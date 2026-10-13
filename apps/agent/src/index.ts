@@ -1,11 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
 import { WebSocket, WebSocketServer } from "ws";
-import { PROTOCOL_VERSION, type ClientMessage, type ServerMessage } from "@laserlink/shared";
+import { PROTOCOL_VERSION, parseClientMessage, type ClientMessage, type ServerMessage } from "@laserlink/shared";
 import { loadConfig } from "./config.js";
 import { Grbl, type GrblStatus } from "./grbl.js";
+import { NodeSerialLink } from "./serial-link.js";
 
 const config = loadConfig();
-const grbl = new Grbl(config.serialPort, config.baudRate);
+const grbl = new Grbl(new NodeSerialLink(config.serialPort, config.baudRate));
 
 const clients = new Set<WebSocket>();
 let lastStatus: GrblStatus | null = null;
@@ -59,13 +60,18 @@ function handle(ws: WebSocket, msg: ClientMessage): void {
     case "unlock":
       grbl.sendLine("$X");
       break;
-    case "job":
-      if (!grbl.startJob(msg.gcode)) {
+    case "job": {
+      const lines = msg.gcode
+        .split(/\r?\n/)
+        .map((l) => l.replace(/;.*$/, "").replace(/\(.*?\)/g, "").trim())
+        .filter((l) => l.length > 0);
+      if (!grbl.startJob(lines)) {
         send(ws, { type: "error", message: "Não foi possível iniciar (trabalho em andamento ou arquivo vazio)." });
       } else {
         broadcast({ type: "log", level: "info", text: `Iniciando: ${msg.name}` });
       }
       break;
+    }
   }
 }
 
@@ -90,11 +96,18 @@ wss.on("connection", (ws, req) => {
   if (lastStatus) send(ws, { type: "status", ...lastStatus });
 
   ws.on("message", (data) => {
+    let parsed: unknown;
     try {
-      handle(ws, JSON.parse(data.toString()) as ClientMessage);
+      parsed = JSON.parse(data.toString());
     } catch {
-      send(ws, { type: "error", message: "Mensagem inválida." });
+      parsed = null;
     }
+    const msg = parseClientMessage(parsed);
+    if (!msg) {
+      send(ws, { type: "error", message: "Mensagem inválida." });
+      return;
+    }
+    handle(ws, msg);
   });
   ws.on("close", () => {
     clients.delete(ws);
