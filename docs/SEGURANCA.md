@@ -33,6 +33,7 @@ A interface pede para manter a tela acesa (Wake Lock) nessa aba, mas no celular 
 - Use **Tailscale** ou rede local. Não faça port-forward do agente.
 - Troque o token padrão. Gere um longo e aleatório.
 - Considere TLS (wss) via proxy se sair da rede local.
+- O firewall do Windows (regra criada pelo `instalar-servico.ps1`) aceita a porta só do Tailscale e da rede local. Veja `WINDOWS.md`.
 
 ## Regra de ouro
 
