@@ -12,6 +12,7 @@ import {
 import type { AgentConfig } from "./config.js";
 import { checkGcode, stripComment, type CheckContext } from "./gcode-check.js";
 import type { Grbl, JobEnd, JobProgress } from "./grbl.js";
+import type { JobLog } from "./job-log.js";
 
 /** Um cliente já autenticado. O transporte (WebSocket) fica fora desta classe. */
 export interface ClientConn {
@@ -24,6 +25,7 @@ export interface AgentOptions {
   grbl: Grbl;
   /** Nome exibido da porta serial (ex.: COM3 ou "simulador"). */
   portLabel: string;
+  jobLog?: JobLog;
 }
 
 interface ClientEntry {
@@ -67,6 +69,7 @@ export class Agent {
   private readonly config: AgentConfig;
   private readonly grbl: Grbl;
   private readonly portLabel: string;
+  private readonly jobLog: JobLog | null;
   private readonly ticker: NodeJS.Timeout;
 
   private job: ActiveJob | null = null;
@@ -77,6 +80,7 @@ export class Agent {
     this.config = options.config;
     this.grbl = options.grbl;
     this.portLabel = options.portLabel;
+    this.jobLog = options.jobLog ?? null;
 
     const grbl = this.grbl;
     grbl.on("status", (s) => this.broadcast({ type: "status", ...s }));
@@ -207,6 +211,13 @@ export class Agent {
     const check = checkGcode(gcode, this.config, this.checkContext());
     if (check.problems.length > 0) {
       client.send({ type: "jobRejected", name, problems: check.problems, bounds: check.bounds });
+      this.jobLog?.write({
+        event: "rejected",
+        name,
+        at: new Date().toISOString(),
+        problems: check.problems.length,
+        first: check.problems[0]!.message,
+      });
       this.broadcast({ type: "log", level: "warn", text: `Trabalho recusado: ${name} (${check.problems.length} problema(s)).` });
       return;
     }
@@ -224,6 +235,7 @@ export class Agent {
       client.send({ type: "error", message: "O GRBL não aceitou o trabalho agora. Tente de novo em alguns segundos." });
       return;
     }
+    this.jobLog?.write({ event: "start", id: this.job.id, name, at: new Date(this.job.startedAt).toISOString(), lines: lines.length });
     this.broadcast({ type: "log", level: "info", text: `Iniciando: ${name}` });
     this.broadcastJob();
   }
@@ -301,6 +313,17 @@ export class Agent {
       outcome: end.outcome,
       reason: end.reason,
     };
+    this.jobLog?.write({
+      event: "end",
+      id: job.id,
+      name: job.name,
+      startedAt: result.startedAt,
+      at: result.endedAt,
+      outcome: result.outcome,
+      reason: result.reason,
+      sent: job.sent,
+      total: job.total,
+    });
     this.broadcast({ type: "jobEnded", result });
     this.broadcastJob();
   }

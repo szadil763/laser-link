@@ -84,6 +84,7 @@ const OUTCOME_LABELS: Record<JobResult["outcome"], string> = {
   completed: "concluído",
   aborted: "cancelado",
   error: "interrompido por erro",
+  interrupted: "interrompido (o agente reiniciou)",
 };
 
 function renderResult(result: JobResult): void {

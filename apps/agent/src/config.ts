@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Area, MachineLimits } from "./gcode-check.js";
 
 export interface AgentConfig {
@@ -16,7 +17,12 @@ export interface AgentConfig {
   workArea: Area;
   /** Opcional: curso da máquina em coordenadas de máquina (só faz sentido com homing). */
   machineLimits?: MachineLimits;
+  /** Pasta dos logs de trabalho. Padrão: apps/agent/logs. */
+  logDir: string;
 }
+
+/** apps/agent/logs, tanto rodando de src/ (tsx) quanto de dist/ (node). */
+const DEFAULT_LOG_DIR = fileURLToPath(new URL("../logs/", import.meta.url));
 
 const DEFAULT_TOKEN = "TROQUE-POR-UM-TOKEN-LONGO-E-ALEATORIO";
 
@@ -41,6 +47,7 @@ export function loadConfig(): AgentConfig {
     reconnectGraceSec: raw.reconnectGraceSec ?? 60,
     maxSpindle: raw.maxSpindle ?? 1000,
     workArea: raw.workArea ?? { x: 0, y: 0 },
+    logDir: raw.logDir ? resolve(path, "..", raw.logDir) : DEFAULT_LOG_DIR,
   };
   if (raw.machineLimits) config.machineLimits = raw.machineLimits;
   if (!(config.maxSpindle > 0)) throw new Error("maxSpindle precisa ser maior que zero (use o valor do $30 do GRBL).");

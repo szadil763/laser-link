@@ -23,6 +23,7 @@ export function testConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     reconnectGraceSec: 60,
     maxSpindle: 1000,
     workArea: { x: 400, y: 300 },
+    logDir: "",
     ...overrides,
   };
 }

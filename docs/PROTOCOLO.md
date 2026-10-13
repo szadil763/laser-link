@@ -66,7 +66,7 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 | Campo | Descrição |
 |---|---|
 | `name`, `startedAt`, `endedAt` | |
-| `outcome` | `completed`, `aborted` ou `error` |
+| `outcome` | `completed`, `aborted`, `error` ou `interrupted` (o agente foi encerrado ou o PC desligou durante o trabalho) |
 | `reason` | texto para a pessoa |
 
 ### `JobProblem` e `JobBounds`

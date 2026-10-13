@@ -55,7 +55,8 @@ export interface JobInfo {
   reason?: string;
 }
 
-export type JobOutcome = "completed" | "aborted" | "error";
+/** `interrupted`: o agente foi encerrado ou o PC desligou durante o trabalho. */
+export type JobOutcome = "completed" | "aborted" | "error" | "interrupted";
 
 export interface JobResult {
   name: string;
