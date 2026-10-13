@@ -1,4 +1,5 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import { createServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import type { ServerMessage } from "@laserlink/shared";
 import { Agent, type ClientConn } from "./agent.js";
@@ -7,6 +8,7 @@ import { Grbl } from "./grbl.js";
 import { JobLog } from "./job-log.js";
 import { NodeSerialLink, type SerialLink } from "./serial-link.js";
 import { FakeGrbl } from "./sim/fake-grbl.js";
+import { createStaticHandler } from "./static.js";
 
 const config = loadConfig();
 const simulated = config.serialPort === "sim";
@@ -22,7 +24,9 @@ function tokenOk(given: string | null): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-const wss = new WebSocketServer({ port: config.wsPort });
+// A mesma porta serve a interface (arquivos estáticos, sem segredos) e o WebSocket (com token).
+const server = createServer(createStaticHandler(config.webDir));
+const wss = new WebSocketServer({ server });
 
 wss.on("connection", (ws, req) => {
   const url = new URL(req.url ?? "/", "http://localhost");
@@ -51,22 +55,20 @@ wss.on("connection", (ws, req) => {
   ws.on("error", () => ws.close());
 });
 
-async function main(): Promise<void> {
-  try {
-    await grbl.open();
-    console.log(
-      simulated ? "Modo simulador: GRBL falso, nenhuma máquina conectada." : `GRBL conectado em ${config.serialPort} @ ${config.baudRate}`,
-    );
-  } catch (err) {
-    console.error(`Falha ao abrir ${config.serialPort}:`, (err as Error).message);
-    process.exit(1);
-  }
-  console.log(`LaserLink agente ouvindo em ws://0.0.0.0:${config.wsPort}`);
-}
-
-process.on("SIGINT", () => {
-  agent.shutdown();
-  setTimeout(() => process.exit(0), 500);
+server.on("error", (err) => {
+  console.error(`Não foi possível escutar em ${config.host}:${config.wsPort}: ${err.message}`);
+  process.exit(1);
 });
 
-void main();
+server.listen(config.wsPort, config.host, () => {
+  console.log(`LaserLink agente em http://${config.host}:${config.wsPort} (interface e WebSocket)`);
+  if (simulated) console.log("Modo simulador: GRBL falso, nenhuma máquina conectada.");
+  void agent.start();
+});
+
+function shutdown(): void {
+  agent.shutdown();
+  setTimeout(() => process.exit(0), 500);
+}
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

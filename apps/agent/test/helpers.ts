@@ -18,12 +18,14 @@ export function testConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     serialPort: "sim",
     baudRate: 115200,
     wsPort: 0,
+    host: "127.0.0.1",
     token: "token-de-teste-com-16+",
     maxFeed: 6000,
     reconnectGraceSec: 60,
     maxSpindle: 1000,
     workArea: { x: 400, y: 300 },
     logDir: "",
+    webDir: "",
     ...overrides,
   };
 }

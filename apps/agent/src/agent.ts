@@ -26,6 +26,8 @@ export interface AgentOptions {
   /** Nome exibido da porta serial (ex.: COM3 ou "simulador"). */
   portLabel: string;
   jobLog?: JobLog;
+  /** Intervalo entre tentativas de reabrir a serial. Padrão: 2 s. */
+  serialRetryMs?: number;
 }
 
 interface ClientEntry {
@@ -71,6 +73,10 @@ export class Agent {
   private readonly portLabel: string;
   private readonly jobLog: JobLog | null;
   private readonly ticker: NodeJS.Timeout;
+  private readonly serialRetryMs: number;
+  private serialTimer: NodeJS.Timeout | null = null;
+  private stopped = false;
+  private lastResult: JobResult | null = null;
 
   private job: ActiveJob | null = null;
   /** Desde quando não há nenhum cliente vivo com o trabalho pausado por perda de conexão. */
@@ -81,13 +87,19 @@ export class Agent {
     this.grbl = options.grbl;
     this.portLabel = options.portLabel;
     this.jobLog = options.jobLog ?? null;
+    this.serialRetryMs = options.serialRetryMs ?? 2000;
+    this.recoverUnfinishedJobs();
 
     const grbl = this.grbl;
     grbl.on("status", (s) => this.broadcast({ type: "status", ...s }));
     grbl.on("log", (level, text) => this.broadcast({ type: "log", level, text }));
     grbl.on("progress", (p) => this.onProgress(p));
     grbl.on("jobEnd", (e) => this.onJobEnd(e));
-    grbl.on("closed", () => this.broadcast({ type: "error", message: "Porta serial fechada." }));
+    grbl.on("closed", () => {
+      this.broadcast({ type: "serial", connected: false });
+      this.broadcast({ type: "log", level: "error", text: "Laser desconectada (porta serial fechada). Tentando reconectar…" });
+      this.scheduleSerialOpen();
+    });
 
     this.ticker = setInterval(() => this.tick(), TICK_MS);
   }
@@ -121,6 +133,7 @@ export class Agent {
       job: this.jobInfo,
       reconnectGraceSec: this.config.reconnectGraceSec,
       limits: { maxSpindle: this.config.maxSpindle, workArea: this.config.workArea },
+      lastResult: this.lastResult,
     });
     const last = this.grbl.lastStatus;
     if (last) client.send({ type: "status", ...last });
@@ -145,10 +158,66 @@ export class Agent {
     this.handle(client, msg);
   }
 
+  /**
+   * Abre a serial e mantém aberta: se falhar ou cair, tenta de novo a cada
+   * `serialRetryMs`. Depois de reconectar, o agente nunca retoma trabalho sozinho.
+   */
+  async start(): Promise<void> {
+    await this.openSerial();
+  }
+
   /** Encerramento do processo: para qualquer trabalho em andamento. */
   shutdown(): void {
+    this.stopped = true;
     clearInterval(this.ticker);
+    if (this.serialTimer) clearTimeout(this.serialTimer);
+    this.serialTimer = null;
     if (this.grbl.isRunning) this.grbl.abortJob("Agente encerrado.");
+  }
+
+  private async openSerial(): Promise<void> {
+    this.serialTimer = null;
+    if (this.stopped || this.grbl.isOpen) return;
+    try {
+      await this.grbl.open();
+      this.broadcast({ type: "serial", connected: true });
+      this.broadcast({ type: "log", level: "info", text: `Laser conectada (${this.portLabel}).` });
+      console.log(`Serial aberta: ${this.portLabel}`);
+    } catch (err) {
+      console.warn(`Não foi possível abrir ${this.portLabel}: ${(err as Error).message}. Nova tentativa em ${this.serialRetryMs / 1000} s.`);
+      this.scheduleSerialOpen();
+    }
+  }
+
+  private scheduleSerialOpen(): void {
+    if (this.stopped || this.serialTimer) return;
+    this.serialTimer = setTimeout(() => void this.openSerial(), this.serialRetryMs);
+  }
+
+  /** Trabalho que começou e não terminou (agente encerrado ou PC desligado): registra e avisa quem conectar. */
+  private recoverUnfinishedJobs(): void {
+    if (!this.jobLog) return;
+    for (const job of this.jobLog.findUnfinished()) {
+      const result: JobResult = {
+        name: job.name,
+        startedAt: job.startedAt,
+        endedAt: new Date().toISOString(),
+        outcome: "interrupted",
+        reason: "O agente foi encerrado ou o computador da laser desligou durante o trabalho.",
+      };
+      this.jobLog.write({
+        event: "end",
+        id: job.id,
+        name: job.name,
+        startedAt: job.startedAt,
+        at: result.endedAt,
+        outcome: result.outcome,
+        reason: result.reason,
+        sent: 0,
+        total: job.lines,
+      });
+      this.lastResult = result;
+    }
   }
 
   private handle(client: ClientConn, msg: ClientMessage): void {
@@ -199,8 +268,13 @@ export class Agent {
       client.send({ type: "error", message: "Já existe um trabalho em andamento." });
       return;
     }
-    if (!this.grbl.isOpen) {
-      client.send({ type: "error", message: "A laser não está conectada ao agente. Confira o cabo USB." });
+    if (!this.grbl.isReady) {
+      client.send({
+        type: "error",
+        message: this.grbl.isOpen
+          ? "A laser está reiniciando. Tente de novo em alguns segundos."
+          : "A laser não está conectada ao agente. Confira o cabo USB.",
+      });
       return;
     }
     const lines = cleanGcode(gcode);
@@ -324,6 +398,7 @@ export class Agent {
       sent: job.sent,
       total: job.total,
     });
+    this.lastResult = result;
     this.broadcast({ type: "jobEnded", result });
     this.broadcastJob();
   }

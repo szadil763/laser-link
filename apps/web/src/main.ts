@@ -17,8 +17,12 @@ let currentJob: JobInfo | null = null;
 let ownJob = false;
 let wakeLock: WakeLockSentinel | null = null;
 
+/** Aberta pelo próprio agente (http://IP:8787), o endereço do WebSocket é o mesmo host. */
+const servedByAgent = location.protocol === "http:" && location.port !== "5173";
 try {
-  urlInput.value = localStorage.getItem("laserlink.url") ?? "";
+  urlInput.value = localStorage.getItem("laserlink.url") ?? (servedByAgent ? `ws://${location.host}` : "");
+  // O token fica só nesta aba (sessionStorage): sobrevive a recarregar a página, não a fechar o navegador.
+  tokenInput.value = sessionStorage.getItem("laserlink.token") ?? "";
 } catch {
   /* armazenamento indisponível */
 }
@@ -38,6 +42,7 @@ const LINK_LABELS: Record<LinkState, [string, "ok" | "warn" | "bad"]> = {
   connected: ["Conectado", "ok"],
   unstable: ["Conexão instável", "warn"],
   connecting: ["Conectando…", "warn"],
+  reconnecting: ["Reconectando…", "warn"],
   disconnected: ["Desconectado", "bad"],
 };
 
@@ -122,6 +127,10 @@ function onMessage(msg: ServerMessage): void {
       log(`Agente v${msg.version} · porta ${msg.port} · GRBL ${msg.connected ? "conectado" : "desconectado"}`);
       reconnectGraceSec = msg.reconnectGraceSec;
       renderSerial(msg.connected);
+      if (msg.lastResult) renderResult(msg.lastResult);
+      if (msg.lastResult && msg.lastResult.outcome !== "completed") {
+        log(`Último trabalho: ${msg.lastResult.name}, ${OUTCOME_LABELS[msg.lastResult.outcome]}. ${msg.lastResult.reason}`);
+      }
       $("limits").textContent =
         `Limites do agente: área ${msg.limits.workArea.x} × ${msg.limits.workArea.y} mm a partir da origem, potência até S${msg.limits.maxSpindle}.`;
       renderJob(msg.job);
@@ -165,6 +174,9 @@ function onMessage(msg: ServerMessage): void {
       log(`Trabalho recusado: ${msg.name} (${msg.problems.length} problema(s)).`);
       break;
     }
+    case "serial":
+      renderSerial(msg.connected);
+      break;
     case "pong":
       break;
     case "error":
@@ -192,12 +204,19 @@ $("connect").addEventListener("click", () => {
   }
   try {
     localStorage.setItem("laserlink.url", base);
+    sessionStorage.setItem("laserlink.token", tokenInput.value);
   } catch {
     /* ignorar */
   }
   conn.connect(base, tokenInput.value);
 });
-$("disconnect").addEventListener("click", () => conn.disconnect());
+$("disconnect").addEventListener("click", () => {
+  if (currentJob && ownJob && !window.confirm("Desconectar pausa o trabalho em andamento e desliga o laser. Continuar?")) return;
+  conn.disconnect();
+});
+
+// Reabriu a página com o token na aba: reconecta sozinho.
+if (urlInput.value && tokenInput.value) conn.connect(urlInput.value.trim(), tokenInput.value);
 
 document.querySelectorAll<HTMLButtonElement>(".jog button").forEach((btn) => {
   btn.addEventListener("click", () => {

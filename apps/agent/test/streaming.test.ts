@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RX_BUFFER_SIZE, type JobEnd, type JobProgress } from "../src/grbl.js";
+import { Grbl, RX_BUFFER_SIZE, type JobEnd, type JobProgress } from "../src/grbl.js";
+import { FakeGrbl } from "../src/sim/fake-grbl.js";
 import { openGrbl, sampleJob } from "./helpers.js";
 
 describe("streaming com contagem de caracteres", () => {
@@ -95,5 +96,23 @@ describe("streaming com contagem de caracteres", () => {
     fake.unplug();
     expect(ends.map((e) => e.outcome)).toEqual(["error"]);
     expect(grbl.isRunning).toBe(false);
+  });
+});
+
+describe("espera o GRBL ficar pronto", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("não envia linhas entre o reset e a mensagem de boas-vindas", async () => {
+    const fake = new FakeGrbl();
+    const grbl = new Grbl(fake, { statusPollMs: 100 });
+    await grbl.open();
+    expect(grbl.isReady).toBe(false);
+    expect(grbl.startJob(["G1 X1 F100"])).toBe(false);
+    grbl.sendLine("$X");
+    expect(fake.rxBytes).toBe(0);
+    await vi.advanceTimersByTimeAsync(5);
+    expect(grbl.isReady).toBe(true);
+    expect(fake.lines).toEqual(["$X"]); // enviado só depois do banner
   });
 });

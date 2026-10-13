@@ -97,6 +97,8 @@ export type ServerMessage =
       /** Segundos que o agente espera alguém reconectar antes de cancelar um trabalho pausado. */
       reconnectGraceSec: number;
       limits: AgentLimits;
+      /** Último trabalho encerrado, para quem reconecta saber o que aconteceu enquanto estava fora. */
+      lastResult: JobResult | null;
     }
   | { type: "status"; state: MachineState; mpos: Position; wpos?: Position; feed: number; spindle: number }
   | { type: "log"; level: "info" | "warn" | "error"; text: string }
@@ -104,6 +106,7 @@ export type ServerMessage =
   | { type: "job"; job: JobInfo | null }
   | { type: "jobEnded"; result: JobResult }
   | { type: "jobRejected"; name: string; problems: JobProblem[]; bounds: JobBounds | null }
+  | { type: "serial"; connected: boolean }
   | { type: "pong"; t: number }
   | { type: "error"; message: string };
 

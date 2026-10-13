@@ -3,9 +3,14 @@ import { HEARTBEAT_INTERVAL_MS, type ClientMessage, type ServerMessage } from "@
 /**
  * - `connected`: pong recente.
  * - `unstable`: socket aberto, mas sem pong há mais de UNSTABLE_AFTER_MS.
- * - `connecting` / `disconnected`.
+ * - `connecting`: primeira tentativa.
+ * - `reconnecting`: caiu e está tentando de novo sozinho.
+ * - `disconnected`: parado (a pessoa desconectou ou o token é inválido).
  */
-export type LinkState = "disconnected" | "connecting" | "connected" | "unstable";
+export type LinkState = "disconnected" | "connecting" | "reconnecting" | "connected" | "unstable";
+
+/** Espera entre tentativas de reconexão: 1, 2, 4, 8 e depois 10 s. */
+const BACKOFF_MS = [1000, 2000, 4000, 8000, 10000];
 
 /** Sem pong por este tempo (dois pings perdidos), a conexão é considerada instável. */
 const UNSTABLE_AFTER_MS = HEARTBEAT_INTERVAL_MS * 2 + 500;
@@ -21,6 +26,9 @@ export class Connection {
   private ticker: Worker | null = null;
   private lastPong = 0;
   private state_: LinkState = "disconnected";
+  private target: { url: string; token: string } | null = null;
+  private attempt = 0;
+  private retryTimer: number | undefined;
 
   constructor(private readonly events: ConnectionEvents) {}
 
@@ -28,15 +36,33 @@ export class Connection {
     return this.state_;
   }
 
+  /** Conecta e mantém conectado: se cair, reconecta sozinho até `disconnect()`. */
   connect(baseUrl: string, token: string): void {
     this.disconnect();
-    this.setState("connecting");
-    const ws = new WebSocket(`${baseUrl.replace(/\/+$/, "")}/?token=${encodeURIComponent(token)}`);
+    this.target = { url: baseUrl.replace(/\/+$/, ""), token };
+    this.attempt = 0;
+    this.open("connecting");
+  }
+
+  private open(state: "connecting" | "reconnecting"): void {
+    const target = this.target;
+    if (!target) return;
+    this.setState(state);
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(`${target.url}/?token=${encodeURIComponent(target.token)}`);
+    } catch {
+      this.events.onLog("Endereço inválido. Use o formato ws://IP-DA-LASER:8787.");
+      this.target = null;
+      this.setState("disconnected");
+      return;
+    }
     this.ws = ws;
     ws.onopen = () => {
+      this.attempt = 0;
       this.lastPong = Date.now();
       this.setState("connected");
-      this.events.onLog("Conectado.");
+      this.events.onLog(state === "reconnecting" ? "Reconectado." : "Conectado.");
       this.startPing();
     };
     ws.onmessage = (e) => {
@@ -52,12 +78,33 @@ export class Connection {
       if (this.ws !== ws) return;
       this.stopPing();
       this.ws = null;
-      this.setState("disconnected");
-      this.events.onLog(e.code === 4401 ? "Token inválido. Confira o token no laserlink.config.json do agente." : "Desconectado.");
+      if (e.code === 4401) {
+        this.target = null;
+        this.setState("disconnected");
+        this.events.onLog("Token inválido. Confira o token no laserlink.config.json do agente.");
+        return;
+      }
+      this.scheduleRetry();
     };
   }
 
+  private scheduleRetry(): void {
+    if (!this.target) return;
+    const wait = BACKOFF_MS[Math.min(this.attempt, BACKOFF_MS.length - 1)]!;
+    this.attempt += 1;
+    if (this.attempt === 1) this.events.onLog("Conexão perdida. Tentando reconectar…");
+    this.setState("reconnecting");
+    this.retryTimer = window.setTimeout(() => {
+      this.retryTimer = undefined;
+      this.open("reconnecting");
+    }, wait);
+  }
+
+  /** Para de vez (não reconecta). */
   disconnect(): void {
+    this.target = null;
+    if (this.retryTimer !== undefined) window.clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
     const ws = this.ws;
     this.ws = null;
     this.stopPing();

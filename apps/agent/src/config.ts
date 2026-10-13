@@ -7,6 +7,8 @@ export interface AgentConfig {
   serialPort: string;
   baudRate: number;
   wsPort: number;
+  /** Endereço onde o agente escuta. "0.0.0.0" = todas as interfaces; use o IP do Tailscale para restringir. */
+  host: string;
   token: string;
   maxFeed: number;
   /** Segundos esperando alguém reconectar antes de cancelar um trabalho pausado por perda de conexão. */
@@ -19,15 +21,19 @@ export interface AgentConfig {
   machineLimits?: MachineLimits;
   /** Pasta dos logs de trabalho. Padrão: apps/agent/logs. */
   logDir: string;
+  /** Interface compilada servida pelo agente. Padrão: apps/web/dist. */
+  webDir: string;
 }
 
 /** apps/agent/logs, tanto rodando de src/ (tsx) quanto de dist/ (node). */
 const DEFAULT_LOG_DIR = fileURLToPath(new URL("../logs/", import.meta.url));
+const DEFAULT_WEB_DIR = fileURLToPath(new URL("../../web/dist/", import.meta.url));
 
 const DEFAULT_TOKEN = "TROQUE-POR-UM-TOKEN-LONGO-E-ALEATORIO";
 
 export function loadConfig(): AgentConfig {
   const candidates = [
+    ...(process.env.LASERLINK_CONFIG ? [resolve(process.env.LASERLINK_CONFIG)] : []),
     resolve(process.cwd(), "laserlink.config.json"),
     resolve(process.cwd(), "../../laserlink.config.json"),
   ];
@@ -42,12 +48,14 @@ export function loadConfig(): AgentConfig {
     serialPort: raw.serialPort ?? "",
     baudRate: raw.baudRate ?? 115200,
     wsPort: raw.wsPort ?? 8787,
+    host: raw.host ?? "0.0.0.0",
     token: raw.token ?? "",
     maxFeed: raw.maxFeed ?? 6000,
     reconnectGraceSec: raw.reconnectGraceSec ?? 60,
     maxSpindle: raw.maxSpindle ?? 1000,
     workArea: raw.workArea ?? { x: 0, y: 0 },
     logDir: raw.logDir ? resolve(path, "..", raw.logDir) : DEFAULT_LOG_DIR,
+    webDir: raw.webDir ? resolve(path, "..", raw.webDir) : DEFAULT_WEB_DIR,
   };
   if (raw.machineLimits) config.machineLimits = raw.machineLimits;
   if (!(config.maxSpindle > 0)) throw new Error("maxSpindle precisa ser maior que zero (use o valor do $30 do GRBL).");

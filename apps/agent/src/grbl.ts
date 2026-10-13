@@ -4,6 +4,8 @@ import type { SerialLink } from "./serial-link.js";
 
 export const RX_BUFFER_SIZE = 127; // buffer de RX do GRBL 1.1
 const STATUS_POLL_MS = 200;
+/** Se o GRBL não mandar a mensagem de boas-vindas depois do reset, segue assim mesmo após este tempo. */
+const READY_TIMEOUT_MS = 3000;
 
 // Comandos de tempo real: vão direto para a serial, fora da fila de linhas.
 const RT_STATUS = Buffer.from("?");
@@ -70,6 +72,9 @@ export class Grbl extends EventEmitter<GrblEvents> {
   private total = 0;
   private acked = 0;
   private running = false;
+  /** Falso entre um reset e a mensagem "Grbl 1.1…": linhas enviadas nesse intervalo seriam descartadas. */
+  private ready = false;
+  private readyTimer?: NodeJS.Timeout;
   /** Entre o pedido de parada e o M5 final: nada novo entra na fila. */
   private aborting = false;
 
@@ -100,6 +105,11 @@ export class Grbl extends EventEmitter<GrblEvents> {
     return this.running;
   }
 
+  /** Serial aberta e GRBL pronto para receber linhas. */
+  get isReady(): boolean {
+    return this.isOpen && this.ready;
+  }
+
   get lastStatus(): GrblStatus | null {
     return this.last;
   }
@@ -110,6 +120,7 @@ export class Grbl extends EventEmitter<GrblEvents> {
     this.startPolling();
     // reset suave para iniciar o GRBL em estado conhecido
     this.writeRaw(RT_RESET);
+    this.waitReady();
   }
 
   close(): void {
@@ -148,6 +159,7 @@ export class Grbl extends EventEmitter<GrblEvents> {
   /** Reset suave: aborta o movimento atual e limpa o buffer do GRBL. */
   softReset(): void {
     this.writeRaw(RT_RESET);
+    this.waitReady();
     this.spindleStopPending = false;
     this.spindleStopped = false;
     // O GRBL descarta o que estava no buffer e não responde mais a essas linhas.
@@ -169,7 +181,7 @@ export class Grbl extends EventEmitter<GrblEvents> {
 
   /** Recebe as linhas já limpas (sem comentários nem linhas vazias). */
   startJob(lines: readonly string[]): boolean {
-    if (this.running || this.aborting || lines.length === 0 || !this.isOpen) return false;
+    if (this.running || this.aborting || lines.length === 0 || !this.isReady) return false;
     this.total = lines.length;
     this.acked = 0;
     this.running = true;
@@ -210,13 +222,31 @@ export class Grbl extends EventEmitter<GrblEvents> {
     this.emit("log", "warn", "Laser desligado (override 0x9E) com o trabalho em pausa.");
   }
 
+  private waitReady(): void {
+    this.ready = false;
+    if (this.readyTimer) clearTimeout(this.readyTimer);
+    this.readyTimer = setTimeout(() => {
+      this.readyTimer = undefined;
+      if (this.ready || !this.isOpen) return;
+      this.emit("log", "warn", "O GRBL não respondeu ao reset com a mensagem de boas-vindas. Seguindo assim mesmo.");
+      this.markReady();
+    }, READY_TIMEOUT_MS);
+  }
+
+  private markReady(): void {
+    if (this.readyTimer) clearTimeout(this.readyTimer);
+    this.readyTimer = undefined;
+    this.ready = true;
+    this.pump();
+  }
+
   private enqueue(item: Queued): void {
     this.queue.push(item);
     this.pump();
   }
 
   private pump(): void {
-    while (this.queue.length > 0 && this.isOpen) {
+    while (this.queue.length > 0 && this.isReady) {
       const next = this.queue[0]!;
       const size = Buffer.byteLength(next.text) + 1;
       if (this.inFlightBytes + size > RX_BUFFER_SIZE) break;
@@ -252,14 +282,16 @@ export class Grbl extends EventEmitter<GrblEvents> {
       }
     } else if (line.startsWith("Grbl ")) {
       // Mensagem de boas-vindas após reset: o buffer do GRBL está vazio.
+      const unexpected = this.ready;
       this.resetLineState();
-      if (this.running) {
+      if (unexpected && this.running) {
         this.running = false;
         this.queue = [];
         this.emitProgress();
         this.emit("jobEnd", { outcome: "error", reason: "O GRBL reiniciou durante o trabalho." });
       }
       this.emit("log", "info", line);
+      this.markReady();
     } else {
       this.emit("log", "info", line);
     }
@@ -287,6 +319,9 @@ export class Grbl extends EventEmitter<GrblEvents> {
 
   private onClose(): void {
     this.stopPolling();
+    this.ready = false;
+    if (this.readyTimer) clearTimeout(this.readyTimer);
+    this.readyTimer = undefined;
     const hadJob = this.running;
     this.running = false;
     this.queue = [];

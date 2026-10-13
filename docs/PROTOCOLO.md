@@ -3,9 +3,17 @@
 Mensagens JSON. Tipos em `packages/shared/src/protocol.ts`; validação das mensagens do cliente em `packages/shared/src/validate.ts`.
 Versão atual: **0.2.0** (`PROTOCOL_VERSION`). O agente informa a versão no `hello`; a interface avisa se for diferente.
 
-## Autenticação
+## Endereço e autenticação
 
-Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão fechada com código 4401.
+O agente serve, na mesma porta, a interface compilada (`http://host:8787/`, arquivos estáticos sem segredos) e o WebSocket.
+Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão fechada com código 4401 (a interface não tenta reconectar).
+
+## Reconexão
+
+- **Interface:** se a conexão cair, tenta de novo sozinha após 1, 2, 4, 8 e depois a cada 10 s, até a pessoa clicar em Desconectar. Ao reconectar, o `hello` traz o trabalho atual (inclusive pausado por perda de conexão) e o último resultado (`lastResult`).
+- **Serial:** se a porta não abrir ou cair, o agente tenta reabrir a cada 2 s e avisa os clientes com `serial`. Se a serial cair no meio de um trabalho, o trabalho termina com `outcome: "error"`: o GRBL perde o buffer, e o agente **nunca** retoma um trabalho por conta própria.
+- **Agente reiniciado:** um trabalho que começou e não terminou (agente encerrado, PC desligado) aparece no `lastResult` do próximo `hello` com `outcome: "interrupted"`.
+- **Prontidão do GRBL:** depois de abrir a serial ou de um reset, o agente só envia linhas após a mensagem `Grbl 1.1…` (ou 3 s sem ela). Trabalho enviado nesse intervalo é recusado com uma mensagem para tentar de novo.
 
 ## Heartbeat
 
@@ -40,13 +48,14 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 
 | `type` | Campos |
 |---|---|
-| `hello` | `version`, `port`, `connected`, `job` (`JobInfo` ou `null`), `reconnectGraceSec`, `limits {maxSpindle, workArea {x,y}}` |
+| `hello` | `version`, `port`, `connected`, `job` (`JobInfo` ou `null`), `reconnectGraceSec`, `limits {maxSpindle, workArea {x,y}}`, `lastResult` (`JobResult` ou `null`) |
 | `status` | `state`, `mpos {x,y,z}`, `wpos {x,y,z}` (se o WCO já é conhecido), `feed`, `spindle` |
 | `log` | `level`, `text` |
 | `progress` | `sent`, `total`, `running` |
 | `job` | `job` (`JobInfo` ou `null`): enviado sempre que o trabalho muda de estado |
 | `jobEnded` | `result` (`JobResult`) |
 | `jobRejected` | `name`, `problems` (`JobProblem[]`, até 20), `bounds` (`JobBounds` ou `null`) |
+| `serial` | `connected`: a porta serial abriu ou fechou |
 | `pong` | `t` |
 | `error` | `message` |
 
