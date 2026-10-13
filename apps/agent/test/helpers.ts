@@ -20,6 +20,7 @@ export function testConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     wsPort: 0,
     token: "token-de-teste-com-16+",
     maxFeed: 6000,
+    reconnectGraceSec: 60,
     ...overrides,
   };
 }

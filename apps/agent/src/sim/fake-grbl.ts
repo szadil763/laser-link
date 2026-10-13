@@ -109,7 +109,10 @@ export class FakeGrbl extends EventEmitter<SerialLinkEvents> implements SerialLi
         return true;
       case 0x21: // !
         this.realtime.push("!");
-        if (this.state === "Run" || this.state === "Jog") this.state = "Hold";
+        // Pausa se está se movendo ou se ainda há linhas esperando execução.
+        if (this.state === "Run" || this.state === "Jog" || (this.state === "Idle" && this.rx.includes("\n"))) {
+          this.state = "Hold";
+        }
         return true;
       case 0x7e: // ~
         this.realtime.push("~");

@@ -27,13 +27,19 @@ export function parseClientMessage(value: unknown): ClientMessage | null {
     case "home":
     case "setOrigin":
     case "hold":
-    case "resume":
     case "stop":
     case "unlock":
       return { type: value.type };
+    case "resume":
+      if (value.confirmLaserOn !== true) return null;
+      return { type: "resume", confirmLaserOn: true };
     case "job":
       if (typeof value.name !== "string" || typeof value.gcode !== "string") return null;
-      return { type: "job", name: value.name, gcode: value.gcode };
+      if (value.confirmLaserOn !== true) return null;
+      return { type: "job", name: value.name, gcode: value.gcode, confirmLaserOn: true };
+    case "ping":
+      if (!isFiniteNumber(value.t)) return null;
+      return { type: "ping", t: value.t };
     default:
       return null;
   }

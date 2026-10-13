@@ -15,13 +15,18 @@ Laser sem supervisão é risco real de incêndio e de ferimento. Este documento 
 ## Software (implementado e planejado)
 
 - [x] Token obrigatório no WebSocket.
-- [x] Desconexão do cliente durante trabalho: `!` + `M5`.
+- [x] Desconexão do cliente durante trabalho: `!` e, em Hold, `0x9E` (laser desligado); cancela com reset + `M5` se ninguém reconectar em 60 s.
+- [x] Heartbeat: cliente mudo por 6 s = mesma parada acima.
 - [x] Parada em `error:` e `ALARM:`.
 - [x] `Parar` envia reset suave (0x18) e `M5`.
-- [ ] Confirmação extra na UI antes de iniciar o trabalho.
-- [ ] Timeout de heartbeat (cliente mudo = pausa).
+- [x] Confirmação na UI antes de iniciar e de retomar (`confirmLaserOn` no protocolo).
 - [ ] Limite máximo de potência configurável no agente.
 - [ ] Log de trabalhos.
+
+## A aba que iniciou o trabalho
+
+O heartbeat vem da aba que iniciou (ou retomou) o trabalho. Se ela fechar, o computador dormir ou o celular apagar a tela e suspender o navegador, o agente pausa o trabalho e desliga o laser. Isso é proposital.
+A interface pede para manter a tela acesa (Wake Lock) nessa aba, mas no celular nem todo navegador respeita. Para trabalhos longos, prefira um computador.
 
 ## Rede
 

@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import type { MachineState, Position } from "@laserlink/shared";
+import type { JobOutcome, MachineState, Position } from "@laserlink/shared";
 import type { SerialLink } from "./serial-link.js";
 
 export const RX_BUFFER_SIZE = 127; // buffer de RX do GRBL 1.1
@@ -10,6 +10,7 @@ const RT_STATUS = Buffer.from("?");
 const RT_HOLD = Buffer.from("!");
 const RT_RESUME = Buffer.from("~");
 const RT_RESET = Buffer.from([0x18]);
+const RT_SPINDLE_STOP = Buffer.from([0x9e]); // override: liga/desliga o laser, só vale em Hold
 
 export interface GrblStatus {
   state: MachineState;
@@ -19,8 +20,6 @@ export interface GrblStatus {
   feed: number;
   spindle: number;
 }
-
-export type JobOutcome = "completed" | "aborted" | "error";
 
 export interface JobEnd {
   outcome: JobOutcome;
@@ -74,6 +73,11 @@ export class Grbl extends EventEmitter<GrblEvents> {
   /** Entre o pedido de parada e o M5 final: nada novo entra na fila. */
   private aborting = false;
 
+  /** Pedido de desligar o laser assim que o GRBL confirmar o Hold. */
+  private spindleStopPending = false;
+  /** 0x9E já enviado neste Hold (é alternância: mandar duas vezes religaria). */
+  private spindleStopped = false;
+
   private wco: Position | null = null;
   private last: GrblStatus | null = null;
 
@@ -120,12 +124,32 @@ export class Grbl extends EventEmitter<GrblEvents> {
   }
 
   cycleResume(): void {
+    // Ao retomar, o GRBL religa o laser que o 0x9E tinha desligado.
+    this.spindleStopPending = false;
+    this.spindleStopped = false;
     this.writeRaw(RT_RESUME);
+  }
+
+  /**
+   * Parada de segurança sem perder o trabalho: feed hold e, assim que o GRBL
+   * estiver em Hold, desliga o laser com o override 0x9E. Um "M5" aqui não
+   * adiantaria: ele entraria na fila e só rodaria depois de retomar.
+   */
+  safetyHold(): void {
+    this.feedHold();
+    // Espera um relatório novo com Hold (no máximo um ciclo de polling).
+    if (!this.spindleStopped) this.spindleStopPending = true;
+  }
+
+  get isSpindleStopped(): boolean {
+    return this.spindleStopped;
   }
 
   /** Reset suave: aborta o movimento atual e limpa o buffer do GRBL. */
   softReset(): void {
     this.writeRaw(RT_RESET);
+    this.spindleStopPending = false;
+    this.spindleStopped = false;
     // O GRBL descarta o que estava no buffer e não responde mais a essas linhas.
     this.resetLineState();
   }
@@ -178,6 +202,14 @@ export class Grbl extends EventEmitter<GrblEvents> {
 
   // ---------- internos ----------
 
+  private applySpindleStop(): void {
+    if (!this.spindleStopPending || this.spindleStopped) return;
+    this.spindleStopPending = false;
+    this.spindleStopped = true;
+    this.writeRaw(RT_SPINDLE_STOP);
+    this.emit("log", "warn", "Laser desligado (override 0x9E) com o trabalho em pausa.");
+  }
+
   private enqueue(item: Queued): void {
     this.queue.push(item);
     this.pump();
@@ -215,6 +247,7 @@ export class Grbl extends EventEmitter<GrblEvents> {
         if (status.wco) this.wco = status.wco;
         const { wco: _wco, ...rest } = status;
         this.last = rest;
+        if (rest.state === "Hold") this.applySpindleStop();
         this.emit("status", rest);
       }
     } else if (line.startsWith("Grbl ")) {

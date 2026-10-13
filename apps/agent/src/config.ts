@@ -7,6 +7,8 @@ export interface AgentConfig {
   wsPort: number;
   token: string;
   maxFeed: number;
+  /** Segundos esperando alguém reconectar antes de cancelar um trabalho pausado por perda de conexão. */
+  reconnectGraceSec: number;
 }
 
 const DEFAULT_TOKEN = "TROQUE-POR-UM-TOKEN-LONGO-E-ALEATORIO";
@@ -29,6 +31,7 @@ export function loadConfig(): AgentConfig {
     wsPort: raw.wsPort ?? 8787,
     token: raw.token ?? "",
     maxFeed: raw.maxFeed ?? 6000,
+    reconnectGraceSec: raw.reconnectGraceSec ?? 60,
   };
   if (!config.serialPort) throw new Error('Configure serialPort (ex.: COM3, /dev/ttyUSB0 ou "sim" para o simulador).');
   if (!config.token || config.token === DEFAULT_TOKEN || config.token.length < 16) {
