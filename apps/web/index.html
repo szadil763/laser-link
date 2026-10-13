@@ -5,9 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LaserLink</title>
     <style>
+      *, *::before, *::after { box-sizing: border-box; }
       :root { color-scheme: dark; font-family: system-ui, sans-serif; }
       body { margin: 0; background: #14161a; color: #e8eaed; }
-      main { max-width: 760px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+      main { max-width: 760px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+      input { max-width: 100%; }
       section { background: #1e2127; border-radius: 10px; padding: 14px; }
       h1 { margin: 0; font-size: 20px; }
       h2 { margin: 0 0 10px; font-size: 14px; color: #9aa0a6; text-transform: uppercase; letter-spacing: .05em; }
@@ -34,6 +36,11 @@
       progress { width: 100%; }
       .muted { color: #9aa0a6; font-size: 14px; }
       [hidden] { display: none !important; }
+      dialog { max-width: min(440px, calc(100vw - 32px)); border: 1px solid #3c4043; border-radius: 10px; background: #1e2127; color: inherit; padding: 18px; }
+      dialog::backdrop { background: rgba(0, 0, 0, .6); }
+      dialog h2 { color: #fdd663; font-size: 16px; text-transform: none; letter-spacing: 0; }
+      dialog p { white-space: pre-line; line-height: 1.45; }
+      dialog .row { justify-content: flex-end; }
     </style>
   </head>
   <body>
@@ -115,6 +122,16 @@
         <div id="log" aria-live="polite"></div>
       </section>
     </main>
+    <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+      <form method="dialog">
+        <h2 id="confirm-title"></h2>
+        <p id="confirm-text"></p>
+        <div class="row">
+          <button id="confirm-cancel" value="cancel">Voltar</button>
+          <button id="confirm-ok" value="ok"></button>
+        </div>
+      </form>
+    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

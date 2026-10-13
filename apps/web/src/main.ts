@@ -1,4 +1,5 @@
 import { PROTOCOL_VERSION, type JobInfo, type JobResult, type ServerMessage } from "@laserlink/shared";
+import { confirmDialog } from "./confirm-dialog.js";
 import { Connection, type LinkState } from "./connection.js";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -182,14 +183,13 @@ function onMessage(msg: ServerMessage): void {
   }
 }
 
-function confirmResume(): boolean {
-  return window.confirm(
+async function resume(): Promise<void> {
+  const ok = await confirmDialog(
+    "Retomar o trabalho?",
     "Retomar religa o laser.\n\nConfirme que a peça não se moveu, a área está livre, a exaustão está ligada e que há alguém presente ou câmera ao vivo.",
+    "Retomar e ligar o laser",
   );
-}
-
-function resume(): void {
-  if (!confirmResume()) return;
+  if (!ok) return;
   conn.send({ type: "resume", confirmLaserOn: true });
 }
 
@@ -207,8 +207,13 @@ $("connect").addEventListener("click", () => {
   }
   conn.connect(base, tokenInput.value);
 });
-$("disconnect").addEventListener("click", () => {
-  if (currentJob?.ownedByYou && !window.confirm("Desconectar pausa o trabalho em andamento e desliga o laser. Continuar?")) return;
+$("disconnect").addEventListener("click", async () => {
+  if (
+    currentJob?.ownedByYou &&
+    !(await confirmDialog("Desconectar?", "Desconectar pausa o trabalho em andamento e desliga o laser.", "Desconectar"))
+  ) {
+    return;
+  }
   conn.disconnect();
 });
 
@@ -229,11 +234,13 @@ $("home").addEventListener("click", () => conn.send({ type: "home" }));
 $("origin").addEventListener("click", () => conn.send({ type: "setOrigin" }));
 $("unlock").addEventListener("click", () => conn.send({ type: "unlock" }));
 $("hold").addEventListener("click", () => conn.send({ type: "hold" }));
-$("resume").addEventListener("click", resume);
-$("alert-resume").addEventListener("click", resume);
+$("resume").addEventListener("click", () => void resume());
+$("alert-resume").addEventListener("click", () => void resume());
 $("stop").addEventListener("click", () => conn.send({ type: "stop" }));
 $("alert-cancel").addEventListener("click", () => {
-  if (window.confirm("Cancelar o trabalho? Ele não poderá ser retomado.")) conn.send({ type: "stop" });
+  void confirmDialog("Cancelar o trabalho?", "Ele não poderá ser retomado.", "Cancelar trabalho", true).then((ok) => {
+    if (ok) conn.send({ type: "stop" });
+  });
 });
 
 $("start").addEventListener("click", async () => {
@@ -242,8 +249,10 @@ $("start").addEventListener("click", async () => {
     log("Escolha um arquivo G-code.");
     return;
   }
-  const ok = window.confirm(
-    `Iniciar "${file.name}"? Isto liga o laser.\n\nConfirme que a área está livre, a exaustão ligada e que há alguém presente ou câmera ao vivo.\n\nMantenha esta aba aberta: se ela fechar ou perder a conexão, o agente pausa o trabalho.`,
+  const ok = await confirmDialog(
+    `Iniciar "${file.name}"?`,
+    "Isto liga o laser.\n\nConfirme que a área está livre, a exaustão ligada e que há alguém presente ou câmera ao vivo.\n\nMantenha esta aba aberta: se ela fechar ou perder a conexão, o agente pausa o trabalho.",
+    "Iniciar e ligar o laser",
   );
   if (!ok) return;
   $("rejected").hidden = true;

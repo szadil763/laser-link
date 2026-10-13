@@ -1,4 +1,6 @@
 import { HEARTBEAT_INTERVAL_MS, type ClientMessage, type ServerMessage } from "@laserlink/shared";
+// Worker embutido no bundle (blob): funciona servido pelo agente ou dentro de outras páginas.
+import TickWorker from "./tick-worker.ts?worker&inline";
 
 /**
  * - `connected`: pong recente.
@@ -122,7 +124,7 @@ export class Connection {
   }
 
   private startPing(): void {
-    this.ticker ??= new Worker(new URL("./tick-worker.ts", import.meta.url), { type: "module" });
+    this.ticker ??= new TickWorker();
     this.ticker.onmessage = () => this.ping();
     this.ticker.postMessage(HEARTBEAT_INTERVAL_MS);
     this.ping();
