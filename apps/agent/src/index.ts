@@ -3,10 +3,13 @@ import { WebSocket, WebSocketServer } from "ws";
 import { PROTOCOL_VERSION, parseClientMessage, type ClientMessage, type ServerMessage } from "@laserlink/shared";
 import { loadConfig } from "./config.js";
 import { Grbl, type GrblStatus } from "./grbl.js";
-import { NodeSerialLink } from "./serial-link.js";
+import { NodeSerialLink, type SerialLink } from "./serial-link.js";
+import { FakeGrbl } from "./sim/fake-grbl.js";
 
 const config = loadConfig();
-const grbl = new Grbl(new NodeSerialLink(config.serialPort, config.baudRate));
+const simulated = config.serialPort === "sim";
+const link: SerialLink = simulated ? new FakeGrbl({ msPerLine: 30 }) : new NodeSerialLink(config.serialPort, config.baudRate);
+const grbl = new Grbl(link);
 
 const clients = new Set<WebSocket>();
 let lastStatus: GrblStatus | null = null;
@@ -119,7 +122,9 @@ wss.on("connection", (ws, req) => {
 async function main(): Promise<void> {
   try {
     await grbl.open();
-    console.log(`GRBL conectado em ${config.serialPort} @ ${config.baudRate}`);
+    console.log(
+      simulated ? "Modo simulador: GRBL falso, nenhuma máquina conectada." : `GRBL conectado em ${config.serialPort} @ ${config.baudRate}`,
+    );
   } catch (err) {
     console.error(`Falha ao abrir ${config.serialPort}:`, (err as Error).message);
     process.exit(1);

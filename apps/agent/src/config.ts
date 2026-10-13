@@ -30,7 +30,7 @@ export function loadConfig(): AgentConfig {
     token: raw.token ?? "",
     maxFeed: raw.maxFeed ?? 6000,
   };
-  if (!config.serialPort) throw new Error("Configure serialPort (ex.: COM3 ou /dev/ttyUSB0).");
+  if (!config.serialPort) throw new Error('Configure serialPort (ex.: COM3, /dev/ttyUSB0 ou "sim" para o simulador).');
   if (!config.token || config.token === DEFAULT_TOKEN || config.token.length < 16) {
     throw new Error("Defina um token com pelo menos 16 caracteres em laserlink.config.json.");
   }
