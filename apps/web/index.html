@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LaserLink</title>
+    <style>
+      :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+      body { margin: 0; background: #14161a; color: #e8eaed; }
+      main { max-width: 760px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+      section { background: #1e2127; border-radius: 10px; padding: 14px; }
+      h1 { margin: 0; font-size: 20px; }
+      h2 { margin: 0 0 10px; font-size: 14px; color: #9aa0a6; text-transform: uppercase; letter-spacing: .05em; }
+      input, button { font: inherit; padding: 8px 10px; border-radius: 6px; border: 1px solid #3c4043; background: #2a2d33; color: inherit; }
+      button { cursor: pointer; }
+      button:hover { background: #343841; }
+      button.danger { background: #8c1d18; border-color: #b3261e; font-weight: 700; }
+      button.warn { background: #6b4e00; border-color: #946f00; }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .jog { display: grid; grid-template-columns: repeat(3, 56px); gap: 6px; justify-content: center; }
+      .jog button { height: 48px; }
+      #state { font-weight: 700; }
+      #log { height: 160px; overflow: auto; font: 12px ui-monospace, monospace; background: #111317; padding: 8px; border-radius: 6px; white-space: pre-wrap; }
+      progress { width: 100%; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>LaserLink</h1>
+
+      <section>
+        <h2>Conexão</h2>
+        <div class="row">
+          <input id="url" placeholder="ws://IP-DA-LASER:8787" size="26" />
+          <input id="token" type="password" placeholder="token" size="18" />
+          <button id="connect">Conectar</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Máquina</h2>
+        <p>Estado: <span id="state">—</span> · X <span id="x">0.000</span> Y <span id="y">0.000</span></p>
+        <div class="row">
+          <button id="home">Home</button>
+          <button id="origin">Definir origem</button>
+          <button id="unlock">Destravar</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Mover</h2>
+        <div class="row" style="margin-bottom:10px">
+          <label>Passo (mm) <input id="step" type="number" value="10" min="0.1" max="500" step="0.1" style="width:80px" /></label>
+          <label>Velocidade (mm/min) <input id="feed" type="number" value="3000" min="10" max="6000" step="100" style="width:90px" /></label>
+        </div>
+        <div class="jog">
+          <span></span><button data-axis="Y" data-dir="1">Y+</button><span></span>
+          <button data-axis="X" data-dir="-1">X−</button><span></span><button data-axis="X" data-dir="1">X+</button>
+          <span></span><button data-axis="Y" data-dir="-1">Y−</button><span></span>
+        </div>
+      </section>
+
+      <section>
+        <h2>Trabalho</h2>
+        <div class="row">
+          <input id="file" type="file" accept=".gcode,.nc,.gc,.txt" />
+          <button id="start" class="warn">Iniciar trabalho</button>
+        </div>
+        <p><progress id="progress" value="0" max="1"></progress></p>
+        <div class="row">
+          <button id="hold">Pausar</button>
+          <button id="resume">Retomar</button>
+          <button id="stop" class="danger">PARAR</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Registro</h2>
+        <div id="log"></div>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

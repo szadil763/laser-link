@@ -1,0 +1,7 @@
+{
+  "serialPort": "COM3",
+  "baudRate": 115200,
+  "wsPort": 8787,
+  "token": "TROQUE-POR-UM-TOKEN-LONGO-E-ALEATORIO",
+  "maxFeed": 6000
+}
