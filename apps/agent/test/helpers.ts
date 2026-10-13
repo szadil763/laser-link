@@ -21,6 +21,8 @@ export function testConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     token: "token-de-teste-com-16+",
     maxFeed: 6000,
     reconnectGraceSec: 60,
+    maxSpindle: 1000,
+    workArea: { x: 400, y: 300 },
     ...overrides,
   };
 }

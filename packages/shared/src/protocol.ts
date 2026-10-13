@@ -65,6 +65,27 @@ export interface JobResult {
   reason: string;
 }
 
+/** Motivo de recusa de uma linha do G-code. `line` é 1…n (0 = resumo). */
+export interface JobProblem {
+  line: number;
+  text: string;
+  message: string;
+}
+
+/** Retângulo percorrido pelo cabeçote, em mm, coordenadas de trabalho. */
+export interface JobBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+/** Limites configurados no agente (laserlink.config.json). */
+export interface AgentLimits {
+  maxSpindle: number;
+  workArea: { x: number; y: number };
+}
+
 export type ServerMessage =
   | {
       type: "hello";
@@ -74,12 +95,14 @@ export type ServerMessage =
       job: JobInfo | null;
       /** Segundos que o agente espera alguém reconectar antes de cancelar um trabalho pausado. */
       reconnectGraceSec: number;
+      limits: AgentLimits;
     }
   | { type: "status"; state: MachineState; mpos: Position; wpos?: Position; feed: number; spindle: number }
   | { type: "log"; level: "info" | "warn" | "error"; text: string }
   | { type: "progress"; sent: number; total: number; running: boolean }
   | { type: "job"; job: JobInfo | null }
   | { type: "jobEnded"; result: JobResult }
+  | { type: "jobRejected"; name: string; problems: JobProblem[]; bounds: JobBounds | null }
   | { type: "pong"; t: number }
   | { type: "error"; message: string };
 

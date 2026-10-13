@@ -10,6 +10,7 @@ import {
   type ServerMessage,
 } from "@laserlink/shared";
 import type { AgentConfig } from "./config.js";
+import { checkGcode, stripComment, type CheckContext } from "./gcode-check.js";
 import type { Grbl, JobEnd, JobProgress } from "./grbl.js";
 
 /** Um cliente já autenticado. O transporte (WebSocket) fica fora desta classe. */
@@ -44,12 +45,12 @@ interface ActiveJob {
 
 const TICK_MS = 500;
 
-/** Remove comentários e linhas vazias do G-code. */
+/** Remove comentários, linhas vazias e delimitadores % do G-code. */
 export function cleanGcode(gcode: string): string[] {
   return gcode
     .split(/\r?\n/)
-    .map((l) => l.replace(/;.*$/, "").replace(/\(.*?\)/g, "").trim())
-    .filter((l) => l.length > 0);
+    .map(stripComment)
+    .filter((l) => l.length > 0 && l !== "%");
 }
 
 /**
@@ -115,6 +116,7 @@ export class Agent {
       connected: this.grbl.isOpen,
       job: this.jobInfo,
       reconnectGraceSec: this.config.reconnectGraceSec,
+      limits: { maxSpindle: this.config.maxSpindle, workArea: this.config.workArea },
     });
     const last = this.grbl.lastStatus;
     if (last) client.send({ type: "status", ...last });
@@ -202,6 +204,12 @@ export class Agent {
       client.send({ type: "error", message: "O arquivo não tem nenhuma linha de G-code." });
       return;
     }
+    const check = checkGcode(gcode, this.config, this.checkContext());
+    if (check.problems.length > 0) {
+      client.send({ type: "jobRejected", name, problems: check.problems, bounds: check.bounds });
+      this.broadcast({ type: "log", level: "warn", text: `Trabalho recusado: ${name} (${check.problems.length} problema(s)).` });
+      return;
+    }
     this.job = {
       id: randomUUID(),
       name,
@@ -218,6 +226,16 @@ export class Agent {
     }
     this.broadcast({ type: "log", level: "info", text: `Iniciando: ${name}` });
     this.broadcastJob();
+  }
+
+  private checkContext(): CheckContext {
+    const status = this.grbl.lastStatus;
+    const ctx: CheckContext = {};
+    if (status?.wpos) {
+      ctx.start = { x: status.wpos.x, y: status.wpos.y };
+      ctx.workOffset = { x: status.mpos.x - status.wpos.x, y: status.mpos.y - status.wpos.y };
+    }
+    return ctx;
   }
 
   private connectionLost(reason: string): void {

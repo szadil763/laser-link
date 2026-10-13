@@ -184,3 +184,31 @@ describe("Agent", () => {
     });
   });
 });
+
+describe("Agent: limites", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("recusa trabalho fora dos limites sem enviar nada ao GRBL", async () => {
+    const { fake, grbl, agent } = await setup();
+    const c = new TestClient("a");
+    agent.connect(c);
+    const before = fake.lines.length;
+    agent.receive(c, { type: "job", name: "grande.gcode", gcode: "M4 S1500\nG1 X500 Y10 F1000", confirmLaserOn: true });
+    expect(grbl.isRunning).toBe(false);
+    const rejected = c.of("jobRejected");
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.problems.map((p) => p.line)).toEqual([1, 2]);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(fake.lines.length).toBe(before);
+    agent.shutdown();
+  });
+
+  it("informa os limites no hello", async () => {
+    const { agent } = await setup();
+    const c = new TestClient("a");
+    agent.connect(c);
+    expect(c.of("hello")[0]!.limits).toEqual({ maxSpindle: 1000, workArea: { x: 400, y: 300 } });
+    agent.shutdown();
+  });
+});

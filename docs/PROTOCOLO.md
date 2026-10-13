@@ -40,12 +40,13 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 
 | `type` | Campos |
 |---|---|
-| `hello` | `version`, `port`, `connected`, `job` (`JobInfo` ou `null`), `reconnectGraceSec` |
+| `hello` | `version`, `port`, `connected`, `job` (`JobInfo` ou `null`), `reconnectGraceSec`, `limits {maxSpindle, workArea {x,y}}` |
 | `status` | `state`, `mpos {x,y,z}`, `wpos {x,y,z}` (se o WCO já é conhecido), `feed`, `spindle` |
 | `log` | `level`, `text` |
 | `progress` | `sent`, `total`, `running` |
 | `job` | `job` (`JobInfo` ou `null`): enviado sempre que o trabalho muda de estado |
 | `jobEnded` | `result` (`JobResult`) |
+| `jobRejected` | `name`, `problems` (`JobProblem[]`, até 20), `bounds` (`JobBounds` ou `null`) |
 | `pong` | `t` |
 | `error` | `message` |
 
@@ -67,3 +68,22 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 | `name`, `startedAt`, `endedAt` | |
 | `outcome` | `completed`, `aborted` ou `error` |
 | `reason` | texto para a pessoa |
+
+### `JobProblem` e `JobBounds`
+
+Antes de aceitar um `job`, o agente confere o arquivo inteiro (`apps/agent/src/gcode-check.ts`):
+
+- **Potência:** qualquer `S` acima de `maxSpindle` recusa o trabalho.
+- **Área útil:** todo ponto percorrido (G0, G1 e os extremos de arcos G2/G3), em coordenadas de trabalho, precisa ficar entre `X0 Y0` e `X{workArea.x} Y{workArea.y}`. Movimentos relativos (G91) partem da posição atual do cabeçote; G20 é convertido para mm.
+- **Curso da máquina (opcional):** com `machineLimits` no config e o WCO já conhecido, cada ponto também é conferido em coordenadas de máquina.
+- **Recusados:** comandos `$`, G10, G28, G30, G53, G55–G59, G92, G93, G90.1, planos G18/G19 e palavras desconhecidas.
+
+O agente não corta nem ajusta valores: qualquer problema recusa o trabalho e nada é enviado ao GRBL.
+
+| `JobProblem` | |
+|---|---|
+| `line` | linha no arquivo original (1…n); `0` em resumos ("Mais N pontos fora da área") |
+| `text` | trecho da linha |
+| `message` | motivo, em português |
+
+`JobBounds`: `minX`, `maxX`, `minY`, `maxY` em mm, coordenadas de trabalho.

@@ -121,6 +121,8 @@ function onMessage(msg: ServerMessage): void {
       log(`Agente v${msg.version} · porta ${msg.port} · GRBL ${msg.connected ? "conectado" : "desconectado"}`);
       reconnectGraceSec = msg.reconnectGraceSec;
       renderSerial(msg.connected);
+      $("limits").textContent =
+        `Limites do agente: área ${msg.limits.workArea.x} × ${msg.limits.workArea.y} mm a partir da origem, potência até S${msg.limits.maxSpindle}.`;
       renderJob(msg.job);
       if (msg.job?.state === "connectionLost") log(`Atenção: "${msg.job.name}" está pausado por perda de conexão.`);
       break;
@@ -142,6 +144,26 @@ function onMessage(msg: ServerMessage): void {
       renderResult(msg.result);
       log(`Trabalho ${OUTCOME_LABELS[msg.result.outcome]}: ${msg.result.reason}`);
       break;
+    case "jobRejected": {
+      $("rejected").hidden = false;
+      $("rejected-title").textContent = `"${msg.name}" foi recusado. Nada foi enviado à laser. Corrija o arquivo ou os limites do agente:`;
+      const list = $("rejected-list");
+      list.replaceChildren(
+        ...msg.problems.map((p) => {
+          const li = document.createElement("li");
+          li.textContent = p.line > 0 ? `Linha ${p.line} (${p.text}): ${p.message}` : p.message;
+          return li;
+        }),
+      );
+      if (msg.bounds) {
+        const b = msg.bounds;
+        const li = document.createElement("li");
+        li.textContent = `O trabalho ocupa de X${b.minX.toFixed(1)} Y${b.minY.toFixed(1)} a X${b.maxX.toFixed(1)} Y${b.maxY.toFixed(1)} mm.`;
+        list.append(li);
+      }
+      log(`Trabalho recusado: ${msg.name} (${msg.problems.length} problema(s)).`);
+      break;
+    }
     case "pong":
       break;
     case "error":
@@ -207,5 +229,6 @@ $("start").addEventListener("click", async () => {
     `Iniciar "${file.name}"? Isto liga o laser.\n\nConfirme que a área está livre, a exaustão ligada e que há alguém presente ou câmera ao vivo.\n\nMantenha esta aba aberta: se ela fechar ou perder a conexão, o agente pausa o trabalho.`,
   );
   if (!ok) return;
+  $("rejected").hidden = true;
   if (conn.send({ type: "job", name: file.name, gcode: await file.text(), confirmLaserOn: true })) ownJob = true;
 });

@@ -95,6 +95,11 @@
           <input id="file" type="file" accept=".gcode,.nc,.gc,.txt" aria-label="Arquivo G-code" />
           <button id="start" class="warn">Iniciar trabalho</button>
         </div>
+        <div id="rejected" class="alert" hidden role="alert" style="padding:10px;border-radius:8px;margin-top:10px">
+          <strong id="rejected-title"></strong>
+          <ul id="rejected-list"></ul>
+        </div>
+        <p id="limits" class="muted"></p>
         <p id="job-line" class="muted">Nenhum trabalho em andamento.</p>
         <p><progress id="progress" value="0" max="1"></progress></p>
         <div class="row">
