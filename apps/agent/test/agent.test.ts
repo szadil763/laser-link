@@ -111,6 +111,7 @@ describe("Agent", () => {
       agent.disconnect(owner);
       expect(agent.jobInfo?.state).toBe("connectionLost");
       expect(phone.of("job").at(-1)?.job?.state).toBe("connectionLost");
+      expect(phone.of("job").at(-1)?.job?.ownedByYou).toBe(false);
       agent.shutdown();
     });
 
@@ -131,6 +132,7 @@ describe("Agent", () => {
 
       agent.receive(back, { type: "resume", confirmLaserOn: true });
       expect(fake.realtime.at(-1)).toBe("~");
+      expect(back.of("job").at(-1)?.job).toMatchObject({ state: "running", ownedByYou: true });
       expect(grbl.isSpindleStopped).toBe(false);
       await keepAlive(agent, back, 10_000);
       expect(back.of("jobEnded").map((m) => m.result.outcome)).toEqual(["completed"]);

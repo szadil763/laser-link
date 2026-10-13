@@ -68,6 +68,7 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 | `startedAt` | ISO 8601 |
 | `sent`, `total` | linhas confirmadas pelo GRBL / total |
 | `state` | `running`, `paused` ou `connectionLost` |
+| `ownedByYou` | `true` se quem recebe é o dono do trabalho (o heartbeat dele protege o trabalho) |
 | `reason` | motivo, quando `connectionLost` |
 
 ### `JobResult`

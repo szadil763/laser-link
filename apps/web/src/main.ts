@@ -13,8 +13,6 @@ const logEl = $("log");
 
 let reconnectGraceSec = 60;
 let currentJob: JobInfo | null = null;
-/** Este navegador iniciou ou retomou o trabalho atual (o heartbeat dele protege o trabalho). */
-let ownJob = false;
 let wakeLock: WakeLockSentinel | null = null;
 
 /** Aberta pelo próprio agente (http://IP:8787), o endereço do WebSocket é o mesmo host. */
@@ -67,7 +65,6 @@ const STATE_LABELS: Record<JobInfo["state"], string> = {
 
 function renderJob(job: JobInfo | null): void {
   currentJob = job;
-  if (!job) ownJob = false;
   $("job-line").textContent = job
     ? `${job.name}: ${STATE_LABELS[job.state]} (${job.sent}/${job.total} linhas)`
     : "Nenhum trabalho em andamento.";
@@ -101,7 +98,7 @@ function renderResult(result: JobResult): void {
 
 /** Mantém a tela do celular acesa enquanto este aparelho protege um trabalho. */
 async function updateWakeLock(): Promise<void> {
-  const want = ownJob && currentJob?.state === "running" && document.visibilityState === "visible";
+  const want = currentJob?.ownedByYou === true && currentJob.state === "running" && document.visibilityState === "visible";
   try {
     if (want && !wakeLock && "wakeLock" in navigator) {
       wakeLock = await navigator.wakeLock.request("screen");
@@ -193,7 +190,7 @@ function confirmResume(): boolean {
 
 function resume(): void {
   if (!confirmResume()) return;
-  if (conn.send({ type: "resume", confirmLaserOn: true })) ownJob = true;
+  conn.send({ type: "resume", confirmLaserOn: true });
 }
 
 $("connect").addEventListener("click", () => {
@@ -211,7 +208,7 @@ $("connect").addEventListener("click", () => {
   conn.connect(base, tokenInput.value);
 });
 $("disconnect").addEventListener("click", () => {
-  if (currentJob && ownJob && !window.confirm("Desconectar pausa o trabalho em andamento e desliga o laser. Continuar?")) return;
+  if (currentJob?.ownedByYou && !window.confirm("Desconectar pausa o trabalho em andamento e desliga o laser. Continuar?")) return;
   conn.disconnect();
 });
 
@@ -250,5 +247,5 @@ $("start").addEventListener("click", async () => {
   );
   if (!ok) return;
   $("rejected").hidden = true;
-  if (conn.send({ type: "job", name: file.name, gcode: await file.text(), confirmLaserOn: true })) ownJob = true;
+  conn.send({ type: "job", name: file.name, gcode: await file.text(), confirmLaserOn: true });
 });

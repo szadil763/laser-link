@@ -51,6 +51,8 @@ export interface JobInfo {
   sent: number;
   total: number;
   state: JobState;
+  /** Este cliente é o dono: o heartbeat dele protege o trabalho. */
+  ownedByYou: boolean;
   /** Por que o trabalho foi pausado, quando `state` é `connectionLost`. */
   reason?: string;
 }

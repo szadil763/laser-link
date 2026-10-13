@@ -108,7 +108,8 @@ export class Agent {
     return this.clients.size;
   }
 
-  get jobInfo(): JobInfo | null {
+  /** Estado do trabalho visto por `clientId` (muda só o campo ownedByYou). */
+  jobInfoFor(clientId: string | null): JobInfo | null {
     const j = this.job;
     if (!j) return null;
     const info: JobInfo = {
@@ -118,9 +119,14 @@ export class Agent {
       sent: j.sent,
       total: j.total,
       state: j.state,
+      ownedByYou: clientId !== null && j.ownerId === clientId,
     };
     if (j.reason) info.reason = j.reason;
     return info;
+  }
+
+  get jobInfo(): JobInfo | null {
+    return this.jobInfoFor(null);
   }
 
   connect(client: ClientConn): void {
@@ -130,7 +136,7 @@ export class Agent {
       version: PROTOCOL_VERSION,
       port: this.portLabel,
       connected: this.grbl.isOpen,
-      job: this.jobInfo,
+      job: this.jobInfoFor(client.id),
       reconnectGraceSec: this.config.reconnectGraceSec,
       limits: { maxSpindle: this.config.maxSpindle, workArea: this.config.workArea },
       lastResult: this.lastResult,
@@ -411,7 +417,7 @@ export class Agent {
   }
 
   private broadcastJob(): void {
-    this.broadcast({ type: "job", job: this.jobInfo });
+    for (const c of this.clients.values()) c.conn.send({ type: "job", job: this.jobInfoFor(c.conn.id) });
   }
 
   private broadcast(msg: ServerMessage): void {
