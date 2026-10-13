@@ -3,22 +3,30 @@
 ## Visão geral
 
 ```
-[Navegador / App] ──ws──▶ [Agente] ──serial──▶ [GRBL]
-     UI                    fila + segurança       laser
+[Navegador / celular] ──ws + token──▶ [Agente] ──serial──▶ [GRBL]
+     UI + heartbeat                  regras + fila            laser
 ```
 
 ## Componentes
 
 **Agente (`apps/agent`)**
-- `config.ts`: lê `laserlink.config.json` (porta, baudrate, token, porta WS).
-- `grbl.ts`: abre a serial, faz streaming com contagem de caracteres, interpreta `ok`, `error:`, `ALARM:` e relatórios de status (`<Idle|MPos:...>`).
-- `index.ts`: servidor WebSocket, autenticação por token, roteia mensagens e aplica a parada de segurança na desconexão.
+- `config.ts`: lê `laserlink.config.json` (ou o caminho em `LASERLINK_CONFIG`): porta, token, limites, pastas.
+- `serial-link.ts`: interface `SerialLink` e a implementação com `serialport`. Reabre a porta criando uma instância nova.
+- `grbl.ts`: streaming com contagem de caracteres (fila única para jog, comandos e trabalho), espera o `Grbl 1.1…` após cada reset, interpreta `ok`, `error:`, `ALARM:` e `<Estado|MPos:…|WCO:…>`, `abortJob` (hold, reset, `M5`) e `safetyHold` (hold e `0x9E` quando o GRBL confirma o Hold).
+- `gcode-check.ts`: verificação pura do arquivo inteiro antes do envio (potência, área útil, arcos, comandos recusados).
+- `agent.ts`: regras independentes do transporte: dono do trabalho, heartbeat, pausa por perda de conexão, cancelamento após `reconnectGraceSec`, reabertura da serial, log de trabalhos e recuperação após reinício.
+- `job-log.ts`: log JSON Lines em `apps/agent/logs/jobs.jsonl`.
+- `static.ts`: serve a interface compilada (`apps/web/dist`) na mesma porta do WebSocket.
+- `sim/fake-grbl.ts`: GRBL falso para testes e para `"serialPort": "sim"`.
+- `index.ts`: liga tudo: servidor HTTP + WebSocket, token, sinais de encerramento.
 
 **Interface (`apps/web`)**
-- Conecta no agente, mostra estado e posição, botões de jog, origem, pausa, retomar, parar, e envio de arquivo `.gcode/.nc`.
+- `connection.ts`: WebSocket com reconexão automática e ping a cada 2 s, com timer num Web Worker (`tick-worker.ts`) para não sofrer o limite de timers de abas em segundo plano.
+- `main.ts`: estado da conexão e da laser, posição, jog, origem, envio de arquivo com confirmação, aviso de trabalho pausado (Retomar/Cancelar), problemas de trabalho recusado, último resultado e Wake Lock na aba dona.
 
 **Shared (`packages/shared`)**
-- Tipos TypeScript das mensagens. Evita divergência entre agente e interface.
+- `protocol.ts`: tipos das mensagens e constantes do heartbeat. Única fonte de verdade.
+- `validate.ts`: validação em tempo de execução das mensagens do cliente.
 
 ## Decisões
 
@@ -28,6 +36,12 @@
 | WebSocket | Bidirecional, simples, status em tempo real |
 | Tailscale para acesso externo | VPN sem abrir portas |
 | Monorepo TS | Tipos compartilhados |
+| Agente serve a interface | Uma coisa só para instalar; evita o bloqueio de `ws://` em páginas `https` |
+| Sem nuvem (Firebase etc.) | A laser não pode depender da internet; nada passa por servidor externo |
+| Perda de conexão = hold + `0x9E`, não `M5` | `M5` entra na fila e só rodaria ao retomar; `0x9E` desliga o laser na hora sem perder o trabalho |
+| Dono do trabalho | O heartbeat que importa é o de quem está acompanhando o trabalho; um celular só olhando não segura a máquina |
+| Verificar o arquivo inteiro antes | Recusar é mais seguro que cortar valores no meio do trabalho |
+| `confirmLaserOn: true` no protocolo | A regra "nada liga o laser sem confirmação" fica explícita também no agente |
 
 ## Alternativas consideradas
 
@@ -36,4 +50,4 @@
 
 ## Fases futuras
 
-Editor vetorial, importação SVG/imagem, camadas, geração de G-code própria, biblioteca de materiais, câmera. Veja `ROADMAP.md`.
+Pré-visualização, importação SVG/imagem, camadas, geração de G-code própria (`packages/gcode`), biblioteca de materiais, geradores paramétricos. Veja `ROADMAP.md`.

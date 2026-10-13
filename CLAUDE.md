@@ -17,10 +17,10 @@ Monorepo npm workspaces:
 ## Regras inegociáveis (segurança)
 
 1. **Nunca** fazer streaming de G-code pela rede. O arquivo vai inteiro ao agente.
-2. Se o cliente desconectar com trabalho em andamento: enviar `!` (feed hold) e depois `M5`.
+2. Se o cliente desconectar (ou ficar mudo 6 s) com trabalho em andamento: `!` (feed hold) e, já em Hold, `0x9E` para desligar o laser. Se ninguém reconectar em `reconnectGraceSec`, cancelar com reset e `M5`. Um `M5` direto durante o Hold não serve: ele fica na fila e só roda ao retomar.
 3. Todo WebSocket exige token. Sem token válido, fechar a conexão.
-4. Comandos de tempo real do GRBL (`!`, `~`, `?`, `0x18`) passam fora da fila de linhas.
-5. Não adicionar funcionalidade que ligue o laser sem confirmação explícita do usuário na UI.
+4. Comandos de tempo real do GRBL (`!`, `~`, `?`, `0x18`, `0x9E`) passam fora da fila de linhas.
+5. Não adicionar funcionalidade que ligue o laser sem confirmação explícita do usuário na UI (no protocolo: `confirmLaserOn: true`).
 6. Não expor portas na internet; documentar Tailscale ou LAN.
 
 ## Streaming GRBL
@@ -32,6 +32,7 @@ Usar *character-counting*: manter a soma dos bytes enviados e ainda não confirm
 ```bash
 npm install
 npm run typecheck
+npm test
 npm run dev:agent
 npm run dev:web
 ```

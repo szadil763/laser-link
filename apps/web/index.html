@@ -5,35 +5,71 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LaserLink</title>
     <style>
+      *, *::before, *::after { box-sizing: border-box; }
       :root { color-scheme: dark; font-family: system-ui, sans-serif; }
       body { margin: 0; background: #14161a; color: #e8eaed; }
-      main { max-width: 760px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+      main { max-width: 760px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+      input { max-width: 100%; }
       section { background: #1e2127; border-radius: 10px; padding: 14px; }
       h1 { margin: 0; font-size: 20px; }
       h2 { margin: 0 0 10px; font-size: 14px; color: #9aa0a6; text-transform: uppercase; letter-spacing: .05em; }
       input, button { font: inherit; padding: 8px 10px; border-radius: 6px; border: 1px solid #3c4043; background: #2a2d33; color: inherit; }
-      button { cursor: pointer; }
+      button { cursor: pointer; min-height: 44px; }
       button:hover { background: #343841; }
+      button:focus-visible, input:focus-visible { outline: 2px solid #8ab4f8; outline-offset: 2px; }
       button.danger { background: #8c1d18; border-color: #b3261e; font-weight: 700; }
       button.warn { background: #6b4e00; border-color: #946f00; }
       .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .badges { display: flex; gap: 8px; flex-wrap: wrap; }
+      .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #2a2d33; font-size: 13px; }
+      .badge::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--dot, #5f6368); }
+      .badge[data-level="ok"] { --dot: #34a853; }
+      .badge[data-level="warn"] { --dot: #fbbc04; }
+      .badge[data-level="bad"] { --dot: #ea4335; }
+      .alert { border: 2px solid #fbbc04; background: #2b2410; }
+      .alert h2 { color: #fdd663; }
       .jog { display: grid; grid-template-columns: repeat(3, 56px); gap: 6px; justify-content: center; }
       .jog button { height: 48px; }
       #state { font-weight: 700; }
       #log { height: 160px; overflow: auto; font: 12px ui-monospace, monospace; background: #111317; padding: 8px; border-radius: 6px; white-space: pre-wrap; }
       progress { width: 100%; }
+      .muted { color: #9aa0a6; font-size: 14px; }
+      [hidden] { display: none !important; }
+      dialog { max-width: min(440px, calc(100vw - 32px)); border: 1px solid #3c4043; border-radius: 10px; background: #1e2127; color: inherit; padding: 18px; }
+      dialog::backdrop { background: rgba(0, 0, 0, .6); }
+      dialog h2 { color: #fdd663; font-size: 16px; text-transform: none; letter-spacing: 0; }
+      dialog p { white-space: pre-line; line-height: 1.45; }
+      dialog .row { justify-content: flex-end; }
     </style>
   </head>
   <body>
     <main>
-      <h1>LaserLink</h1>
+      <div class="top">
+        <h1>LaserLink</h1>
+        <div class="badges" aria-live="polite">
+          <span id="link-badge" class="badge" data-level="bad">Desconectado</span>
+          <span id="serial-badge" class="badge">Laser: —</span>
+        </div>
+      </div>
+
+      <section id="job-alert" class="alert" hidden role="alert">
+        <h2>Trabalho pausado</h2>
+        <p id="job-alert-text"></p>
+        <p class="muted" id="job-alert-hint"></p>
+        <div class="row">
+          <button id="alert-resume" class="warn">Retomar trabalho</button>
+          <button id="alert-cancel" class="danger">Cancelar trabalho</button>
+        </div>
+      </section>
 
       <section>
         <h2>Conexão</h2>
         <div class="row">
-          <input id="url" placeholder="ws://IP-DA-LASER:8787" size="26" />
-          <input id="token" type="password" placeholder="token" size="18" />
+          <input id="url" placeholder="ws://IP-DA-LASER:8787" size="26" aria-label="Endereço do agente" />
+          <input id="token" type="password" placeholder="token" size="18" aria-label="Token" />
           <button id="connect">Conectar</button>
+          <button id="disconnect">Desconectar</button>
         </div>
       </section>
 
@@ -63,22 +99,39 @@
       <section>
         <h2>Trabalho</h2>
         <div class="row">
-          <input id="file" type="file" accept=".gcode,.nc,.gc,.txt" />
+          <input id="file" type="file" accept=".gcode,.nc,.gc,.txt" aria-label="Arquivo G-code" />
           <button id="start" class="warn">Iniciar trabalho</button>
         </div>
+        <div id="rejected" class="alert" hidden role="alert" style="padding:10px;border-radius:8px;margin-top:10px">
+          <strong id="rejected-title"></strong>
+          <ul id="rejected-list"></ul>
+        </div>
+        <p id="limits" class="muted"></p>
+        <p id="job-line" class="muted">Nenhum trabalho em andamento.</p>
         <p><progress id="progress" value="0" max="1"></progress></p>
         <div class="row">
           <button id="hold">Pausar</button>
           <button id="resume">Retomar</button>
           <button id="stop" class="danger">PARAR</button>
         </div>
+        <p id="last-result" class="muted" hidden></p>
       </section>
 
       <section>
         <h2>Registro</h2>
-        <div id="log"></div>
+        <div id="log" aria-live="polite"></div>
       </section>
     </main>
+    <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+      <form method="dialog">
+        <h2 id="confirm-title"></h2>
+        <p id="confirm-text"></p>
+        <div class="row">
+          <button id="confirm-cancel" value="cancel">Voltar</button>
+          <button id="confirm-ok" value="ok"></button>
+        </div>
+      </form>
+    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -1,181 +1,341 @@
 import { EventEmitter } from "node:events";
-import { ReadlineParser, SerialPort } from "serialport";
-import type { MachineState, Position } from "@laserlink/shared";
+import type { JobOutcome, MachineState, Position } from "@laserlink/shared";
+import type { SerialLink } from "./serial-link.js";
 
-const RX_BUFFER_SIZE = 127; // buffer de RX do GRBL 1.1
+export const RX_BUFFER_SIZE = 127; // buffer de RX do GRBL 1.1
 const STATUS_POLL_MS = 200;
+/** Se o GRBL não mandar a mensagem de boas-vindas depois do reset, segue assim mesmo após este tempo. */
+const READY_TIMEOUT_MS = 3000;
+
+// Comandos de tempo real: vão direto para a serial, fora da fila de linhas.
+const RT_STATUS = Buffer.from("?");
+const RT_HOLD = Buffer.from("!");
+const RT_RESUME = Buffer.from("~");
+const RT_RESET = Buffer.from([0x18]);
+const RT_SPINDLE_STOP = Buffer.from([0x9e]); // override: liga/desliga o laser, só vale em Hold
 
 export interface GrblStatus {
   state: MachineState;
   mpos: Position;
+  /** Posição de trabalho (MPos − WCO). Só existe depois do primeiro WCO recebido. */
+  wpos?: Position;
   feed: number;
   spindle: number;
+}
+
+export interface JobEnd {
+  outcome: JobOutcome;
+  reason: string;
+}
+
+export interface JobProgress {
+  sent: number;
+  total: number;
+  running: boolean;
 }
 
 interface GrblEvents {
   status: [GrblStatus];
   log: ["info" | "warn" | "error", string];
-  progress: [{ sent: number; total: number; running: boolean }];
+  progress: [JobProgress];
+  jobEnd: [JobEnd];
   closed: [];
 }
 
-export class Grbl extends EventEmitter<GrblEvents> {
-  private port: SerialPort;
-  private pollTimer?: NodeJS.Timeout;
+/** Linha enviada ao GRBL e ainda sem resposta. */
+interface InFlight {
+  text: string;
+  size: number;
+  /** Número da linha no arquivo do trabalho (1…n). Ausente em comandos avulsos. */
+  jobLine?: number;
+}
 
-  // estado do job
-  private queue: string[] = [];
-  private pending: number[] = []; // tamanhos (bytes) das linhas enviadas e ainda sem "ok"
+interface Queued {
+  text: string;
+  jobLine?: number;
+}
+
+export interface GrblOptions {
+  statusPollMs?: number;
+}
+
+export class Grbl extends EventEmitter<GrblEvents> {
+  private pollTimer?: NodeJS.Timeout;
+  private readonly pollMs: number;
+
+  // Uma fila só para tudo que é linha (jog, $H, trabalho): a contagem de bytes nunca se perde.
+  private queue: Queued[] = [];
+  private inFlight: InFlight[] = [];
+  private inFlightBytes = 0;
+
+  // estado do trabalho
   private total = 0;
   private acked = 0;
   private running = false;
+  /** Falso entre um reset e a mensagem "Grbl 1.1…": linhas enviadas nesse intervalo seriam descartadas. */
+  private ready = false;
+  private readyTimer?: NodeJS.Timeout;
+  /** Entre o pedido de parada e o M5 final: nada novo entra na fila. */
+  private aborting = false;
 
-  constructor(path: string, baudRate: number) {
+  /** Pedido de desligar o laser assim que o GRBL confirmar o Hold. */
+  private spindleStopPending = false;
+  /** 0x9E já enviado neste Hold (é alternância: mandar duas vezes religaria). */
+  private spindleStopped = false;
+
+  private wco: Position | null = null;
+  private last: GrblStatus | null = null;
+
+  constructor(
+    private readonly link: SerialLink,
+    options: GrblOptions = {},
+  ) {
     super();
-    this.port = new SerialPort({ path, baudRate, autoOpen: false });
-    const parser = this.port.pipe(new ReadlineParser({ delimiter: "\n" }));
-    parser.on("data", (line: string) => this.onLine(line.trim()));
-    this.port.on("close", () => {
-      this.stopPolling();
-      this.running = false;
-      this.emit("closed");
-    });
-    this.port.on("error", (err) => this.emit("log", "error", `Serial: ${err.message}`));
+    this.pollMs = options.statusPollMs ?? STATUS_POLL_MS;
+    link.on("line", (line) => this.onLine(line.trim()));
+    link.on("close", () => this.onClose());
+    link.on("error", (err) => this.emit("log", "error", `Serial: ${err.message}`));
   }
 
   get isOpen(): boolean {
-    return this.port.isOpen;
+    return this.link.isOpen;
   }
 
   get isRunning(): boolean {
     return this.running;
   }
 
-  open(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.port.open((err) => {
-        if (err) return reject(err);
-        this.startPolling();
-        // reset suave para iniciar o GRBL em estado conhecido
-        this.writeRaw(Buffer.from([0x18]));
-        resolve();
-      });
-    });
+  /** Serial aberta e GRBL pronto para receber linhas. */
+  get isReady(): boolean {
+    return this.isOpen && this.ready;
+  }
+
+  get lastStatus(): GrblStatus | null {
+    return this.last;
+  }
+
+  async open(): Promise<void> {
+    await this.link.open();
+    this.resetLineState();
+    this.startPolling();
+    // reset suave para iniciar o GRBL em estado conhecido
+    this.writeRaw(RT_RESET);
+    this.waitReady();
   }
 
   close(): void {
     this.stopPolling();
-    if (this.port.isOpen) this.port.close();
+    this.link.close();
   }
 
   // ---------- comandos imediatos (fora da fila) ----------
 
   feedHold(): void {
-    this.writeRaw(Buffer.from("!"));
+    this.writeRaw(RT_HOLD);
   }
 
   cycleResume(): void {
-    this.writeRaw(Buffer.from("~"));
+    // Ao retomar, o GRBL religa o laser que o 0x9E tinha desligado.
+    this.spindleStopPending = false;
+    this.spindleStopped = false;
+    this.writeRaw(RT_RESUME);
+  }
+
+  /**
+   * Parada de segurança sem perder o trabalho: feed hold e, assim que o GRBL
+   * estiver em Hold, desliga o laser com o override 0x9E. Um "M5" aqui não
+   * adiantaria: ele entraria na fila e só rodaria depois de retomar.
+   */
+  safetyHold(): void {
+    this.feedHold();
+    // Espera um relatório novo com Hold (no máximo um ciclo de polling).
+    if (!this.spindleStopped) this.spindleStopPending = true;
+  }
+
+  get isSpindleStopped(): boolean {
+    return this.spindleStopped;
   }
 
   /** Reset suave: aborta o movimento atual e limpa o buffer do GRBL. */
   softReset(): void {
-    this.writeRaw(Buffer.from([0x18]));
+    this.writeRaw(RT_RESET);
+    this.waitReady();
+    this.spindleStopPending = false;
+    this.spindleStopped = false;
+    // O GRBL descarta o que estava no buffer e não responde mais a essas linhas.
+    this.resetLineState();
   }
 
-  /** Linha única fora de trabalho (jog, home, unlock...). Recusada durante job. */
+  /** Linha única fora de trabalho (jog, home, unlock...). Recusada durante trabalho. */
   sendLine(line: string): boolean {
+    if (this.aborting) return false;
     if (this.running) {
       this.emit("log", "warn", `Ignorado durante o trabalho: ${line}`);
       return false;
     }
-    this.writeRaw(Buffer.from(line.trim() + "\n"));
+    this.enqueue({ text: line.trim() });
     return true;
   }
 
-  // ---------- job com contagem de caracteres ----------
+  // ---------- trabalho com contagem de caracteres ----------
 
-  startJob(gcode: string): boolean {
-    if (this.running) return false;
-    const lines = gcode
-      .split(/\r?\n/)
-      .map((l) => l.replace(/;.*$/, "").replace(/\(.*?\)/g, "").trim())
-      .filter((l) => l.length > 0);
-    if (lines.length === 0) return false;
-    this.queue = lines;
-    this.pending = [];
+  /** Recebe as linhas já limpas (sem comentários nem linhas vazias). */
+  startJob(lines: readonly string[]): boolean {
+    if (this.running || this.aborting || lines.length === 0 || !this.isReady) return false;
     this.total = lines.length;
     this.acked = 0;
     this.running = true;
+    lines.forEach((text, i) => this.queue.push({ text, jobLine: i + 1 }));
     this.emitProgress();
     this.pump();
     return true;
   }
 
-  /** Para o job com segurança: hold, reset e laser desligado. */
-  abortJob(): void {
+  /** Para com segurança: hold, reset e laser desligado. Funciona com ou sem trabalho. */
+  abortJob(reason = "Parado pelo usuário."): void {
+    const hadJob = this.running;
+    this.aborting = true;
     this.feedHold();
-    this.queue = [];
-    this.pending = [];
     this.running = false;
-    this.emitProgress();
+    this.queue = [];
+    if (hadJob) {
+      this.emitProgress();
+      this.emit("jobEnd", { outcome: "aborted", reason });
+    }
     // pequeno atraso para o hold atuar antes do reset
     setTimeout(() => {
       this.softReset();
-      setTimeout(() => this.writeRaw(Buffer.from("M5\n")), 200);
+      setTimeout(() => {
+        this.aborting = false;
+        this.enqueue({ text: "M5" });
+      }, 200);
     }, 100);
   }
 
   // ---------- internos ----------
 
+  private applySpindleStop(): void {
+    if (!this.spindleStopPending || this.spindleStopped) return;
+    this.spindleStopPending = false;
+    this.spindleStopped = true;
+    this.writeRaw(RT_SPINDLE_STOP);
+    this.emit("log", "warn", "Laser desligado (override 0x9E) com o trabalho em pausa.");
+  }
+
+  private waitReady(): void {
+    this.ready = false;
+    if (this.readyTimer) clearTimeout(this.readyTimer);
+    this.readyTimer = setTimeout(() => {
+      this.readyTimer = undefined;
+      if (this.ready || !this.isOpen) return;
+      this.emit("log", "warn", "O GRBL não respondeu ao reset com a mensagem de boas-vindas. Seguindo assim mesmo.");
+      this.markReady();
+    }, READY_TIMEOUT_MS);
+  }
+
+  private markReady(): void {
+    if (this.readyTimer) clearTimeout(this.readyTimer);
+    this.readyTimer = undefined;
+    this.ready = true;
+    this.pump();
+  }
+
+  private enqueue(item: Queued): void {
+    this.queue.push(item);
+    this.pump();
+  }
+
   private pump(): void {
-    while (this.running && this.queue.length > 0) {
+    while (this.queue.length > 0 && this.isReady) {
       const next = this.queue[0]!;
-      const size = next.length + 1;
-      const inFlight = this.pending.reduce((a, b) => a + b, 0);
-      if (inFlight + size > RX_BUFFER_SIZE) break;
+      const size = Buffer.byteLength(next.text) + 1;
+      if (this.inFlightBytes + size > RX_BUFFER_SIZE) break;
       this.queue.shift();
-      this.pending.push(size);
-      this.writeRaw(Buffer.from(next + "\n"));
+      this.inFlight.push({ text: next.text, size, jobLine: next.jobLine });
+      this.inFlightBytes += size;
+      this.writeRaw(Buffer.from(next.text + "\n"));
     }
   }
 
   private onLine(line: string): void {
     if (!line) return;
     if (line === "ok") {
-      this.onAck();
+      this.onResponse();
     } else if (line.startsWith("error:")) {
-      this.emit("log", "error", line);
-      this.onAck();
-      if (this.running) {
-        this.emit("log", "error", "Trabalho interrompido por erro do GRBL.");
-        this.abortJob();
+      const sent = this.onResponse();
+      const where = sent?.jobLine ? ` na linha ${sent.jobLine} (${sent.text})` : sent ? ` em "${sent.text}"` : "";
+      this.emit("log", "error", `GRBL ${line}${where}`);
+      if (this.running && sent?.jobLine !== undefined) {
+        this.abortJob(`GRBL respondeu ${line}${where}.`);
       }
     } else if (line.startsWith("ALARM:")) {
-      this.emit("log", "error", line);
-      if (this.running) this.abortJob();
+      this.emit("log", "error", `GRBL ${line}`);
+      if (this.running) this.abortJob(`GRBL entrou em alarme (${line}).`);
     } else if (line.startsWith("<")) {
-      const status = parseStatus(line);
-      if (status) this.emit("status", status);
+      const status = parseStatus(line, this.wco);
+      if (status) {
+        if (status.wco) this.wco = status.wco;
+        const { wco: _wco, ...rest } = status;
+        this.last = rest;
+        if (rest.state === "Hold") this.applySpindleStop();
+        this.emit("status", rest);
+      }
+    } else if (line.startsWith("Grbl ")) {
+      // Mensagem de boas-vindas após reset: o buffer do GRBL está vazio.
+      const unexpected = this.ready;
+      this.resetLineState();
+      if (unexpected && this.running) {
+        this.running = false;
+        this.queue = [];
+        this.emitProgress();
+        this.emit("jobEnd", { outcome: "error", reason: "O GRBL reiniciou durante o trabalho." });
+      }
+      this.emit("log", "info", line);
+      this.markReady();
     } else {
       this.emit("log", "info", line);
     }
   }
 
-  private onAck(): void {
-    if (this.pending.length > 0) this.pending.shift();
-    if (!this.running) return;
-    this.acked += 1;
-    this.emitProgress();
-    if (this.queue.length === 0 && this.pending.length === 0) {
-      this.running = false;
+  /** Confirma a linha mais antiga em voo e devolve qual era. */
+  private onResponse(): InFlight | undefined {
+    const done = this.inFlight.shift();
+    if (done) this.inFlightBytes -= done.size;
+    if (done?.jobLine !== undefined && this.running) {
+      this.acked += 1;
       this.emitProgress();
-      this.emit("log", "info", "Trabalho concluído.");
-      // garante laser desligado ao final
-      this.writeRaw(Buffer.from("M5\n"));
-    } else {
-      this.pump();
+      if (this.acked === this.total) {
+        this.running = false;
+        this.emitProgress();
+        this.emit("log", "info", "Trabalho concluído.");
+        this.emit("jobEnd", { outcome: "completed", reason: "Trabalho concluído." });
+        // garante laser desligado ao final
+        this.queue.push({ text: "M5" });
+      }
     }
+    this.pump();
+    return done;
+  }
+
+  private onClose(): void {
+    this.stopPolling();
+    this.ready = false;
+    if (this.readyTimer) clearTimeout(this.readyTimer);
+    this.readyTimer = undefined;
+    const hadJob = this.running;
+    this.running = false;
+    this.queue = [];
+    this.resetLineState();
+    if (hadJob) {
+      this.emitProgress();
+      this.emit("jobEnd", { outcome: "error", reason: "A porta serial foi desconectada durante o trabalho." });
+    }
+    this.emit("closed");
+  }
+
+  private resetLineState(): void {
+    this.inFlight = [];
+    this.inFlightBytes = 0;
   }
 
   private emitProgress(): void {
@@ -183,11 +343,12 @@ export class Grbl extends EventEmitter<GrblEvents> {
   }
 
   private writeRaw(data: Buffer): void {
-    if (this.port.isOpen) this.port.write(data);
+    if (this.link.isOpen) this.link.write(data);
   }
 
   private startPolling(): void {
-    this.pollTimer = setInterval(() => this.writeRaw(Buffer.from("?")), STATUS_POLL_MS);
+    this.stopPolling();
+    this.pollTimer = setInterval(() => this.writeRaw(RT_STATUS), this.pollMs);
   }
 
   private stopPolling(): void {
@@ -196,8 +357,16 @@ export class Grbl extends EventEmitter<GrblEvents> {
   }
 }
 
-/** Ex.: <Idle|MPos:0.000,0.000,0.000|FS:0,0> */
-export function parseStatus(line: string): GrblStatus | null {
+export interface ParsedStatus extends GrblStatus {
+  /** Deslocamento de coordenadas de trabalho, quando veio neste relatório. */
+  wco?: Position;
+}
+
+/**
+ * Ex.: <Idle|MPos:0.000,0.000,0.000|FS:0,0|WCO:10.000,5.000,0.000>
+ * `knownWco` é o último WCO recebido (o GRBL só o envia de tempos em tempos).
+ */
+export function parseStatus(line: string, knownWco: Position | null = null): ParsedStatus | null {
   const m = /^<([A-Za-z]+)(?::\d+)?\|(.*)>$/.exec(line);
   if (!m) return null;
   const state = normalizeState(m[1]!);
@@ -206,13 +375,46 @@ export function parseStatus(line: string): GrblStatus | null {
     const i = part.indexOf(":");
     if (i > 0) fields.set(part.slice(0, i), part.slice(i + 1));
   }
-  const posRaw = fields.get("MPos") ?? fields.get("WPos") ?? "0,0,0";
-  const [x = 0, y = 0, z = 0] = posRaw.split(",").map(Number);
+  const wcoRaw = fields.get("WCO");
+  const wco = wcoRaw !== undefined ? parsePosition(wcoRaw) : undefined;
+  const offset = wco ?? knownWco;
+
+  const mposRaw = fields.get("MPos");
+  const wposRaw = fields.get("WPos");
+  let mpos: Position;
+  let wpos: Position | undefined;
+  if (mposRaw !== undefined) {
+    mpos = parsePosition(mposRaw);
+    if (offset) wpos = subtract(mpos, offset);
+  } else if (wposRaw !== undefined) {
+    wpos = parsePosition(wposRaw);
+    mpos = offset ? add(wpos, offset) : wpos;
+  } else {
+    mpos = { x: 0, y: 0, z: 0 };
+  }
+
   const [feed = 0, spindle = 0] = (fields.get("FS") ?? fields.get("F") ?? "0,0").split(",").map(Number);
-  return { state, mpos: { x, y, z }, feed, spindle };
+  const status: ParsedStatus = { state, mpos, feed, spindle };
+  if (wpos) status.wpos = wpos;
+  if (wco) status.wco = wco;
+  return status;
 }
 
+function parsePosition(raw: string): Position {
+  const [x = 0, y = 0, z = 0] = raw.split(",").map(Number);
+  return { x, y, z };
+}
+
+function add(a: Position, b: Position): Position {
+  return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
+}
+
+function subtract(a: Position, b: Position): Position {
+  return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
+}
+
+const KNOWN_STATES: readonly MachineState[] = ["Idle", "Run", "Hold", "Jog", "Alarm", "Door", "Check", "Home", "Sleep"];
+
 function normalizeState(s: string): MachineState {
-  const known: MachineState[] = ["Idle", "Run", "Hold", "Jog", "Alarm", "Door", "Check", "Home", "Sleep"];
-  return (known.find((k) => k === s) ?? "Unknown") as MachineState;
+  return KNOWN_STATES.find((k) => k === s) ?? "Unknown";
 }

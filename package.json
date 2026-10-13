@@ -12,7 +12,9 @@
     "build": "npm run build -w @laserlink/shared && npm run build -w @laserlink/agent && npm run build -w @laserlink/web",
     "dev:agent": "npm run dev -w @laserlink/agent",
     "dev:web": "npm run dev -w @laserlink/web",
-    "typecheck": "npm run build -w @laserlink/shared && npm run typecheck -w @laserlink/agent && npm run typecheck -w @laserlink/web"
+    "typecheck": "npm run build -w @laserlink/shared && npm run typecheck -w @laserlink/agent && npm run typecheck -w @laserlink/web",
+    "test": "npm run build -w @laserlink/shared && npm test -w @laserlink/agent",
+    "start:agent": "node apps/agent/dist/index.js"
   },
   "engines": {
     "node": ">=20"

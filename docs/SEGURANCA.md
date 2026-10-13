@@ -15,19 +15,25 @@ Laser sem supervisão é risco real de incêndio e de ferimento. Este documento 
 ## Software (implementado e planejado)
 
 - [x] Token obrigatório no WebSocket.
-- [x] Desconexão do cliente durante trabalho: `!` + `M5`.
+- [x] Desconexão do cliente durante trabalho: `!` e, em Hold, `0x9E` (laser desligado); cancela com reset + `M5` se ninguém reconectar em 60 s.
+- [x] Heartbeat: cliente mudo por 6 s = mesma parada acima.
 - [x] Parada em `error:` e `ALARM:`.
 - [x] `Parar` envia reset suave (0x18) e `M5`.
-- [ ] Confirmação extra na UI antes de iniciar o trabalho.
-- [ ] Timeout de heartbeat (cliente mudo = pausa).
-- [ ] Limite máximo de potência configurável no agente.
-- [ ] Log de trabalhos.
+- [x] Confirmação na UI antes de iniciar e de retomar (`confirmLaserOn` no protocolo).
+- [x] Limite de potência (`maxSpindle`) e área útil (`workArea`) no agente: G-code fora dos limites é recusado inteiro.
+- [x] Log de trabalhos em `apps/agent/logs/jobs.jsonl` (início, fim, resultado, motivo e recusas).
+
+## A aba que iniciou o trabalho
+
+O heartbeat vem da aba que iniciou (ou retomou) o trabalho. Se ela fechar, o computador dormir ou o celular apagar a tela e suspender o navegador, o agente pausa o trabalho e desliga o laser. Isso é proposital.
+A interface pede para manter a tela acesa (Wake Lock) nessa aba, mas no celular nem todo navegador respeita. Para trabalhos longos, prefira um computador.
 
 ## Rede
 
 - Use **Tailscale** ou rede local. Não faça port-forward do agente.
 - Troque o token padrão. Gere um longo e aleatório.
 - Considere TLS (wss) via proxy se sair da rede local.
+- O firewall do Windows (regra criada pelo `instalar-servico.ps1`) aceita a porta só do Tailscale e da rede local. Veja `WINDOWS.md`.
 
 ## Regra de ouro
 
