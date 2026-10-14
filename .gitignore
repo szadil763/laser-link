@@ -11,3 +11,4 @@ laserlink.config.json
 
 # logs de trabalho do agente
 apps/agent/logs/
+apps/agent/data/

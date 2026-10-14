@@ -1,7 +1,7 @@
 # Protocolo WebSocket
 
 Mensagens JSON. Tipos em `packages/shared/src/protocol.ts`; validação das mensagens do cliente em `packages/shared/src/validate.ts`.
-Versão atual: **0.2.0** (`PROTOCOL_VERSION`). O agente informa a versão no `hello`; a interface avisa se for diferente.
+Versão atual: **0.3.0** (`PROTOCOL_VERSION`). O agente informa a versão no `hello`; a interface avisa se for diferente.
 
 ## Endereço e autenticação
 
@@ -41,14 +41,16 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 | `stop` | | `!` + `0x18` + `M5` (cancela o trabalho) |
 | `unlock` | | `$X` |
 | `job` | `name`, `gcode`, `confirmLaserOn: true` | Inicia streaming local no agente |
+| `frame` | `bounds {minX,minY,maxX,maxY}`, `laser` (`"off"` ou `"min"`); com `"min"`, `confirmLaserOn: true` | Percorre o retângulo a `frameFeed`. `"off"`: laser desligado (M5). `"min"`: M4 em `framePower`. Passa pelas mesmas conferências de área de um trabalho e aparece no log como "Enquadrar" |
+| `materialsSave` | `materials` (`Material[]`, até 200) | Grava a biblioteca em `materials.json` no agente e envia `materials` a todos |
 
-`confirmLaserOn: true` é obrigatório em `resume` e `job`: sem ele a mensagem é recusada. A interface só envia esse campo depois que a pessoa confirma.
+`confirmLaserOn: true` é obrigatório em `resume`, `job` e `frame` com `laser: "min"`: sem ele a mensagem é recusada. A interface só envia esse campo depois que a pessoa confirma.
 
 ## Agente → Cliente
 
 | `type` | Campos |
 |---|---|
-| `hello` | `version`, `port`, `connected`, `job` (`JobInfo` ou `null`), `reconnectGraceSec`, `limits {maxSpindle, workArea {x,y}}`, `lastResult` (`JobResult` ou `null`) |
+| `hello` | `version`, `port`, `connected`, `job` (`JobInfo` ou `null`), `reconnectGraceSec`, `limits {maxSpindle, workArea {x,y}, framePower, frameFeed}`, `lastResult` (`JobResult` ou `null`) |
 | `status` | `state`, `mpos {x,y,z}`, `wpos {x,y,z}` (se o WCO já é conhecido), `feed`, `spindle` |
 | `log` | `level`, `text` |
 | `progress` | `sent`, `total`, `running` |
@@ -56,6 +58,7 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 | `jobEnded` | `result` (`JobResult`) |
 | `jobRejected` | `name`, `problems` (`JobProblem[]`, até 20), `bounds` (`JobBounds` ou `null`) |
 | `serial` | `connected`: a porta serial abriu ou fechou |
+| `materials` | `materials` (`Material[]`): enviado logo após o `hello` e sempre que alguém salva |
 | `pong` | `t` |
 | `error` | `message` |
 
@@ -97,3 +100,17 @@ O agente não corta nem ajusta valores: qualquer problema recusa o trabalho e na
 | `message` | motivo, em português |
 
 `JobBounds`: `minX`, `maxX`, `minY`, `maxY` em mm, coordenadas de trabalho.
+
+### `Material`
+
+A biblioteca fica no agente (`apps/agent/data/materials.json`, fora do git), para valer em qualquer aparelho. Sem o arquivo, o agente usa MDF 3 mm e MDF 6 mm de exemplo.
+
+| Campo | Descrição |
+|---|---|
+| `id` | identificador único (até 64 caracteres) |
+| `name` | nome (até 80 caracteres) |
+| `thickness` | espessura, mm |
+| `notes` | opcional |
+| `presets` | lista de `MaterialPreset` |
+
+`MaterialPreset`: `mode` (`cut`, `line`, `fill`, `detail`, `raster`), `speed` (mm/min), `power` (0–100 %), `passes` (1–50), `kerf` (mm, opcional, corte), `interval` (mm, opcional, preenchido e detalhado).

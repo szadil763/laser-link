@@ -26,6 +26,9 @@ export function testConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     workArea: { x: 400, y: 300 },
     logDir: "",
     webDir: "",
+    dataDir: "",
+    framePower: 10,
+    frameFeed: 3000,
     ...overrides,
   };
 }

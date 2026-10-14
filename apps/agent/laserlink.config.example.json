@@ -6,5 +6,7 @@
   "maxFeed": 6000,
   "maxSpindle": 1000,
   "workArea": { "x": 400, "y": 400 },
-  "reconnectGraceSec": 60
+  "reconnectGraceSec": 60,
+  "framePower": 10,
+  "frameFeed": 3000
 }

@@ -13,6 +13,8 @@ import type { AgentConfig } from "./config.js";
 import { checkGcode, stripComment, type CheckContext } from "./gcode-check.js";
 import type { Grbl, JobEnd, JobProgress } from "./grbl.js";
 import type { JobLog } from "./job-log.js";
+import type { MaterialStore } from "./materials.js";
+import { frameGcode } from "@laserlink/gcode";
 
 /** Um cliente já autenticado. O transporte (WebSocket) fica fora desta classe. */
 export interface ClientConn {
@@ -26,6 +28,7 @@ export interface AgentOptions {
   /** Nome exibido da porta serial (ex.: COM3 ou "simulador"). */
   portLabel: string;
   jobLog?: JobLog;
+  materials?: MaterialStore;
   /** Intervalo entre tentativas de reabrir a serial. Padrão: 2 s. */
   serialRetryMs?: number;
 }
@@ -72,6 +75,7 @@ export class Agent {
   private readonly grbl: Grbl;
   private readonly portLabel: string;
   private readonly jobLog: JobLog | null;
+  private readonly materials: MaterialStore | null;
   private readonly ticker: NodeJS.Timeout;
   private readonly serialRetryMs: number;
   private serialTimer: NodeJS.Timeout | null = null;
@@ -87,6 +91,7 @@ export class Agent {
     this.grbl = options.grbl;
     this.portLabel = options.portLabel;
     this.jobLog = options.jobLog ?? null;
+    this.materials = options.materials ?? null;
     this.serialRetryMs = options.serialRetryMs ?? 2000;
     this.recoverUnfinishedJobs();
 
@@ -138,11 +143,17 @@ export class Agent {
       connected: this.grbl.isOpen,
       job: this.jobInfoFor(client.id),
       reconnectGraceSec: this.config.reconnectGraceSec,
-      limits: { maxSpindle: this.config.maxSpindle, workArea: this.config.workArea },
+      limits: {
+        maxSpindle: this.config.maxSpindle,
+        workArea: this.config.workArea,
+        framePower: this.config.framePower,
+        frameFeed: this.config.frameFeed,
+      },
       lastResult: this.lastResult,
     });
     const last = this.grbl.lastStatus;
     if (last) client.send({ type: "status", ...last });
+    if (this.materials) client.send({ type: "materials", materials: this.materials.all });
   }
 
   disconnect(client: ClientConn): void {
@@ -265,6 +276,25 @@ export class Agent {
         break;
       case "job":
         this.startJob(client, msg.name, msg.gcode);
+        break;
+      case "frame": {
+        const s = msg.laser === "min" ? this.config.framePower : 0;
+        const label = msg.laser === "min" ? `Enquadrar (laser em S${s})` : "Enquadrar (laser desligado)";
+        this.startJob(client, label, frameGcode(msg.bounds, { feed: this.config.frameFeed, s }));
+        break;
+      }
+      case "materialsSave":
+        if (!this.materials) {
+          client.send({ type: "error", message: "Este agente não guarda materiais." });
+          break;
+        }
+        try {
+          this.materials.save(msg.materials);
+          this.broadcast({ type: "materials", materials: this.materials.all });
+          this.broadcast({ type: "log", level: "info", text: `Biblioteca de materiais salva (${msg.materials.length} materiais).` });
+        } catch (err) {
+          client.send({ type: "error", message: `Não foi possível salvar os materiais: ${(err as Error).message}` });
+        }
         break;
     }
   }

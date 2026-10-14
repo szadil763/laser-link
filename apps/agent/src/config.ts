@@ -23,10 +23,17 @@ export interface AgentConfig {
   logDir: string;
   /** Interface compilada servida pelo agente. Padrão: apps/web/dist. */
   webDir: string;
+  /** Pasta da biblioteca de materiais. Padrão: apps/agent/data. */
+  dataDir: string;
+  /** S do "Enquadrar com potência mínima" (padrão 1% de maxSpindle). */
+  framePower: number;
+  /** mm/min do enquadramento. */
+  frameFeed: number;
 }
 
 /** apps/agent/logs, tanto rodando de src/ (tsx) quanto de dist/ (node). */
 const DEFAULT_LOG_DIR = fileURLToPath(new URL("../logs/", import.meta.url));
+const DEFAULT_DATA_DIR = fileURLToPath(new URL("../data/", import.meta.url));
 const DEFAULT_WEB_DIR = fileURLToPath(new URL("../../web/dist/", import.meta.url));
 
 const DEFAULT_TOKEN = "TROQUE-POR-UM-TOKEN-LONGO-E-ALEATORIO";
@@ -56,12 +63,20 @@ export function loadConfig(): AgentConfig {
     workArea: raw.workArea ?? { x: 0, y: 0 },
     logDir: raw.logDir ? resolve(path, "..", raw.logDir) : DEFAULT_LOG_DIR,
     webDir: raw.webDir ? resolve(path, "..", raw.webDir) : DEFAULT_WEB_DIR,
+    dataDir: raw.dataDir ? resolve(path, "..", raw.dataDir) : DEFAULT_DATA_DIR,
+    framePower: 0,
+    frameFeed: raw.frameFeed ?? 3000,
   };
+  config.framePower = raw.framePower ?? Math.max(1, Math.round(config.maxSpindle * 0.01));
   if (raw.machineLimits) config.machineLimits = raw.machineLimits;
   if (!(config.maxSpindle > 0)) throw new Error("maxSpindle precisa ser maior que zero (use o valor do $30 do GRBL).");
   if (!(config.workArea.x > 0 && config.workArea.y > 0)) {
     throw new Error('Configure a área útil em mm, por exemplo "workArea": { "x": 400, "y": 400 }.');
   }
+  if (!(config.framePower >= 0 && config.framePower <= config.maxSpindle * 0.1)) {
+    throw new Error("framePower precisa ficar entre 0 e 10% de maxSpindle: o enquadramento só deve marcar de leve.");
+  }
+  if (!(config.frameFeed > 0)) throw new Error("frameFeed precisa ser maior que zero.");
   if (!config.serialPort) throw new Error('Configure serialPort (ex.: COM3, /dev/ttyUSB0 ou "sim" para o simulador).');
   if (!config.token || config.token === DEFAULT_TOKEN || config.token.length < 16) {
     throw new Error("Defina um token com pelo menos 16 caracteres em laserlink.config.json.");

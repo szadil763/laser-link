@@ -6,6 +6,7 @@ import { Agent, type ClientConn } from "./agent.js";
 import { loadConfig } from "./config.js";
 import { Grbl } from "./grbl.js";
 import { JobLog } from "./job-log.js";
+import { MaterialStore } from "./materials.js";
 import { NodeSerialLink, type SerialLink } from "./serial-link.js";
 import { FakeGrbl } from "./sim/fake-grbl.js";
 import { createStaticHandler } from "./static.js";
@@ -15,7 +16,8 @@ const simulated = config.serialPort === "sim";
 const link: SerialLink = simulated ? new FakeGrbl({ msPerLine: 30 }) : new NodeSerialLink(config.serialPort, config.baudRate);
 const grbl = new Grbl(link);
 const jobLog = new JobLog(config.logDir);
-const agent = new Agent({ config, grbl, jobLog, portLabel: simulated ? "simulador" : config.serialPort });
+const materials = new MaterialStore(config.dataDir);
+const agent = new Agent({ config, grbl, jobLog, materials, portLabel: simulated ? "simulador" : config.serialPort });
 
 function tokenOk(given: string | null): boolean {
   if (!given) return false;
