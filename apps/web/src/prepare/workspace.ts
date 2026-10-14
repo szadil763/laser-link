@@ -1,6 +1,9 @@
 import {
   boundsOf,
+  boxDesign,
+  DEFAULT_BOX,
   DEFAULT_MATRIX,
+  designToSvg,
   generateGcode,
   matrixTest,
   offsetPath,
@@ -200,6 +203,119 @@ export class Workspace {
     this.view.fitTo(null);
     this.refresh();
     this.host.toast("Matriz gerada: cada quadrado é uma camada com sua potência e velocidade.");
+  }
+
+  /** Gera a caixa com encaixes a partir do diálogo; devolve a mensagem de erro, se houver. */
+  private loadBox(): string | null {
+    const num = (id: string): number => Number($<HTMLInputElement>(id).value);
+    const mat = this.material($<HTMLSelectElement>("bx-material").value || null);
+    const cut = presetFor(mat, "cut");
+    cut.kerf = Math.max(0, num("bx-kerf"));
+    const area = this.limits.workArea;
+    let design: ReturnType<typeof boxDesign>;
+    try {
+      design = boxDesign({
+        ...DEFAULT_BOX,
+        width: num("bx-w"),
+        depth: num("bx-d"),
+        height: num("bx-h"),
+        measure: $<HTMLSelectElement>("bx-measure").value === "inside" ? "inside" : "outside",
+        thickness: num("bx-t"),
+        finger: num("bx-f"),
+        lid: $<HTMLInputElement>("bx-lid").checked,
+        labels: $<HTMLInputElement>("bx-labels").checked,
+        maxRowWidth: area.x - 20,
+        cut,
+        label: presetFor(mat, "line"),
+      });
+    } catch (err) {
+      return (err as Error).message;
+    }
+    this.resetDesign(design.name);
+    for (const g of design.vectors) {
+      const isCut = g.mode === "cut";
+      const layer = makeLayer(isCut ? "Peças" : "Nomes", isCut ? "#ff5c5c" : "#4da3ff", g.mode, mat);
+      layer.settings[g.mode] = { ...g.settings };
+      if (isCut) {
+        g.paths.forEach((p, i) => layer.shapes.push(makeShape(p.points.slice(), design.panels[i]?.name ?? `Peça ${i + 1}`, true)));
+      } else {
+        const group = newId("G");
+        for (const p of g.paths) {
+          const sh = makeShape(p.points.slice(), "Nomes das peças", p.closed);
+          sh.group = group;
+          layer.shapes.push(sh);
+        }
+      }
+      this.layers.push(layer);
+    }
+    this.view.fitTo(null);
+    this.refresh();
+    const b = designBounds(this.layers, null);
+    const fits = !!b && b.maxX <= area.x && b.maxY <= area.y;
+    this.host.toast(
+      fits
+        ? `${design.panels.length} peças geradas. Confira o kerf com um teste antes de cortar a caixa inteira.`
+        : "As peças não cabem todas na mesa: reduza a caixa ou corte em duas vezes (desligue peças na lista).",
+    );
+    return null;
+  }
+
+  private openBox(): void {
+    const dlg = $<HTMLDialogElement>("dlg-box");
+    const sel = $<HTMLSelectElement>("bx-material");
+    sel.innerHTML = this.materials.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("");
+    const syncMaterial = (): void => {
+      const mat = this.material(sel.value || null);
+      if (!mat) return;
+      $<HTMLInputElement>("bx-t").value = String(mat.thickness || 3);
+      $<HTMLInputElement>("bx-kerf").value = String(presetFor(mat, "cut").kerf ?? 0.15);
+    };
+    sel.onchange = syncMaterial;
+    syncMaterial();
+    $("bx-error").textContent = "";
+    const onClose = (): void => {
+      if (dlg.returnValue !== "ok") return;
+      const err = this.loadBox();
+      if (err) {
+        // reabre com o motivo, sem perder o que foi digitado
+        $("bx-error").textContent = err;
+        dlg.returnValue = "";
+        dlg.addEventListener("close", onClose, { once: true });
+        dlg.showModal();
+      }
+    };
+    dlg.addEventListener("close", onClose, { once: true });
+    dlg.returnValue = "";
+    dlg.showModal();
+  }
+
+  /** Baixa um arquivo gerado no navegador. */
+  private download(name: string, content: string, type: string): void {
+    const url = URL.createObjectURL(new Blob([content], { type }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  private fileBase(): string {
+    return (this.designName || "trabalho").replace(/\.(svg|png|jpe?g|gcode)$/i, "").replace(/×/g, "x").replace(/[^\p{L}\p{N}._ -]+/gu, "").trim().replace(/\s+/g, "-") || "trabalho";
+  }
+
+  private exportSvg(): void {
+    const design = toJobDesign(this.designName || "Trabalho", this.layers, null);
+    if (!design.vectors.length) return this.host.toast("Não há vetores para exportar (a imagem não vai para o SVG).");
+    this.download(`${this.fileBase()}.svg`, designToSvg(design), "image/svg+xml");
+    if (this.image?.enabled) this.host.toast("SVG baixado. A imagem não entra no SVG; use Baixar G-code para levá-la junto.");
+  }
+
+  private exportGcode(): void {
+    const r = this.regenerateNow();
+    if (!r) return this.host.toast("Nada para exportar.");
+    this.download(`${this.fileBase()}.gcode`, r.gcode, "text/plain");
   }
 
   private addText(): void {
@@ -1151,6 +1267,9 @@ export class Workspace {
       dlg.showModal();
     });
     $("p-materials").addEventListener("click", () => this.openMaterials());
+    $("p-box-gen").addEventListener("click", () => this.openBox());
+    $("p-export-svg").addEventListener("click", () => this.exportSvg());
+    $("p-export-gcode").addEventListener("click", () => this.exportGcode());
     $("p-multi").addEventListener("click", (e) => {
       this.multi = !this.multi;
       (e.currentTarget as HTMLElement).setAttribute("aria-pressed", String(this.multi));

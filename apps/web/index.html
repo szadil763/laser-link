@@ -126,6 +126,7 @@
               <label class="btn">Importar SVG<input type="file" id="p-file-svg" accept=".svg,image/svg+xml" /></label>
               <label class="btn">Importar imagem<input type="file" id="p-file-img" accept="image/png,image/jpeg" /></label>
               <button id="p-text">Texto</button>
+              <button id="p-box-gen">Caixa</button>
               <button id="p-matrix">Teste de matriz</button>
               <button id="p-sample">Exemplo</button>
               <button id="p-clear">Limpar</button>
@@ -187,6 +188,10 @@
               <button id="p-sim">Simular</button>
               <button id="p-send" class="warn">Enviar para a laser</button>
             </div>
+            <div class="row">
+              <button id="p-export-svg">Baixar SVG</button>
+              <button id="p-export-gcode">Baixar G-code</button>
+            </div>
             <p class="note">Ordem: imagem, detalhado, preenchido, linhas e por último os cortes (furos antes do contorno). O arquivo vai inteiro ao agente, que confere potência e área antes de começar.</p>
           </section>
         </aside>
@@ -237,6 +242,32 @@
         <div class="row end">
           <button value="cancel">Voltar</button>
           <button value="ok" class="primary">Adicionar texto</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="dlg-box" aria-labelledby="bx-title">
+      <form method="dialog">
+        <h2 id="bx-title">Caixa com encaixes</h2>
+        <p class="note">Gera as peças de uma caixa com dentes (finger joints). O kerf vem do material escolhido e compensa a largura do corte para os encaixes ficarem justos.</p>
+        <div class="fields" style="margin-top:10px">
+          <label class="field">Largura <span class="val"><input type="number" id="bx-w" value="100" min="10" step="1" /><span class="unit">mm</span></span></label>
+          <label class="field">Profundidade <span class="val"><input type="number" id="bx-d" value="80" min="10" step="1" /><span class="unit">mm</span></span></label>
+          <label class="field">Altura <span class="val"><input type="number" id="bx-h" value="60" min="10" step="1" /><span class="unit">mm</span></span></label>
+          <label class="field">Medidas <select id="bx-measure"><option value="outside">Externas</option><option value="inside">Internas (espaço útil)</option></select></label>
+          <label class="field">Espessura <span class="val"><input type="number" id="bx-t" value="3" min="0.5" max="20" step="0.1" /><span class="unit">mm</span></span></label>
+          <label class="field">Largura do dente <span class="val"><input type="number" id="bx-f" value="10" min="1" step="0.5" /><span class="unit">mm</span></span></label>
+          <label class="field">Material <select id="bx-material"></select></label>
+          <label class="field">Kerf <span class="val"><input type="number" id="bx-kerf" value="0.15" min="0" max="1" step="0.01" /><span class="unit">mm</span></span></label>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <label class="row"><input type="checkbox" id="bx-lid" checked /> Com tampa</label>
+          <label class="row"><input type="checkbox" id="bx-labels" checked /> Gravar o nome de cada peça</label>
+        </div>
+        <p class="note" id="bx-error" role="alert"></p>
+        <div class="row end">
+          <button value="cancel">Voltar</button>
+          <button value="ok" class="primary">Gerar caixa</button>
         </div>
       </form>
     </dialog>
