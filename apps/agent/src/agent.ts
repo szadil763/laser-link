@@ -51,6 +51,7 @@ interface ActiveJob {
 }
 
 const TICK_MS = 500;
+const PROGRESS_INTERVAL_MS = 100;
 
 /** Remove comentários, linhas vazias e delimitadores % do G-code. */
 export function cleanGcode(gcode: string): string[] {
@@ -187,6 +188,7 @@ export class Agent {
   shutdown(): void {
     this.stopped = true;
     clearInterval(this.ticker);
+    if (this.progressTimer) clearTimeout(this.progressTimer);
     if (this.serialTimer) clearTimeout(this.serialTimer);
     this.serialTimer = null;
     if (this.grbl.isRunning) this.grbl.abortJob("Agente encerrado.");
@@ -403,12 +405,29 @@ export class Agent {
     return false;
   }
 
+  private lastProgressAt = 0;
+  private progressTimer: NodeJS.Timeout | null = null;
+  private pendingProgress: JobProgress | null = null;
+
+  /** No máximo 10 avisos de progresso por segundo (o GRBL confirma centenas de linhas por segundo). */
   private onProgress(p: JobProgress): void {
     if (this.job) {
       this.job.sent = p.sent;
       this.job.total = p.total;
     }
-    this.broadcast({ type: "progress", ...p });
+    const now = Date.now();
+    const flush = (): void => {
+      if (this.progressTimer) clearTimeout(this.progressTimer);
+      this.progressTimer = null;
+      const msg = this.pendingProgress;
+      this.pendingProgress = null;
+      if (!msg) return;
+      this.lastProgressAt = Date.now();
+      this.broadcast({ type: "progress", ...msg });
+    };
+    this.pendingProgress = p;
+    if (!p.running || p.sent === 0 || now - this.lastProgressAt >= PROGRESS_INTERVAL_MS) flush();
+    else this.progressTimer ??= setTimeout(flush, PROGRESS_INTERVAL_MS - (now - this.lastProgressAt));
   }
 
   private onJobEnd(end: JobEnd): void {

@@ -7,6 +7,8 @@ export interface Segment {
   /** Laser aceso (G1/G2/G3 com M3/M4 e S > 0). */
   burn: boolean;
   s: number;
+  /** mm/min do movimento; null em G0 (deslocamento rápido). */
+  feed: number | null;
   /** Linha do arquivo (1…n). */
   line: number;
 }
@@ -33,6 +35,7 @@ export function parseGcode(text: string, start: Point = [0, 0]): ParsedGcode {
   let motion = 0;
   let laserOn = false;
   let s = 0;
+  let feed = 1000;
   const lines = text.split(/\r?\n/);
   for (let li = 0; li < lines.length; li++) {
     const code = lines[li]!.replace(/;.*$/, "").replace(/\(.*?\)/g, "").trim().toUpperCase();
@@ -57,6 +60,8 @@ export function parseGcode(text: string, start: Point = [0, 0]): ParsedGcode {
     }
     const sv = one("S");
     if (sv !== undefined) s = sv;
+    const fv = one("F");
+    if (fv !== undefined && fv > 0) feed = fv * unit;
     const xw = one("X");
     const yw = one("Y");
     const isArc = motion === 2 || motion === 3;
@@ -66,15 +71,16 @@ export function parseGcode(text: string, start: Point = [0, 0]): ParsedGcode {
       yw === undefined ? pos[1] : absolute ? yw * unit : pos[1] + yw * unit,
     ];
     const burn = motion !== 0 && laserOn && s > 0;
+    const segFeed = motion === 0 ? null : feed;
     if (isArc) {
       const pts = arcPoints(pos, to, motion === 2, (one("I") ?? 0) * unit, (one("J") ?? 0) * unit, one("R") !== undefined ? one("R")! * unit : undefined);
       let prev = pos;
       for (const p of pts) {
-        segments.push({ from: prev, to: p, burn, s, line: li + 1 });
+        segments.push({ from: prev, to: p, burn, s, feed: segFeed, line: li + 1 });
         prev = p;
       }
     } else {
-      segments.push({ from: pos, to, burn, s, line: li + 1 });
+      segments.push({ from: pos, to, burn, s, feed: segFeed, line: li + 1 });
     }
     pos = to;
   }
@@ -115,4 +121,10 @@ function arcPoints(a: Point, b: Point, clockwise: boolean, i: number, j: number,
     out.push(k === steps ? b : [cx + radius * Math.cos(t), cy + radius * Math.sin(t)]);
   }
   return out;
+}
+
+/** Duração estimada de cada segmento em segundos (sem aceleração). */
+export function segmentSeconds(sg: Segment, rapidFeed = 6000): number {
+  const d = Math.hypot(sg.to[0] - sg.from[0], sg.to[1] - sg.from[1]);
+  return (d / (sg.feed ?? rapidFeed)) * 60;
 }

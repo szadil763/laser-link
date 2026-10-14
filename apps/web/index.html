@@ -4,44 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LaserLink</title>
-    <style>
-      *, *::before, *::after { box-sizing: border-box; }
-      :root { color-scheme: dark; font-family: system-ui, sans-serif; }
-      body { margin: 0; background: #14161a; color: #e8eaed; }
-      main { max-width: 760px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
-      input { max-width: 100%; }
-      section { background: #1e2127; border-radius: 10px; padding: 14px; }
-      h1 { margin: 0; font-size: 20px; }
-      h2 { margin: 0 0 10px; font-size: 14px; color: #9aa0a6; text-transform: uppercase; letter-spacing: .05em; }
-      input, button { font: inherit; padding: 8px 10px; border-radius: 6px; border: 1px solid #3c4043; background: #2a2d33; color: inherit; }
-      button { cursor: pointer; min-height: 44px; }
-      button:hover { background: #343841; }
-      button:focus-visible, input:focus-visible { outline: 2px solid #8ab4f8; outline-offset: 2px; }
-      button.danger { background: #8c1d18; border-color: #b3261e; font-weight: 700; }
-      button.warn { background: #6b4e00; border-color: #946f00; }
-      .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-      .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-      .badges { display: flex; gap: 8px; flex-wrap: wrap; }
-      .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #2a2d33; font-size: 13px; }
-      .badge::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--dot, #5f6368); }
-      .badge[data-level="ok"] { --dot: #34a853; }
-      .badge[data-level="warn"] { --dot: #fbbc04; }
-      .badge[data-level="bad"] { --dot: #ea4335; }
-      .alert { border: 2px solid #fbbc04; background: #2b2410; }
-      .alert h2 { color: #fdd663; }
-      .jog { display: grid; grid-template-columns: repeat(3, 56px); gap: 6px; justify-content: center; }
-      .jog button { height: 48px; }
-      #state { font-weight: 700; }
-      #log { height: 160px; overflow: auto; font: 12px ui-monospace, monospace; background: #111317; padding: 8px; border-radius: 6px; white-space: pre-wrap; }
-      progress { width: 100%; }
-      .muted { color: #9aa0a6; font-size: 14px; }
-      [hidden] { display: none !important; }
-      dialog { max-width: min(440px, calc(100vw - 32px)); border: 1px solid #3c4043; border-radius: 10px; background: #1e2127; color: inherit; padding: 18px; }
-      dialog::backdrop { background: rgba(0, 0, 0, .6); }
-      dialog h2 { color: #fdd663; font-size: 16px; text-transform: none; letter-spacing: 0; }
-      dialog p { white-space: pre-line; line-height: 1.45; }
-      dialog .row { justify-content: flex-end; }
-    </style>
   </head>
   <body>
     <main>
@@ -63,75 +25,249 @@
         </div>
       </section>
 
-      <section>
-        <h2>Conexão</h2>
-        <div class="row">
-          <input id="url" placeholder="ws://IP-DA-LASER:8787" size="26" aria-label="Endereço do agente" />
-          <input id="token" type="password" placeholder="token" size="18" aria-label="Token" />
-          <button id="connect">Conectar</button>
-          <button id="disconnect">Desconectar</button>
-        </div>
-      </section>
+      <div class="tabs" role="tablist" aria-label="Seções">
+        <button role="tab" id="tab-control" aria-selected="true" aria-controls="view-control">Controle</button>
+        <button role="tab" id="tab-prepare" aria-selected="false" aria-controls="view-prepare">Preparar trabalho</button>
+      </div>
 
-      <section>
-        <h2>Máquina</h2>
-        <p>Estado: <span id="state">—</span> · X <span id="x">0.000</span> Y <span id="y">0.000</span></p>
-        <div class="row">
-          <button id="home">Home</button>
-          <button id="origin">Definir origem</button>
-          <button id="unlock">Destravar</button>
-        </div>
-      </section>
+      <!-- ================= Controle ================= -->
+      <div id="view-control" class="cols" role="tabpanel" aria-labelledby="tab-control">
+        <section class="sticky" aria-label="Pré-visualização">
+          <h2>Pré-visualização</h2>
+          <div class="canvas-box">
+            <canvas id="c-canvas" aria-label="Área útil da laser com o trabalho e a posição do cabeçote em tempo real. Roda do mouse dá zoom; arraste para mover."></canvas>
+            <div class="empty" id="c-empty">Escolha um arquivo G-code ou envie um trabalho pela aba Preparar trabalho para ver a trajetória aqui.</div>
+            <div class="hud">
+              <span class="chip" id="c-hud-pos">X — Y —</span>
+              <span class="chip" id="c-hud-zoom">100%</span>
+            </div>
+            <div class="zoombar" role="group" aria-label="Zoom">
+              <button id="c-zoom-out" aria-label="Diminuir zoom">−</button>
+              <button id="c-zoom-in" aria-label="Aumentar zoom">+</button>
+              <button id="c-zoom-piece">Ajustar ao trabalho</button>
+              <button id="c-zoom-fit">Mesa inteira</button>
+            </div>
+          </div>
+          <div class="legend">
+            <span style="--c:#ff7a59">Grava (laser aceso)</span>
+            <span class="dash" style="--c:#6b7480">Deslocamento sem laser</span>
+            <span style="--c:#fff4d6">Já executado</span>
+            <b id="c-name"></b>
+          </div>
+        </section>
 
-      <section>
-        <h2>Mover</h2>
-        <div class="row" style="margin-bottom:10px">
-          <label>Passo (mm) <input id="step" type="number" value="10" min="0.1" max="500" step="0.1" style="width:80px" /></label>
-          <label>Velocidade (mm/min) <input id="feed" type="number" value="3000" min="10" max="6000" step="100" style="width:90px" /></label>
-        </div>
-        <div class="jog">
-          <span></span><button data-axis="Y" data-dir="1">Y+</button><span></span>
-          <button data-axis="X" data-dir="-1">X−</button><span></span><button data-axis="X" data-dir="1">X+</button>
-          <span></span><button data-axis="Y" data-dir="-1">Y−</button><span></span>
-        </div>
-      </section>
+        <div class="stack">
+          <section>
+            <h2>Conexão</h2>
+            <div class="row">
+              <input id="url" placeholder="ws://IP-DA-LASER:8787" size="26" aria-label="Endereço do agente" />
+              <input id="token" type="password" placeholder="token" size="18" aria-label="Token" />
+              <button id="connect">Conectar</button>
+              <button id="disconnect">Desconectar</button>
+            </div>
+          </section>
 
-      <section>
-        <h2>Trabalho</h2>
-        <div class="row">
-          <input id="file" type="file" accept=".gcode,.nc,.gc,.txt" aria-label="Arquivo G-code" />
-          <button id="start" class="warn">Iniciar trabalho</button>
-        </div>
-        <div id="rejected" class="alert" hidden role="alert" style="padding:10px;border-radius:8px;margin-top:10px">
-          <strong id="rejected-title"></strong>
-          <ul id="rejected-list"></ul>
-        </div>
-        <p id="limits" class="muted"></p>
-        <p id="job-line" class="muted">Nenhum trabalho em andamento.</p>
-        <p><progress id="progress" value="0" max="1"></progress></p>
-        <div class="row">
-          <button id="hold">Pausar</button>
-          <button id="resume">Retomar</button>
-          <button id="stop" class="danger">PARAR</button>
-        </div>
-        <p id="last-result" class="muted" hidden></p>
-      </section>
+          <section>
+            <h2>Máquina</h2>
+            <p>Estado: <span id="state">—</span> · X <span id="x">0.000</span> Y <span id="y">0.000</span></p>
+            <div class="row">
+              <button id="home">Home</button>
+              <button id="origin">Definir origem</button>
+              <button id="unlock">Destravar</button>
+            </div>
+          </section>
 
-      <section>
-        <h2>Registro</h2>
-        <div id="log" aria-live="polite"></div>
-      </section>
+          <section>
+            <h2>Mover</h2>
+            <div class="row" style="margin-bottom:10px">
+              <label>Passo (mm) <input id="step" type="number" value="10" min="0.1" max="500" step="0.1" style="width:80px" /></label>
+              <label>Velocidade (mm/min) <input id="feed" type="number" value="3000" min="10" max="6000" step="100" style="width:90px" /></label>
+            </div>
+            <div class="jog">
+              <span></span><button data-axis="Y" data-dir="1">Y+</button><span></span>
+              <button data-axis="X" data-dir="-1">X−</button><span></span><button data-axis="X" data-dir="1">X+</button>
+              <span></span><button data-axis="Y" data-dir="-1">Y−</button><span></span>
+            </div>
+          </section>
+
+          <section>
+            <h2>Trabalho</h2>
+            <div class="row">
+              <input id="file" type="file" accept=".gcode,.nc,.gc,.txt" aria-label="Arquivo G-code" />
+              <button id="start" class="warn">Iniciar trabalho</button>
+            </div>
+            <div id="rejected" class="alert" hidden role="alert" style="padding:10px;border-radius:8px;margin-top:10px">
+              <strong id="rejected-title"></strong>
+              <ul id="rejected-list"></ul>
+            </div>
+            <p id="limits" class="muted"></p>
+            <p id="job-line" class="muted">Nenhum trabalho em andamento.</p>
+            <p><progress id="progress" value="0" max="1"></progress></p>
+            <div class="row">
+              <button id="hold">Pausar</button>
+              <button id="resume">Retomar</button>
+              <button id="stop" class="danger">PARAR</button>
+            </div>
+            <p id="last-result" class="muted" hidden></p>
+          </section>
+
+          <section>
+            <h2>Registro</h2>
+            <div id="log" aria-live="polite"></div>
+          </section>
+        </div>
+      </div>
+
+      <!-- ================= Preparar trabalho ================= -->
+      <div id="view-prepare" class="cols" role="tabpanel" aria-labelledby="tab-prepare" hidden>
+        <section class="sticky" aria-label="Mesa da laser">
+          <div class="toolbar">
+            <div class="row">
+              <label class="btn">Importar SVG<input type="file" id="p-file-svg" accept=".svg,image/svg+xml" /></label>
+              <label class="btn">Importar imagem<input type="file" id="p-file-img" accept="image/png,image/jpeg" /></label>
+              <button id="p-text">Texto</button>
+              <button id="p-matrix">Teste de matriz</button>
+              <button id="p-sample">Exemplo</button>
+              <button id="p-clear">Limpar</button>
+            </div>
+            <div class="row">
+              <button id="p-multi" aria-pressed="false">Selecionar vários</button>
+              <button id="p-travel" aria-pressed="true">Deslocamentos</button>
+            </div>
+          </div>
+          <div class="canvas-box" id="p-box">
+            <canvas id="p-canvas" aria-label="Área útil da laser com o desenho. Toque num elemento para selecioná-lo; arraste o selecionado para mover. Roda do mouse dá zoom."></canvas>
+            <div class="empty" id="p-empty">Importe um SVG ou uma imagem (ou arraste o arquivo para cá), adicione um texto ou carregue o exemplo.</div>
+            <div class="hud">
+              <span class="chip" id="p-hud-pos">X 0.0 Y 0.0</span>
+              <span class="chip" id="p-hud-mode">Pré-visualização</span>
+              <span class="chip" id="p-hud-zoom">100%</span>
+            </div>
+            <div class="zoombar" role="group" aria-label="Zoom">
+              <button id="p-zoom-out" aria-label="Diminuir zoom">−</button>
+              <button id="p-zoom-in" aria-label="Aumentar zoom">+</button>
+              <button id="p-zoom-piece">Ajustar à peça</button>
+              <button id="p-zoom-fit">Mesa inteira</button>
+            </div>
+          </div>
+          <div class="legend" id="p-legend"></div>
+          <div id="p-sim-bar" class="row" hidden style="margin-top:8px">
+            <progress id="p-sim-progress" value="0" max="1" style="flex:1 1 200px"></progress>
+            <span class="muted" id="p-sim-text"></span>
+            <button id="p-sim-stop">Parar simulação</button>
+          </div>
+        </section>
+
+        <aside class="stack" aria-label="Camadas e envio">
+          <div id="p-selection" class="selection" hidden aria-live="polite"></div>
+          <section>
+            <div class="row" style="justify-content: space-between; margin-bottom: 10px">
+              <h2 style="margin:0">Camadas</h2>
+              <button id="p-materials">Materiais</button>
+            </div>
+            <div class="layers" id="p-layers"><p class="note">Nenhum desenho ainda.</p></div>
+          </section>
+          <section style="display:grid; gap:10px">
+            <h2 style="margin:0">Resumo</h2>
+            <div class="summary">
+              <div class="stat"><b id="p-sum-size">—</b><span>tamanho (mm)</span></div>
+              <div class="stat"><b id="p-sum-time">—</b><span>tempo estimado</span></div>
+              <div class="stat"><b id="p-sum-lines">—</b><span>linhas G-code</span></div>
+            </div>
+            <div id="p-limits" class="note"></div>
+            <div class="field" style="font-size:13px">
+              Enquadrar com
+              <div class="seg" id="p-frame-mode">
+                <button data-v="off" aria-pressed="true">Laser desligado</button>
+                <button data-v="min" aria-pressed="false" id="p-frame-min">Potência mínima</button>
+              </div>
+            </div>
+            <div class="send">
+              <button id="p-frame">Enquadrar</button>
+              <button id="p-sim">Simular</button>
+              <button id="p-send" class="warn">Enviar para a laser</button>
+            </div>
+            <p class="note">Ordem: imagem, detalhado, preenchido, linhas e por último os cortes (furos antes do contorno). O arquivo vai inteiro ao agente, que confere potência e área antes de começar.</p>
+          </section>
+        </aside>
+      </div>
     </main>
+
     <dialog id="confirm-dialog" aria-labelledby="confirm-title">
       <form method="dialog">
         <h2 id="confirm-title"></h2>
         <p id="confirm-text"></p>
-        <div class="row">
+        <div class="row end">
           <button id="confirm-cancel" value="cancel">Voltar</button>
           <button id="confirm-ok" value="ok"></button>
         </div>
       </form>
     </dialog>
+
+    <dialog id="dlg-matrix" aria-labelledby="mx-title">
+      <form method="dialog">
+        <h2 id="mx-title">Teste de matriz potência × velocidade</h2>
+        <p class="note">Grade de quadrados preenchidos: cada coluna uma velocidade, cada linha uma potência, com rótulos gravados. Grave num retalho do material e escolha o melhor quadrado.</p>
+        <div class="fields" style="margin-top:10px">
+          <label class="field">Potência de <span class="val"><input type="number" id="mx-p0" value="10" min="1" max="100" /><span class="unit">%</span></span></label>
+          <label class="field">até <span class="val"><input type="number" id="mx-p1" value="90" min="1" max="100" /><span class="unit">%</span></span></label>
+          <label class="field">Velocidade de <span class="val"><input type="number" id="mx-s0" value="600" min="10" /><span class="unit">mm/min</span></span></label>
+          <label class="field">até <span class="val"><input type="number" id="mx-s1" value="3000" min="10" /><span class="unit">mm/min</span></span></label>
+          <label class="field">Linhas <span class="val"><input type="number" id="mx-rows" value="5" min="2" max="10" /></span></label>
+          <label class="field">Colunas <span class="val"><input type="number" id="mx-cols" value="5" min="2" max="10" /></span></label>
+          <label class="field">Quadrado <span class="val"><input type="number" id="mx-size" value="8" min="3" max="30" /><span class="unit">mm</span></span></label>
+        </div>
+        <div class="row end">
+          <button value="cancel">Voltar</button>
+          <button value="ok" class="primary">Gerar matriz</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="dlg-text" aria-labelledby="tx-title">
+      <form method="dialog">
+        <h2 id="tx-title">Adicionar texto</h2>
+        <p class="note">Fonte de traço único, boa para gravar em linha. Só maiúsculas, números e sinais comuns; acentos são removidos (Ç vira C).</p>
+        <div class="fields" style="margin-top:10px">
+          <label class="field" style="grid-column: 1 / -1">Texto <input type="text" id="tx-text" maxlength="200" value="LASERLINK" /></label>
+          <label class="field">Altura <span class="val"><input type="number" id="tx-height" value="8" min="1" max="200" step="0.5" /><span class="unit">mm</span></span></label>
+          <label class="field">X <span class="val"><input type="number" id="tx-x" value="20" step="1" /><span class="unit">mm</span></span></label>
+          <label class="field">Y <span class="val"><input type="number" id="tx-y" value="20" step="1" /><span class="unit">mm</span></span></label>
+        </div>
+        <div class="row end">
+          <button value="cancel">Voltar</button>
+          <button value="ok" class="primary">Adicionar texto</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="dlg-materials" aria-labelledby="mat-title">
+      <form method="dialog">
+        <h2 id="mat-title">Biblioteca de materiais</h2>
+        <p class="note" id="mat-note">A biblioteca fica salva no agente e vale para todos os aparelhos. Os valores de exemplo precisam ser ajustados com o teste de matriz na sua máquina.</p>
+        <div class="row" style="margin-top:10px">
+          <label class="field" style="flex:1 1 200px">Material <select class="plain" id="mat-select"></select></label>
+          <button type="button" id="mat-new">Novo material</button>
+          <button type="button" id="mat-delete">Excluir</button>
+        </div>
+        <div class="fields" style="margin-top:8px">
+          <label class="field">Nome <input type="text" id="mat-name" maxlength="80" /></label>
+          <label class="field">Espessura <span class="val"><input type="number" id="mat-thickness" min="0" max="100" step="0.5" /><span class="unit">mm</span></span></label>
+        </div>
+        <div class="table-scroll" style="margin-top:8px">
+          <table class="mat">
+            <thead><tr><th>Operação</th><th>mm/min</th><th>Potência %</th><th>Passes</th><th>Kerf / intervalo (mm)</th></tr></thead>
+            <tbody id="mat-body"></tbody>
+          </table>
+        </div>
+        <div class="row end">
+          <button value="cancel">Fechar sem salvar</button>
+          <button value="ok" class="primary" id="mat-save">Salvar no agente</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" hidden role="status"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

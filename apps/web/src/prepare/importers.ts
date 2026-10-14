@@ -1,0 +1,147 @@
+import { boundsOf, type Point } from "@laserlink/gcode";
+import type { Material } from "@laserlink/shared";
+import { makeLayer, makeShape, rebuildImage, type ImageItem, type Layer } from "./model.js";
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+const NAMED: Record<string, string> = {
+  "rgb(255, 0, 0)": "Vermelho",
+  "rgb(0, 0, 255)": "Azul",
+  "rgb(0, 0, 0)": "Preto",
+  "rgb(0, 128, 0)": "Verde",
+  "rgb(0, 255, 0)": "Verde",
+  "rgb(255, 0, 255)": "Magenta",
+  "rgb(255, 165, 0)": "Laranja",
+};
+
+/** mm por unidade de um comprimento SVG ("100mm", "4in", "300" = px). */
+function lengthToMm(v: string | null): number | null {
+  if (!v) return null;
+  const m = /^\s*([\d.]+)\s*(mm|cm|in|px|pt)?\s*$/.exec(v);
+  if (!m) return null;
+  const factor: Record<string, number> = { mm: 1, cm: 10, in: 25.4, pt: 25.4 / 72, px: 25.4 / 96 };
+  return factor[m[2] ?? "px"]! * Number(m[1]);
+}
+
+export interface SvgImport {
+  layers: Layer[];
+  count: number;
+}
+
+/**
+ * Lê um SVG com o próprio navegador: cada elemento vira uma polilinha
+ * (curvas amostradas a cada ~0,25 mm), agrupada em camadas pela cor do traço.
+ * Vermelho vira Cortar; as outras cores, Gravar linha. Posiciona a 20 mm da origem.
+ */
+export function importSvg(text: string, materials: readonly Material[]): SvgImport {
+  const doc = new DOMParser().parseFromString(text, "image/svg+xml");
+  const svg = doc.documentElement;
+  if (svg.nodeName.toLowerCase() !== "svg" || doc.querySelector("parsererror")) {
+    throw new Error("Esse arquivo não é um SVG válido.");
+  }
+  const host = document.createElementNS(SVG_NS, "svg");
+  host.setAttribute("style", "position:absolute;left:-9999px;top:0;width:10px;height:10px;visibility:hidden");
+  for (const child of [...svg.childNodes]) host.appendChild(document.importNode(child, true));
+  const vb = (svg.getAttribute("viewBox") ?? "").trim().split(/[\s,]+/).map(Number);
+  const hasVb = vb.length === 4 && vb.every(Number.isFinite);
+  const wmm = lengthToMm(svg.getAttribute("width"));
+  const hmm = lengthToMm(svg.getAttribute("height"));
+  const sx = wmm && hasVb && vb[2] ? wmm / vb[2] : 25.4 / 96;
+  const sy = hmm && hasVb && vb[3] ? hmm / vb[3] : sx;
+  const vx = hasVb ? vb[0]! : 0;
+  const vy = hasVb ? vb[1]! : 0;
+  document.body.appendChild(host);
+  const groups = new Map<string, Array<{ points: Point[]; closed: boolean; name: string }>>();
+  let count = 0;
+  try {
+    const hostCtm = host.getCTM();
+    for (const el of host.querySelectorAll<SVGGeometryElement>("path,line,polyline,polygon,rect,circle,ellipse")) {
+      const cs = getComputedStyle(el);
+      if (cs.display === "none") continue;
+      const color = cs.stroke && cs.stroke !== "none" ? cs.stroke : cs.fill && cs.fill !== "none" ? cs.fill : "rgb(0, 0, 0)";
+      let total = 0;
+      try {
+        total = el.getTotalLength();
+      } catch {
+        total = 0;
+      }
+      if (!(total > 0)) continue;
+      const step = Math.max(0.25 / sx, total / 4000);
+      const ctm = el.getCTM();
+      const m = hostCtm && ctm ? hostCtm.inverse().multiply(ctm) : null;
+      const at = (len: number): Point => {
+        let p = el.getPointAtLength(len);
+        if (m) p = p.matrixTransform(m);
+        return [(p.x - vx) * sx, (p.y - vy) * sy];
+      };
+      const points: Point[] = [];
+      for (let s = 0; s < total; s += step) points.push(at(s));
+      points.push(at(total));
+      if (points.length < 2) continue;
+      const tag = el.tagName.toLowerCase();
+      const closed = ["rect", "circle", "ellipse", "polygon"].includes(tag) || (tag === "path" && /z\s*$/i.test(el.getAttribute("d") ?? ""));
+      const list = groups.get(color) ?? [];
+      list.push({ points, closed, name: el.id || tag });
+      groups.set(color, list);
+      count++;
+    }
+  } finally {
+    host.remove();
+  }
+  if (!count) throw new Error("Não encontrei caminhos nesse SVG. No programa de desenho, converta textos e objetos em caminhos.");
+  const b = boundsOf([...groups.values()].flat().flatMap((s) => s.points))!;
+  const layers: Layer[] = [];
+  let n = 0;
+  const mdf = materials[0];
+  for (const [color, shapes] of groups) {
+    const red = /^rgb\((2\d\d), (\d{1,2}), (\d{1,2})\)$/.test(color);
+    const layer = makeLayer(NAMED[color] ?? `Cor ${++n}`, color, red ? "cut" : "line", mdf);
+    shapes.forEach((sh, k) => {
+      const pts = sh.points.map(([x, y]) => [x - b.minX + 20, b.maxY - y + 20] as Point); // SVG tem Y para baixo
+      layer.shapes.push(makeShape(pts, `${sh.name} ${k + 1}`, sh.closed));
+    });
+    layers.push(layer);
+  }
+  return { layers, count };
+}
+
+/** Abre PNG/JPG e cria a imagem com 60 mm de largura a 20 mm da origem. */
+export function importImage(file: File, material: Material | undefined, settings: ImageItem["settings"]): Promise<ImageItem> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => {
+      const w = 60;
+      const h = Math.max(1, Math.round((60 * im.naturalHeight) / im.naturalWidth));
+      const img: ImageItem = {
+        name: file.name,
+        source: im,
+        sourceWidth: im.naturalWidth,
+        sourceHeight: im.naturalHeight,
+        x: 20,
+        y: 20,
+        w,
+        h,
+        res: 8,
+        threshold: 128,
+        dither: "floyd-steinberg",
+        overscan: 3,
+        bidirectional: true,
+        settings,
+        enabled: true,
+        materialId: material?.id ?? null,
+        bitmap: new Uint8Array(0),
+        bw: 0,
+        bh: 0,
+        preview: document.createElement("canvas"),
+      };
+      rebuildImage(img);
+      resolve(img);
+    };
+    im.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Não consegui abrir a imagem. Use PNG ou JPG."));
+    };
+    im.src = url;
+  });
+}

@@ -1,6 +1,9 @@
+import "./styles.css";
 import { PROTOCOL_VERSION, type JobInfo, type JobResult, type ServerMessage } from "@laserlink/shared";
 import { confirmDialog } from "./confirm-dialog.js";
 import { Connection, type LinkState } from "./connection.js";
+import { Workspace } from "./prepare/workspace.js";
+import { JobPreview } from "./preview.js";
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -35,6 +38,43 @@ const conn = new Connection({
   onMessage,
   onState: renderLinkState,
   onLog: log,
+});
+
+let toastTimer: number | undefined;
+function toast(text: string): void {
+  const t = $("toast");
+  t.textContent = text;
+  t.hidden = false;
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => (t.hidden = true), 5000);
+}
+
+// ---------- abas ----------
+const TABS = [
+  ["tab-control", "view-control"],
+  ["tab-prepare", "view-prepare"],
+] as const;
+function showTab(tabId: (typeof TABS)[number][0]): void {
+  for (const [t, v] of TABS) {
+    $(t).setAttribute("aria-selected", String(t === tabId));
+    $(v).hidden = t !== tabId;
+  }
+  if (tabId === "tab-prepare") workspace.shown();
+}
+for (const [t] of TABS) $(t).addEventListener("click", () => showTab(t));
+
+const preview = new JobPreview({ x: 400, y: 400 });
+const workspace = new Workspace({
+  confirm: confirmDialog,
+  toast,
+  send: (msg) => conn.send(msg),
+  isConnected: () => conn.state === "connected" || conn.state === "unstable",
+  onJobSent: (name, gcode) => {
+    $("rejected").hidden = true;
+    preview.load(name, gcode);
+    showTab("tab-control");
+    toast(`"${name}" enviado ao agente. Acompanhe aqui.`);
+  },
 });
 
 const LINK_LABELS: Record<LinkState, [string, "ok" | "warn" | "bad"]> = {
@@ -131,6 +171,8 @@ function onMessage(msg: ServerMessage): void {
       }
       $("limits").textContent =
         `Limites do agente: área ${msg.limits.workArea.x} × ${msg.limits.workArea.y} mm a partir da origem, potência até S${msg.limits.maxSpindle}.`;
+      preview.setArea(msg.limits.workArea);
+      workspace.setLimits(msg.limits);
       renderJob(msg.job);
       if (msg.job?.state === "connectionLost") log(`Atenção: "${msg.job.name}" está pausado por perda de conexão.`);
       break;
@@ -138,12 +180,21 @@ function onMessage(msg: ServerMessage): void {
       $("state").textContent = msg.state;
       $("x").textContent = (msg.wpos ?? msg.mpos).x.toFixed(3);
       $("y").textContent = (msg.wpos ?? msg.mpos).y.toFixed(3);
+      {
+        const p = msg.wpos ?? msg.mpos;
+        preview.setHead([p.x, p.y], msg.spindle);
+        workspace.setHead([p.x, p.y]);
+      }
       break;
     case "log":
       log(`[${msg.level}] ${msg.text}`);
       break;
     case "progress":
       if (currentJob) renderJob({ ...currentJob, sent: msg.sent, total: msg.total });
+      preview.setProgress(msg.sent);
+      break;
+    case "materials":
+      workspace.setMaterials(msg.materials);
       break;
     case "job":
       renderJob(msg.job);
@@ -256,5 +307,12 @@ $("start").addEventListener("click", async () => {
   );
   if (!ok) return;
   $("rejected").hidden = true;
-  conn.send({ type: "job", name: file.name, gcode: await file.text(), confirmLaserOn: true });
+  const gcode = await file.text();
+  if (conn.send({ type: "job", name: file.name, gcode, confirmLaserOn: true })) preview.load(file.name, gcode);
+});
+
+// arquivo escolhido: mostra a trajetória antes de iniciar
+$<HTMLInputElement>("file").addEventListener("change", async (e) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (file) preview.load(file.name, await file.text());
 });
