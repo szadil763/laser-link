@@ -10,7 +10,8 @@ Projeto do Adilson (Guarulhos/SP): controlar remotamente uma laser GRBL ligada a
 
 Monorepo npm workspaces:
 
-- `packages/shared`: tipos do protocolo (única fonte de verdade das mensagens cliente↔agente).
+- `packages/shared`: tipos do protocolo (única fonte de verdade das mensagens cliente↔agente), validação e materiais de exemplo.
+- `packages/gcode`: gerador de G-code puro (sem DOM, sem Node), com testes. Usado pela interface; o agente só confere.
 - `apps/agent`: Node.js + `serialport` + `ws`. Dono da conexão com o GRBL e do streaming do G-code.
 - `apps/web`: Vite + TypeScript, sem framework no MVP.
 
@@ -32,7 +33,7 @@ Usar *character-counting*: manter a soma dos bytes enviados e ainda não confirm
 ```bash
 npm install
 npm run typecheck
-npm test
+npm test            # packages/gcode e apps/agent
 npm run dev:agent
 npm run dev:web
 ```
@@ -43,7 +44,8 @@ npm run dev:web
 - Mudou o protocolo? Atualize `packages/shared/src/protocol.ts` e `docs/PROTOCOLO.md` juntos.
 - Commits curtos em português, no imperativo.
 - Não copiar código, interface, ícones ou formato de arquivo do LightBurn.
+- G-code gerado precisa passar em `checkGcode` do agente (há teste em `apps/agent/test/gcode-integration.test.ts`).
 
 ## Próximos passos
 
-Veja `docs/ROADMAP.md`. Fase atual: **1 (agente + controle)**.
+Veja `docs/ROADMAP.md`. Fases 1 e 2 prontas no simulador; falta validar na bancada (`docs/TESTES-NA-BANCADA.md`). Próxima: **3 (diferenciais)**.

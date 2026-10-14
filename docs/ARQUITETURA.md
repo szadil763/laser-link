@@ -24,6 +24,19 @@
 - `connection.ts`: WebSocket com reconexão automática e ping a cada 2 s, com timer num Web Worker (`tick-worker.ts`) para não sofrer o limite de timers de abas em segundo plano.
 - `main.ts`: estado da conexão e da laser, posição, jog, origem, envio de arquivo com confirmação, aviso de trabalho pausado (Retomar/Cancelar), problemas de trabalho recusado, último resultado e Wake Lock na aba dona.
 
+**Gerador (`packages/gcode`)**, puro e testado
+- `emit.ts`: gera o G-code do projeto (M4, S proporcional, ordem imagem → detalhado → preenchido → linhas → cortes, passes, comentários por camada, sem repetir palavras modais).
+- `order.ts`: vizinho mais próximo; no corte, nada é cortado antes do que está dentro dele.
+- `offset.ts`: kerf e contorno deslocado com clipper-lib (Clipper de Angus Johnson, licença Boost).
+- `hatch.ts`: hachura par-ímpar em zigue-zague. `raster.ts`: limiar, Floyd-Steinberg e trechos por linha.
+- `text.ts`: fonte própria de traço único. `matrix.ts`: teste potência × velocidade. `frame.ts`: enquadrar. `parse.ts`: lê G-code para pré-visualizar e simular.
+
+**Interface: aba Preparar trabalho (`apps/web/src/prepare`)**
+- `model.ts`: camadas, elementos (com operação própria), imagem, desfazer e conversão para o gerador.
+- `importers.ts`: SVG lido pelo próprio navegador (curvas amostradas, camadas por cor) e PNG/JPG.
+- `workspace.ts`: mesa, seleção e edição, materiais, simular (percorre o G-code real), enquadrar e enviar.
+- `bed-view.ts` (compartilhado com a aba Controle): câmera com zoom, arrastar, pinça e grade em mm. `preview.ts`: trajetória e cabeçote ao vivo.
+
 **Shared (`packages/shared`)**
 - `protocol.ts`: tipos das mensagens e constantes do heartbeat. Única fonte de verdade.
 - `validate.ts`: validação em tempo de execução das mensagens do cliente.
@@ -42,6 +55,9 @@
 | Dono do trabalho | O heartbeat que importa é o de quem está acompanhando o trabalho; um celular só olhando não segura a máquina |
 | Verificar o arquivo inteiro antes | Recusar é mais seguro que cortar valores no meio do trabalho |
 | `confirmLaserOn: true` no protocolo | A regra "nada liga o laser sem confirmação" fica explícita também no agente |
+| G-code gerado no navegador | O agente continua simples e só confere; o mesmo arquivo é simulado, pré-visualizado e enviado |
+| clipper-lib em vez de clipper2-js | Mesmo algoritmo e licença; a clipper2-js exige o Angular como dependência |
+| Materiais no agente | A biblioteca vale para o PC e o celular; arquivo JSON simples, fora do git |
 
 ## Alternativas consideradas
 
@@ -50,4 +66,4 @@
 
 ## Fases futuras
 
-Pré-visualização, importação SVG/imagem, camadas, geração de G-code própria (`packages/gcode`), biblioteca de materiais, geradores paramétricos. Veja `ROADMAP.md`.
+Geradores paramétricos (caixas com encaixes, peças educacionais), fila de trabalhos e notificação. Veja `ROADMAP.md`.

@@ -16,14 +16,18 @@
 - [ ] Testes com a laser real (ver `TESTES-NA-BANCADA.md`)
 - [ ] Rodar `instalar-servico.ps1` no PC da laser (primeira execução real)
 
-## Fase 2: enviar trabalhos (MVP)
-- [ ] a) Pré-visualização do G-code em canvas (trajetória, área útil, cabeçote em tempo real)
-- [ ] b) Importar SVG: polilinhas, camadas por cor, modo Cortar/Gravar linha, velocidade, potência, passes
-- [ ] c) Importar imagem: escala de cinza, limiar, Floyd-Steinberg, raster bidirecional com overscan
-- [ ] d) Gerador de G-code próprio em `packages/gcode` (M4 dinâmico, ordenação de caminhos, kerf)
-- [ ] e) Enquadrar (frame) com laser desligado ou potência mínima configurável
-- [ ] f) Biblioteca de materiais (JSON), com MDF 3 mm e 6 mm de exemplo
-- [ ] g) Teste de matriz potência × velocidade
+## Fase 2: enviar trabalhos (MVP) (concluída no simulador; falta a bancada)
+- [x] a) Pré-visualização do G-code em canvas (trajetória, área útil, cabeçote em tempo real)
+- [x] b) Importar SVG: polilinhas, camadas por cor, modo Cortar/Gravar linha, velocidade, potência, passes
+- [x] c) Importar imagem: escala de cinza, limiar, Floyd-Steinberg, raster bidirecional com overscan
+- [x] d) Gerador de G-code próprio em `packages/gcode` (M4 dinâmico, ordenação de caminhos, kerf)
+- [x] e) Enquadrar (frame) com laser desligado ou potência mínima configurável
+- [x] f) Biblioteca de materiais (JSON), com MDF 3 mm e 6 mm de exemplo
+- [x] g) Teste de matriz potência × velocidade
+- [x] Extra: operação por elemento (cortar, linha, preenchido, detalhado)
+- [x] Extra: edição básica (mover, girar, escalar, espelhar, alinhar, duplicar, desfazer)
+- [x] Extra (adiantado): texto em fonte de traço único e contorno deslocado (offset)
+- [ ] Testes com a laser real (ver `TESTES-NA-BANCADA.md`, seção Fase 2)
 
 ## Fase 3: diferenciais
 - [ ] a) Gerador paramétrico de caixas com encaixes (finger joints) e kerf
@@ -33,4 +37,6 @@
 ## Depois
 - [ ] Câmera e timelapse
 - [ ] Nesting
-- [ ] Editor vetorial completo (formas, texto, nós, offset, booleanas)
+- [ ] Editor vetorial completo: edição de nós, booleanas (unir, subtrair, interseção), matriz de cópias
+- [ ] Texto com fontes de contorno (TTF/OTF) além da fonte de traço único
+- [ ] Atualizar o vitest para a versão 4+ (o npm falha ao resolver hoje; afeta só ferramentas de teste)
