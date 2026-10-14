@@ -21,6 +21,8 @@ Laser sem supervisão é risco real de incêndio e de ferimento. Este documento 
 - [x] `Parar` envia reset suave (0x18) e `M5`.
 - [x] Confirmação na UI antes de iniciar e de retomar (`confirmLaserOn` no protocolo).
 - [x] Limite de potência (`maxSpindle`) e área útil (`workArea`) no agente: G-code fora dos limites é recusado inteiro.
+- [x] Enquadrar com laser desligado por padrão; potência mínima (`framePower`, no máximo 10% de `maxSpindle`) só com confirmação.
+- [x] G-code gerado pela interface passa pelas mesmas conferências de potência e área no agente.
 - [x] Log de trabalhos em `apps/agent/logs/jobs.jsonl` (início, fim, resultado, motivo e recusas).
 
 ## A aba que iniciou o trabalho

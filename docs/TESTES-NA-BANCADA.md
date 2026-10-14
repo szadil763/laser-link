@@ -64,6 +64,21 @@ Faça com o laser desligado, depois com potência baixa.
   - [ ] ⚠️ Observar o que a **máquina** faz nesse caso: o processo morre sem enviar hold. Ao reabrir a porta, a maioria das placas reinicia o GRBL (DTR), o que para o movimento. Anote se o laser apagou e em quanto tempo.
 - [ ] Firewall: de um aparelho fora do Tailscale e fora da rede local, a porta 8787 não responde.
 
+## 7. Fase 2: trabalhos gerados pelo LaserLink
+
+Primeiro sempre com **Simular**, depois **Enquadrar com laser desligado**, depois potência baixa em retalho.
+
+- [ ] **Enquadrar (laser desligado)**: o cabeçote percorre o retângulo do trabalho e volta ao canto. Confere com a peça?
+- [ ] **Enquadrar com potência mínima** (S`framePower`): o ponto fica visível mas **não marca** o material. Se marcar, reduza `framePower`.
+- [ ] **Teste de matriz** em MDF 3 mm (potência baixa primeiro): os quadrados saem na ordem certa (potência sobe para cima, velocidade para a direita) e os rótulos ficam legíveis. Anote a melhor combinação e salve no material.
+- [ ] **M4 dinâmico**: nos cantos de um quadrado, a marca não fica mais escura que no meio da linha (confirma `$32=1`, modo laser).
+- [ ] **Kerf**: corte um quadrado de 20 mm e um furo de 10 mm com kerf 0. Meça com paquímetro: kerf = 20 − medida do quadrado. Ajuste o kerf no material e corte de novo: as medidas devem bater (±0,1 mm).
+- [ ] **Ordem do corte**: com uma peça com furos, os furos são cortados antes do contorno (a peça não cai antes).
+- [ ] **Preenchido e detalhado**: o preenchimento fica uniforme, sem listras; o detalhado (0,08 mm) não queima demais (se queimar, aumente a velocidade ou o intervalo).
+- [ ] **Imagem**: gravação nos dois sentidos sem "fantasma" (linhas de ida e volta alinhadas). Se desalinhar, aumente o overscan ou reduza a velocidade. O overscan não pode passar da borda da mesa.
+- [ ] **SVG do Inkscape** (mm) e de outro programa (px): o tamanho importado bate com o desenho original.
+- [ ] **Texto**: altura de 5 mm legível em linha; acentos viram letras sem acento.
+
 ## Resultados
 
 | Data | Item | Resultado | Observação |

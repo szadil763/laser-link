@@ -16,7 +16,46 @@ export type ClientMessage =
   | { type: "unlock" }
   /** Iniciar liga o laser: a UI precisa ter pedido confirmação. */
   | { type: "job"; name: string; gcode: string; confirmLaserOn: true }
-  | { type: "ping"; t: number };
+  | { type: "ping"; t: number }
+  /**
+   * Percorre o retângulo do trabalho. `laser: "off"` não liga o laser;
+   * `"min"` usa a potência mínima do agente (framePower) e exige confirmação.
+   */
+  | { type: "frame"; bounds: FrameBounds; laser: "off" }
+  | { type: "frame"; bounds: FrameBounds; laser: "min"; confirmLaserOn: true }
+  | { type: "materialsSave"; materials: Material[] };
+
+export interface FrameBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+export type MaterialMode = "cut" | "line" | "fill" | "detail" | "raster";
+
+/** Configuração de um material para uma operação. */
+export interface MaterialPreset {
+  mode: MaterialMode;
+  /** mm/min */
+  speed: number;
+  /** 0–100 % */
+  power: number;
+  passes: number;
+  /** mm, só corte */
+  kerf?: number;
+  /** mm, preenchido e detalhado */
+  interval?: number;
+}
+
+export interface Material {
+  id: string;
+  name: string;
+  /** mm */
+  thickness: number;
+  notes?: string;
+  presets: MaterialPreset[];
+}
 
 export interface Position {
   x: number;
@@ -87,6 +126,10 @@ export interface JobBounds {
 export interface AgentLimits {
   maxSpindle: number;
   workArea: { x: number; y: number };
+  /** S usado em "Enquadrar com potência mínima". */
+  framePower: number;
+  /** mm/min do enquadramento. */
+  frameFeed: number;
 }
 
 export type ServerMessage =
@@ -109,7 +152,8 @@ export type ServerMessage =
   | { type: "jobEnded"; result: JobResult }
   | { type: "jobRejected"; name: string; problems: JobProblem[]; bounds: JobBounds | null }
   | { type: "serial"; connected: boolean }
+  | { type: "materials"; materials: Material[] }
   | { type: "pong"; t: number }
   | { type: "error"; message: string };
 
-export const PROTOCOL_VERSION = "0.2.0";
+export const PROTOCOL_VERSION = "0.3.0";

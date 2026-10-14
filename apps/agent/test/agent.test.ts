@@ -210,7 +210,27 @@ describe("Agent: limites", () => {
     const { agent } = await setup();
     const c = new TestClient("a");
     agent.connect(c);
-    expect(c.of("hello")[0]!.limits).toEqual({ maxSpindle: 1000, workArea: { x: 400, y: 300 } });
+    expect(c.of("hello")[0]!.limits).toEqual({ maxSpindle: 1000, workArea: { x: 400, y: 300 }, framePower: 10, frameFeed: 3000 });
+    agent.shutdown();
+  });
+});
+
+describe("Agent: progresso", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("envia no máximo ~10 avisos de progresso por segundo e sempre o último", async () => {
+    const { agent } = await setup(0);
+    const c = new TestClient("a");
+    agent.connect(c);
+    startJob(agent, c, 2000);
+    for (let i = 0; i < 10; i++) {
+      agent.receive(c, { type: "ping", t: i });
+      await vi.advanceTimersByTimeAsync(300);
+    }
+    const progress = c.of("progress");
+    expect(progress.length).toBeLessThan(60);
+    expect(progress.at(-1)).toEqual({ type: "progress", sent: 2000, total: 2000, running: false });
     agent.shutdown();
   });
 });

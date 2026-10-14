@@ -13,7 +13,8 @@
   "dependencies": {
     "@laserlink/shared": "*",
     "serialport": "^12.0.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "@laserlink/gcode": "*"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

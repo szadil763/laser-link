@@ -13,6 +13,8 @@ import type { AgentConfig } from "./config.js";
 import { checkGcode, stripComment, type CheckContext } from "./gcode-check.js";
 import type { Grbl, JobEnd, JobProgress } from "./grbl.js";
 import type { JobLog } from "./job-log.js";
+import type { MaterialStore } from "./materials.js";
+import { frameGcode } from "@laserlink/gcode";
 
 /** Um cliente já autenticado. O transporte (WebSocket) fica fora desta classe. */
 export interface ClientConn {
@@ -26,6 +28,7 @@ export interface AgentOptions {
   /** Nome exibido da porta serial (ex.: COM3 ou "simulador"). */
   portLabel: string;
   jobLog?: JobLog;
+  materials?: MaterialStore;
   /** Intervalo entre tentativas de reabrir a serial. Padrão: 2 s. */
   serialRetryMs?: number;
 }
@@ -48,6 +51,7 @@ interface ActiveJob {
 }
 
 const TICK_MS = 500;
+const PROGRESS_INTERVAL_MS = 100;
 
 /** Remove comentários, linhas vazias e delimitadores % do G-code. */
 export function cleanGcode(gcode: string): string[] {
@@ -72,6 +76,7 @@ export class Agent {
   private readonly grbl: Grbl;
   private readonly portLabel: string;
   private readonly jobLog: JobLog | null;
+  private readonly materials: MaterialStore | null;
   private readonly ticker: NodeJS.Timeout;
   private readonly serialRetryMs: number;
   private serialTimer: NodeJS.Timeout | null = null;
@@ -87,6 +92,7 @@ export class Agent {
     this.grbl = options.grbl;
     this.portLabel = options.portLabel;
     this.jobLog = options.jobLog ?? null;
+    this.materials = options.materials ?? null;
     this.serialRetryMs = options.serialRetryMs ?? 2000;
     this.recoverUnfinishedJobs();
 
@@ -138,11 +144,17 @@ export class Agent {
       connected: this.grbl.isOpen,
       job: this.jobInfoFor(client.id),
       reconnectGraceSec: this.config.reconnectGraceSec,
-      limits: { maxSpindle: this.config.maxSpindle, workArea: this.config.workArea },
+      limits: {
+        maxSpindle: this.config.maxSpindle,
+        workArea: this.config.workArea,
+        framePower: this.config.framePower,
+        frameFeed: this.config.frameFeed,
+      },
       lastResult: this.lastResult,
     });
     const last = this.grbl.lastStatus;
     if (last) client.send({ type: "status", ...last });
+    if (this.materials) client.send({ type: "materials", materials: this.materials.all });
   }
 
   disconnect(client: ClientConn): void {
@@ -176,6 +188,7 @@ export class Agent {
   shutdown(): void {
     this.stopped = true;
     clearInterval(this.ticker);
+    if (this.progressTimer) clearTimeout(this.progressTimer);
     if (this.serialTimer) clearTimeout(this.serialTimer);
     this.serialTimer = null;
     if (this.grbl.isRunning) this.grbl.abortJob("Agente encerrado.");
@@ -265,6 +278,25 @@ export class Agent {
         break;
       case "job":
         this.startJob(client, msg.name, msg.gcode);
+        break;
+      case "frame": {
+        const s = msg.laser === "min" ? this.config.framePower : 0;
+        const label = msg.laser === "min" ? `Enquadrar (laser em S${s})` : "Enquadrar (laser desligado)";
+        this.startJob(client, label, frameGcode(msg.bounds, { feed: this.config.frameFeed, s }));
+        break;
+      }
+      case "materialsSave":
+        if (!this.materials) {
+          client.send({ type: "error", message: "Este agente não guarda materiais." });
+          break;
+        }
+        try {
+          this.materials.save(msg.materials);
+          this.broadcast({ type: "materials", materials: this.materials.all });
+          this.broadcast({ type: "log", level: "info", text: `Biblioteca de materiais salva (${msg.materials.length} materiais).` });
+        } catch (err) {
+          client.send({ type: "error", message: `Não foi possível salvar os materiais: ${(err as Error).message}` });
+        }
         break;
     }
   }
@@ -373,12 +405,29 @@ export class Agent {
     return false;
   }
 
+  private lastProgressAt = 0;
+  private progressTimer: NodeJS.Timeout | null = null;
+  private pendingProgress: JobProgress | null = null;
+
+  /** No máximo 10 avisos de progresso por segundo (o GRBL confirma centenas de linhas por segundo). */
   private onProgress(p: JobProgress): void {
     if (this.job) {
       this.job.sent = p.sent;
       this.job.total = p.total;
     }
-    this.broadcast({ type: "progress", ...p });
+    const now = Date.now();
+    const flush = (): void => {
+      if (this.progressTimer) clearTimeout(this.progressTimer);
+      this.progressTimer = null;
+      const msg = this.pendingProgress;
+      this.pendingProgress = null;
+      if (!msg) return;
+      this.lastProgressAt = Date.now();
+      this.broadcast({ type: "progress", ...msg });
+    };
+    this.pendingProgress = p;
+    if (!p.running || p.sent === 0 || now - this.lastProgressAt >= PROGRESS_INTERVAL_MS) flush();
+    else this.progressTimer ??= setTimeout(flush, PROGRESS_INTERVAL_MS - (now - this.lastProgressAt));
   }
 
   private onJobEnd(end: JobEnd): void {

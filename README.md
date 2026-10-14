@@ -3,9 +3,11 @@
 Controle remoto de cortadora/gravadora a laser **GRBL**. Dois pedaços de software:
 
 - **Agente** (`apps/agent`): roda no PC ligado à laser por USB. Fala serial com o GRBL, faz o streaming do G-code e serve a interface e um WebSocket protegido por token.
-- **Interface web** (`apps/web`): abre em qualquer navegador (PC de projeto, celular). Move o cabeçote, define origem, envia o trabalho, pausa, retoma e para.
+- **Interface web** (`apps/web`): abre em qualquer navegador (PC de projeto, celular). Duas abas:
+  - **Controle**: conexão, jog, origem, pausa, retomar, PARAR e a pré-visualização do trabalho com o cabeçote em tempo real.
+  - **Preparar trabalho**: importa SVG e imagens, define o que é corte, linha, preenchido ou detalhado, edita, simula, enquadra e envia. O G-code é gerado pelo próprio LaserLink (`packages/gcode`).
 
-> Status: **Fase 1 (agente e controle) concluída no simulador**, aguardando os testes na laser real (`docs/TESTES-NA-BANCADA.md`). Editor e geração de G-code vêm na Fase 2 (veja `docs/ROADMAP.md`).
+> Status: **Fases 1 e 2 concluídas no simulador**, aguardando os testes na laser real (`docs/TESTES-NA-BANCADA.md`). Próxima: Fase 3 (geradores paramétricos e fila de trabalhos). Veja `docs/ROADMAP.md`.
 
 ## Por que assim
 
@@ -62,6 +64,9 @@ No PC da laser, edite `laserlink.config.json`:
 | `workArea` | `{ "x": 400, "y": 400 }` | área útil em mm a partir da origem |
 | `machineLimits` | `{ "xMin": 0, "xMax": 400, "yMin": 0, "yMax": 400 }` | opcional: curso em coordenadas de máquina (com homing) |
 | `reconnectGraceSec` | `60` | espera por reconexão antes de cancelar um trabalho pausado |
+| `framePower` | `10` | S do "Enquadrar com potência mínima" (padrão 1% de `maxSpindle`, no máximo 10%) |
+| `frameFeed` | `3000` | velocidade do enquadramento, mm/min |
+| `dataDir` | `./data` | opcional: pasta da biblioteca de materiais (padrão `apps/agent/data`) |
 | `logDir` | `./logs` | opcional: pasta dos logs (padrão `apps/agent/logs`) |
 
 ```bash
@@ -80,12 +85,26 @@ npm run dev:agent   # agente com recarga (tsx)
 npm run dev:web     # interface em http://localhost:5173; informe ws://localhost:8787
 ```
 
+## Preparar um trabalho (aba Preparar trabalho)
+
+1. **Importe** um SVG (cada cor vira uma camada; vermelho vira Cortar) ou uma imagem PNG/JPG, ou arraste o arquivo para a mesa. Também dá para adicionar **Texto** (fonte de traço único) ou gerar um **Teste de matriz** potência × velocidade.
+2. **Escolha a operação**: cada camada tem uma operação padrão, e cada elemento pode ter a sua (toque nele na mesa ou use a lista "Elementos"):
+   - **Cortar**: atravessa o material (com compensação de kerf).
+   - **Gravar linha**: marca o contorno.
+   - **Gravar preenchido**: hachura dentro da forma (intervalo padrão 0,2 mm).
+   - **Detalhado**: preenchimento fino (0,08 mm), para textos e detalhes pequenos.
+3. **Material**: escolha na camada (MDF 3 mm e 6 mm de exemplo) ou ajuste velocidade, potência e passes à mão. O botão **Materiais** edita a biblioteca, que fica salva no agente.
+4. **Edite** se precisar: arraste o elemento selecionado, use os campos de posição e tamanho, girar, espelhar, alinhar, duplicar, contorno deslocado e desfazer (Ctrl+Z). Roda do mouse dá zoom; arrastar o fundo move a vista.
+5. **Simular** mostra o percurso exato do G-code que será enviado. **Enquadrar** percorre o contorno na máquina com o laser desligado (ou em potência mínima, com confirmação).
+6. **Enviar para a laser** pede confirmação, manda o arquivo inteiro ao agente e abre a aba Controle para acompanhar.
+
 ## Logs
 
 - `apps/agent/logs/jobs.jsonl`: um registro por linha com início, fim, resultado e motivo de cada trabalho, e as recusas.
 - `apps/agent/logs/agente.log`: saída do agente quando roda como serviço no Windows.
+- `apps/agent/data/materials.json`: biblioteca de materiais (criada quando você salva pela interface).
 
-A pasta `apps/agent/logs/` fica fora do git.
+As pastas `apps/agent/logs/` e `apps/agent/data/` ficam fora do git.
 
 ## Estrutura
 
@@ -97,7 +116,10 @@ apps/agent       agente Node.js (serialport + ws)
   src/sim/           simulador de GRBL
   test/              testes (vitest)
 apps/web         interface web (Vite + TypeScript)
-packages/shared  tipos e validação das mensagens do protocolo
+  src/prepare/       aba Preparar trabalho (modelo, importação, mesa, edição)
+  src/preview.ts     pré-visualização da aba Controle
+packages/gcode   gerador de G-code puro, com testes (kerf, hachura, raster, texto, matriz)
+packages/shared  tipos e validação das mensagens do protocolo, materiais de exemplo
 scripts/windows  instalação do agente como serviço (NSSM)
 docs/            arquitetura, protocolo, segurança, Windows, testes na bancada, roadmap
 ```
