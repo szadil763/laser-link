@@ -4,6 +4,21 @@ Passo a passo para deixar o agente rodando como serviço no PC ligado à laser, 
 
 > **Versão do Windows:** o Node.js 20 e o Tailscale atuais precisam do **Windows 10 ou 11** (64 ou 32 bits). No Windows 7 ou 8.1 eles não instalam. Se o PC antigo tiver Windows 7, me avise antes: o caminho muda (por exemplo, rodar o agente num Linux leve no mesmo PC).
 
+## Jeito fácil: arquivos de clique duplo
+
+Na pasta do LaserLink (`C:\LaserLink`) há quatro arquivos. Clique duas vezes e responda **Sim** quando o Windows pedir permissão. Eles pedem administrador sozinhos; não precisa abrir o PowerShell.
+
+| Arquivo | Para quê |
+|---|---|
+| **Instalar LaserLink** | Primeira instalação: instala Node.js, Git e NSSM pelo winget, pergunta a porta COM e a área de corte, gera o token, instala o serviço e (se quiser) o Tailscale. Rodar de novo é seguro: mantém a configuração. |
+| **Atualizar LaserLink** | Baixa a versão nova e reinstala o serviço. Para o serviço antes, mesmo se estiver travado. Não use com trabalho em andamento. |
+| **Reiniciar LaserLink** | Reinicia o agente (depois de editar o `laserlink.config.json`, ou se algo travar). |
+| **Abrir LaserLink** | Abre a interface no navegador deste PC. |
+
+Num PC novo, sem o LaserLink ainda: baixe o projeto como ZIP no GitHub (botão **Code > Download ZIP**, ramo `fase-3`), extraia em qualquer pasta e clique duas vezes em **Instalar LaserLink**. Ele baixa o projeto de verdade em `C:\LaserLink` (com Git, para as atualizações funcionarem) e continua de lá.
+
+Os passos abaixo fazem a mesma coisa à mão e servem de referência.
+
 ## 1. Preparar o PC
 
 1. **Energia:** em *Configurações > Sistema > Energia*, coloque "Suspender" em **Nunca** (na tomada). Se o PC dormir, a serial fecha e o trabalho para.

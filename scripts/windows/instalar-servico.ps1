@@ -51,12 +51,9 @@ if (-not $NssmCmd) { Fail "nssm.exe não encontrado. Baixe em https://nssm.cc/do
 $NssmExe = $NssmCmd.Source
 
 # O serviço em execução prende arquivos de node_modules (o driver da porta serial).
-# Para antes de reinstalar as dependências; o serviço volta a rodar no fim.
-if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
-  Write-Host "Parando o serviço $ServiceName para atualizar..." -ForegroundColor Yellow
-  & $NssmExe stop $ServiceName | Out-Null
-  Start-Sleep -Seconds 2
-}
+# Para antes de reinstalar as dependências (mesmo se estiver travado); volta a rodar no fim.
+. (Join-Path $PSScriptRoot "comum.ps1")
+Stop-LaserLink $ServiceName
 
 Write-Host "Compilando o LaserLink em $Root ..." -ForegroundColor Cyan
 Push-Location $Root

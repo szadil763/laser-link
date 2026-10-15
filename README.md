@@ -74,7 +74,7 @@ npm run build
 npm run start:agent
 ```
 
-No Windows, instale como serviço e configure o Tailscale seguindo `docs/WINDOWS.md`.
+No Windows, o jeito mais fácil é clicar duas vezes em **Instalar LaserLink** (e depois em **Atualizar LaserLink** a cada versão nova). O passo a passo completo, com o Tailscale, está em `docs/WINDOWS.md`.
 
 Abra `http://IP-DO-PC-DA-LASER:8787` em qualquer aparelho da rede (ou o IP `100.x.y.z` do Tailscale), informe o token e conecte.
 
