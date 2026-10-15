@@ -114,15 +114,28 @@ export class Workspace {
   private readonly view: BedView;
   private fileHandle: FileHandle | null = null;
   private dragSaved = false;
+  /** Ferramenta "Área": arrastar no vazio desenha a caixa de seleção. */
+  private areaMode = false;
+  /** Caixa de seleção sendo desenhada, em pixels do canvas. */
+  private marquee: { a: Point; b: Point } | null = null;
 
   constructor(private readonly host: PrepareHost) {
     this.view = new BedView($<HTMLCanvasElement>("p-canvas"), this.limits.workArea, () => this.requestDraw(), {
       onTap: (px, ev) => this.pick(px, ev),
-      onDragStart: (px) => {
+      onDragStart: (px, ev) => {
         if (this.anim) return false;
         const hit = this.hitTest(px);
         this.dragSaved = false;
-        return !!hit && this.selected.has(hit.id);
+        if (hit && this.selected.has(hit.id)) return true;
+        return this.areaMode || ev.shiftKey ? "marquee" : false;
+      },
+      onMarquee: (a, b) => {
+        this.marquee = b ? { a, b } : null;
+        this.requestDraw();
+      },
+      onMarqueeEnd: (a, b, ev) => {
+        this.marquee = null;
+        this.selectArea(a, b, this.multi || ev.shiftKey || ev.ctrlKey || ev.metaKey);
       },
       onDragMove: (dx, dy) => {
         // só grava o "desfazer" quando o elemento realmente se move (um clique simples não conta)
@@ -713,7 +726,7 @@ export class Workspace {
   private select(id: string, add: boolean): void {
     const found = this.findShape(id);
     if (!found) return;
-    const ids = found.s.group ? found.l.shapes.filter((x) => x.group === found.s.group).map((x) => x.id) : [id];
+    const ids = this.groupIds(found.s);
     const already = ids.every((x) => this.selected.has(x));
     if (!add) {
       const only = already && this.selected.size === ids.length;
@@ -722,6 +735,55 @@ export class Workspace {
     } else if (already) ids.forEach((x) => this.selected.delete(x));
     else ids.forEach((x) => this.selected.add(x));
     this.refresh();
+  }
+
+  /** O elemento e todos os do mesmo grupo (em qualquer camada). */
+  private groupIds(s: Shape): string[] {
+    if (!s.group) return [s.id];
+    return this.layers.flatMap((l) => l.shapes.filter((x) => x.group === s.group).map((x) => x.id));
+  }
+
+  /**
+   * Caixa de seleção. Arrastando para a direita: pega o que está inteiro dentro.
+   * Para a esquerda: pega também o que a caixa só encosta. Grupos vêm inteiros.
+   */
+  private selectArea(a: Point, b: Point, add: boolean): void {
+    const [ax, ay] = this.view.toMm(a[0], a[1]);
+    const [bx, by] = this.view.toMm(b[0], b[1]);
+    const r = { minX: Math.min(ax, bx), maxX: Math.max(ax, bx), minY: Math.min(ay, by), maxY: Math.max(ay, by) };
+    const touching = b[0] < a[0];
+    const inside = (p: Point): boolean => p[0] >= r.minX && p[0] <= r.maxX && p[1] >= r.minY && p[1] <= r.maxY;
+    const picked: Shape[] = [];
+    for (const l of this.layers) {
+      if (!l.enabled) continue;
+      for (const s of l.shapes) {
+        const ok = touching ? s.points.some(inside) || s.points.some((p, i) => i > 0 && segmentHitsRect(s.points[i - 1]!, p, r)) : s.points.every(inside);
+        if (ok) picked.push(s);
+      }
+    }
+    if (!add) this.selected.clear();
+    for (const s of picked) for (const id of this.groupIds(s)) this.selected.add(id);
+    this.refresh();
+    if (!picked.length) this.host.toast(touching ? "A caixa não encostou em nenhum elemento." : "Nenhum elemento ficou inteiro dentro da caixa. Arraste para a esquerda para pegar o que ela só encosta.");
+  }
+
+  private groupSel(): void {
+    const items = this.selItems();
+    if (new Set(items.map(({ s }) => s.group ?? s.id)).size < 2) return this.host.toast("Selecione dois ou mais elementos para agrupar.");
+    this.history.push(this.layers);
+    const g = newId("GU"); // "GU" = grupo feito pela pessoa (o nome mostra "Grupo de N elementos")
+    for (const { s } of items) s.group = g;
+    this.refresh();
+    this.host.toast(`${items.length} elementos agrupados: agora andam juntos.`);
+  }
+
+  private ungroupSel(): void {
+    const items = this.selItems().filter(({ s }) => s.group);
+    if (!items.length) return this.host.toast("Nada agrupado na seleção.");
+    this.history.push(this.layers);
+    for (const { s } of items) delete s.group;
+    this.refresh();
+    this.host.toast(`Desagrupado: clique num elemento para selecionar só ele.`);
   }
 
   private hitTest(px: Point): Shape | null {
@@ -966,7 +1028,9 @@ export class Workspace {
     const first = items[0];
     $("ed-name").textContent = !first
       ? "Nada selecionado"
-      : groups.size === 1
+      : groups.size === 1 && first.s.group?.startsWith("GU")
+        ? `Grupo de ${items.length} elementos`
+        : groups.size === 1
         ? `${first.s.group ? first.s.name.replace(/: (furo \d+|gravação)$/, "") : first.s.name} · camada ${first.l.name}`
         : `${items.length} elementos`;
     $("ed-name").title = $("ed-name").textContent ?? "";
@@ -981,6 +1045,8 @@ export class Workspace {
     $("ed-lock").setAttribute("aria-pressed", String(this.lockRatio));
     $("ed-align-label").textContent = groups.size > 1 ? "Alinhar entre si" : "Alinhar na mesa";
     $("ed-align-table").hidden = groups.size <= 1;
+    $<HTMLButtonElement>("ed-group").disabled = groups.size < 2;
+    $<HTMLButtonElement>("ed-ungroup").disabled = !items.some(({ s }) => s.group);
     // faixa de operações
     const modes = new Set(items.map(({ s, l }) => effectiveMode(s, l)));
     const current = has && modes.size === 1 ? [...modes][0]! : null;
@@ -1053,6 +1119,8 @@ export class Workspace {
       this.offsetSel(num("ed-off"));
       $<HTMLDetailsElement>("ed-off-menu").open = false;
     });
+    $("ed-group").addEventListener("click", () => this.groupSel());
+    $("ed-ungroup").addEventListener("click", () => this.ungroupSel());
     $("ed-dup").addEventListener("click", () => this.duplicateSel());
     $("ed-del").addEventListener("click", () => this.deleteSel());
     $("p-undo").addEventListener("click", () => this.undo());
@@ -1410,6 +1478,20 @@ export class Workspace {
       } else if (last) head = last.to;
     }
     if (anim || this.headLive) v.drawHead(head, lit);
+    const mq = this.marquee;
+    if (mq) {
+      const touching = mq.b[0] < mq.a[0];
+      ctx.save();
+      ctx.lineWidth = 1.2 * d;
+      ctx.setLineDash(touching ? [6 * d, 4 * d] : []);
+      ctx.strokeStyle = touching ? "#34a853" : "#4da3ff";
+      ctx.fillStyle = touching ? "rgba(52,168,83,.12)" : "rgba(77,163,255,.12)";
+      const x = Math.min(mq.a[0], mq.b[0]);
+      const y = Math.min(mq.a[1], mq.b[1]);
+      ctx.fillRect(x, y, Math.abs(mq.b[0] - mq.a[0]), Math.abs(mq.b[1] - mq.a[1]));
+      ctx.strokeRect(x, y, Math.abs(mq.b[0] - mq.a[0]), Math.abs(mq.b[1] - mq.a[1]));
+      ctx.restore();
+    }
     $("p-hud-pos").textContent = `X ${head[0].toFixed(1)} Y ${head[1].toFixed(1)}`;
     $("p-hud-zoom").textContent = `${v.zoomPercent}%`;
   }
@@ -1651,6 +1733,15 @@ export class Workspace {
     $("p-materials").addEventListener("click", () => this.openMaterials());
     $("p-box-gen").addEventListener("click", () => this.openBox());
     $("p-parts").addEventListener("click", () => this.openParts());
+    $("p-area").addEventListener("click", (e) => {
+      this.areaMode = !this.areaMode;
+      (e.currentTarget as HTMLElement).setAttribute("aria-pressed", String(this.areaMode));
+      this.host.toast(
+        this.areaMode
+          ? "Arraste no espaço vazio da mesa: para a direita pega o que fica inteiro dentro; para a esquerda, o que a caixa encosta. Para mover a vista, desligue Área."
+          : "Arrastar no vazio volta a mover a vista. Shift + arrastar ainda desenha a caixa.",
+      );
+    });
     $("p-multi").addEventListener("click", (e) => {
       this.multi = !this.multi;
       (e.currentTarget as HTMLElement).setAttribute("aria-pressed", String(this.multi));
@@ -1686,6 +1777,19 @@ export class Workspace {
         this.undo();
         return;
       }
+      if ((e.ctrlKey || e.metaKey) && key === "a") {
+        e.preventDefault();
+        this.selected.clear();
+        for (const l of this.layers) if (l.enabled) for (const s of l.shapes) this.selected.add(s.id);
+        this.refresh();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && key === "g") {
+        e.preventDefault();
+        if (e.shiftKey) this.ungroupSel();
+        else this.groupSel();
+        return;
+      }
       if (!this.selected.size) return;
       const step = e.shiftKey ? 10 : 1;
       const moves: Record<string, Point> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] };
@@ -1710,6 +1814,27 @@ export class Workspace {
   shown(): void {
     this.view.resize();
   }
+}
+
+/** O segmento ab cruza o retângulo? (Liang–Barsky) */
+function segmentHitsRect(a: Point, b: Point, r: Bounds): boolean {
+  let t0 = 0;
+  let t1 = 1;
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const clip = (p: number, q: number): boolean => {
+    if (p === 0) return q >= 0;
+    const t = q / p;
+    if (p < 0) {
+      if (t > t1) return false;
+      if (t > t0) t0 = t;
+    } else {
+      if (t < t0) return false;
+      if (t < t1) t1 = t;
+    }
+    return true;
+  };
+  return clip(-dx, a[0] - r.minX) && clip(dx, r.maxX - a[0]) && clip(-dy, a[1] - r.minY) && clip(dy, r.maxY - a[1]) && t0 <= t1;
 }
 
 function segDist(p: Point, a: Point, b: Point): number {

@@ -70,14 +70,15 @@ button[aria-pressed="true"] { background: #2b3a55; border-color: var(--accent); 
 #alerts:not(:has(> :not([hidden]))) { display: none; }
 #rejected { padding: 10px 14px; }
 
-.propbar { grid-area: props; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; background: var(--panel); border-radius: 10px; padding: 6px 10px; font-size: 13px; }
-.sel-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.propbar { grid-area: props; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 5px; background: var(--panel); border-radius: 10px; padding: 6px 10px; font-size: 13px; }
+/* largura fixa: a barra não pode mudar de tamanho quando a seleção muda (a mesa pularia) */
+.sel-name { flex: 0 0 150px; width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .pf { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
-.pf input { width: 64px; min-height: 34px; padding: 4px 6px; background: var(--bg); font-variant-numeric: tabular-nums; }
+.pf input { width: 58px; min-height: 34px; padding: 4px 6px; background: var(--bg); font-variant-numeric: tabular-nums; }
 .propbar button, .propbar summary { min-height: 34px; padding: 4px 10px; font-size: 13px; }
 .propbar .unit { font-size: 12px; }
 .sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px; }
-.icon-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; padding: 4px !important; }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; padding: 4px !important; }
 .icon-btn svg, .rail svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 details.menu { position: relative; }
@@ -125,7 +126,11 @@ details.menu.flip .menu-body { left: auto; right: 0; }
 .frame-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .frame-row .seg button { min-height: 36px; }
 
-.statusbar { grid-area: status; display: flex; gap: 4px 18px; flex-wrap: wrap; align-items: center; font-size: 13px; color: var(--muted); padding: 2px 6px; font-variant-numeric: tabular-nums; }
+/* uma linha só: se o texto mudar de tamanho (posição do mouse), a mesa não pode mudar de altura */
+.statusbar { grid-area: status; display: flex; gap: 18px; flex-wrap: nowrap; align-items: center; font-size: 13px; color: var(--muted); padding: 2px 6px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; min-width: 0; height: 22px; }
+.statusbar > span { flex: 0 0 auto; }
+.statusbar > span:last-child { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#sb-cursor { min-width: 22ch; }
 .statusbar b { color: var(--fg); }
 
 @media (min-width: 980px) and (min-height: 560px) {
@@ -150,6 +155,13 @@ details.menu.flip .menu-body { left: auto; right: 0; }
   .side { min-height: 0; overflow: hidden; }
   .side-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   #log { height: auto; min-height: 320px; }
+  /* faixas em volta da mesa com altura fixa: a mesa não muda de tamanho quando a seleção ou o desenho mudam */
+  .opsbar { flex-wrap: nowrap; }
+  .opsbar .seg { flex-wrap: nowrap; flex: 0 0 auto; }
+  #p-ops-hint { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stage-head { flex-wrap: nowrap; }
+  .stage-head .legend { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
+  .stage-head .legend b { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 }
 .jog { display: grid; grid-template-columns: repeat(3, 56px); gap: 6px; justify-content: center; }
 .jog button { height: 48px; }

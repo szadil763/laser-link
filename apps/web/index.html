@@ -103,12 +103,15 @@
             <p class="note">Cria uma cópia do contorno afastada para fora (positivo) ou para dentro (negativo).</p>
           </div>
         </details>
+        <button id="ed-group" class="icon-btn" title="Agrupar (Ctrl+G): os selecionados passam a andar juntos"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="2.5 2"/><rect x="6.5" y="6.5" width="6" height="6"/><rect x="11.5" y="11.5" width="6" height="6"/></svg><span class="sr">Agrupar</span></button>
+        <button id="ed-ungroup" class="icon-btn" title="Desagrupar (Ctrl+Shift+G): cada elemento volta a ser selecionado sozinho"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><path d="M14 4.5h5.5V10M4.5 14v5.5H10" stroke-dasharray="2 2"/></svg><span class="sr">Desagrupar</span></button>
         <button id="ed-dup" class="icon-btn" title="Duplicar (Ctrl+D)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/></svg><span class="sr">Duplicar</span></button>
         <button id="ed-del" class="icon-btn" title="Excluir (Delete)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span class="sr">Excluir</span></button>
       </div>
 
       <nav class="rail" aria-label="Ferramentas">
         <button id="p-multi" aria-pressed="false" title="Selecionar vários elementos"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 3l11 6-5 1.5L9 16z"/><path d="M17 14v6M14 17h6"/></svg><span>Vários</span></button>
+        <button id="p-area" aria-pressed="false" title="Caixa de seleção: arraste na mesa para selecionar o que estiver dentro (Shift + arrastar também funciona)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="3.5" width="13" height="11" stroke-dasharray="2.5 2"/><path d="M13 12l7 3.5-3 1-1.3 3.3z"/></svg><span>Área</span></button>
         <button id="p-text" title="Adicionar texto"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg><span>Texto</span></button>
         <button id="p-box-gen" title="Gerar caixa com encaixes"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg><span>Caixa</span></button>
         <button id="p-parts" title="Peças do carrinho e do robô bípede"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="7.5" cy="16.5" r="3"/><circle cx="16.5" cy="16.5" r="3"/><path d="M5 13V8h9l3 5M10 8V5h3"/></svg><span>Peças</span></button>

@@ -36,6 +36,7 @@
 - [x] Extra: tela única (barra de medidas, ferramentas à esquerda, faixa de operações, painel em abas, barra de status) e mesa clara/escura
 - [x] Extra: instalação e atualização com clique duplo no Windows
 - [x] Extra: menu Arquivo (projeto .laserlink, salvar como, importar SVG/DXF/imagem, exportar SVG/DXF/G-code), textos editáveis com dois cliques e Limpar mesa nas duas vistas
+- [x] Extra: caixa de seleção (ferramenta Área ou Shift + arrastar), agrupar e desagrupar
 - [ ] Testes com a laser real (ver `TESTES-NA-BANCADA.md`, seção Fase 3)
 
 ## Depois
