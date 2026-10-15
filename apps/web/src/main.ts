@@ -5,6 +5,8 @@ import { confirmDialog } from "./confirm-dialog.js";
 import { Connection, type LinkState } from "./connection.js";
 import { Workspace } from "./prepare/workspace.js";
 import { JobPreview } from "./preview.js";
+import { bedTheme, setBedTheme } from "./theme.js";
+import type { Point } from "@laserlink/gcode";
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -62,21 +64,55 @@ function toast(text: string): void {
   toastTimer = window.setTimeout(() => (t.hidden = true), 5000);
 }
 
-// ---------- abas ----------
-const TABS = [
-  ["tab-control", "view-control"],
-  ["tab-prepare", "view-prepare"],
+// ---------- painel lateral (abas) ----------
+const SIDE_TABS = [
+  ["st-layers", "sp-layers"],
+  ["st-machine", "sp-machine"],
+  ["st-queue", "sp-queue"],
+  ["st-log", "sp-log"],
 ] as const;
-function showTab(tabId: (typeof TABS)[number][0]): void {
-  for (const [t, v] of TABS) {
+type SideTab = (typeof SIDE_TABS)[number][0];
+function showSide(tabId: SideTab): void {
+  for (const [t, panel] of SIDE_TABS) {
     $(t).setAttribute("aria-selected", String(t === tabId));
-    $(v).hidden = t !== tabId;
+    $(panel).hidden = t !== tabId;
   }
-  if (tabId === "tab-prepare") workspace.shown();
+  if (tabId === "st-log") logEl.scrollTop = logEl.scrollHeight;
 }
-for (const [t] of TABS) $(t).addEventListener("click", () => showTab(t));
+for (const [t] of SIDE_TABS) $(t).addEventListener("click", () => showSide(t));
 
-const preview = new JobPreview({ x: 400, y: 400 });
+// ---------- mesa: Desenho ou Na máquina ----------
+type View = "design" | "machine";
+function showView(view: View): void {
+  const design = view === "design";
+  $("view-design").setAttribute("aria-selected", String(design));
+  $("view-machine").setAttribute("aria-selected", String(!design));
+  $("p-box").hidden = !design;
+  $("p-legend").hidden = !design;
+  $("c-box").hidden = design;
+  $("c-legend").hidden = design;
+  if (design) workspace.shown();
+}
+$("view-design").addEventListener("click", () => showView("design"));
+$("view-machine").addEventListener("click", () => showView("machine"));
+
+// ---------- mesa clara ou escura ----------
+function renderBedTheme(): void {
+  const light = bedTheme() === "light";
+  $("bed-theme-label").textContent = light ? "Mesa escura" : "Mesa clara";
+  $("bed-theme").setAttribute("aria-label", light ? "Trocar para mesa escura" : "Trocar para mesa clara");
+}
+$("bed-theme").addEventListener("click", () => {
+  setBedTheme(bedTheme() === "light" ? "dark" : "light");
+  renderBedTheme();
+});
+renderBedTheme();
+
+function showCursor(mm: Point | null): void {
+  $("sb-cursor").textContent = mm ? `Cursor: X ${mm[0].toFixed(1)} Y ${mm[1].toFixed(1)} mm` : "Cursor: —";
+}
+
+const preview = new JobPreview({ x: 400, y: 400 }, showCursor);
 const workspace = new Workspace({
   confirm: confirmDialog,
   toast,
@@ -85,13 +121,14 @@ const workspace = new Workspace({
   onJobSent: (name, gcode) => {
     $("rejected").hidden = true;
     preview.load(name, gcode);
-    showTab("tab-control");
-    toast(`"${name}" enviado ao agente. Acompanhe aqui.`);
+    showView("machine");
+    toast(`"${name}" enviado ao agente. Acompanhe na mesa "Na máquina".`);
   },
   onQueued: (name, gcode) => {
     $("rejected").hidden = true;
     queuedGcode.set(name, gcode);
   },
+  onCursor: showCursor,
 });
 
 const LINK_LABELS: Record<LinkState, [string, "ok" | "warn" | "bad"]> = {
@@ -126,6 +163,9 @@ function renderJob(job: JobInfo | null): void {
   $("job-line").textContent = job
     ? `${job.name}: ${STATE_LABELS[job.state]} (${job.sent}/${job.total} linhas)`
     : "Nenhum trabalho em andamento.";
+  $("dock-job").hidden = !job;
+  // com trabalho rodando, o resumo e o enquadrar só ocupam espaço
+  document.querySelector(".side")?.classList.toggle("job-on", job !== null);
   const bar = $<HTMLProgressElement>("progress");
   bar.max = Math.max(1, job?.total ?? 1);
   bar.value = job?.sent ?? 0;
@@ -219,6 +259,7 @@ async function startQueued(item: QueueItem): Promise<void> {
     hideDone();
     const gcode = queuedGcode.get(item.name);
     if (gcode) preview.load(item.name, gcode);
+    showView("machine");
   }
 }
 
@@ -444,7 +485,10 @@ $("start").addEventListener("click", async () => {
   if (!ok) return;
   $("rejected").hidden = true;
   const gcode = await file.text();
-  if (conn.send({ type: "job", name: file.name, gcode, confirmLaserOn: true })) preview.load(file.name, gcode);
+  if (conn.send({ type: "job", name: file.name, gcode, confirmLaserOn: true })) {
+    preview.load(file.name, gcode);
+    showView("machine");
+  }
 });
 
 $("enqueue").addEventListener("click", async () => {
@@ -464,5 +508,13 @@ $("enqueue").addEventListener("click", async () => {
 // arquivo escolhido: mostra a trajetória antes de iniciar
 $<HTMLInputElement>("file").addEventListener("change", async (e) => {
   const file = (e.target as HTMLInputElement).files?.[0];
-  if (file) preview.load(file.name, await file.text());
+  if (file) {
+    preview.load(file.name, await file.text());
+    showView("machine");
+  }
 });
+
+$("rejected-close").addEventListener("click", () => ($("rejected").hidden = true));
+
+// Sem endereço ou token salvos: começa pela aba Máquina, onde fica a conexão.
+if (!urlInput.value || !tokenInput.value) showSide("st-machine");

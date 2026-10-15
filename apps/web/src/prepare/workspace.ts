@@ -23,6 +23,7 @@ import {
 } from "@laserlink/gcode";
 import { DEFAULT_MATERIALS, type AgentLimits, type ClientMessage, type Material, type MaterialMode, type MaterialPreset } from "@laserlink/shared";
 import { BedView } from "../bed-view.js";
+import { bedColors } from "../theme.js";
 import { importImage, importSvg } from "./importers.js";
 import {
   History,
@@ -47,10 +48,12 @@ export interface PrepareHost {
   toast(message: string): void;
   send(msg: ClientMessage): boolean;
   isConnected(): boolean;
-  /** Trabalho enviado: a interface mostra a aba Controle com a pré-visualização. */
+  /** Trabalho enviado: a interface mostra a mesa "Na máquina". */
   onJobSent(name: string, gcode: string): void;
   /** G-code mandado para a fila do agente (ainda não iniciado). */
   onQueued(name: string, gcode: string): void;
+  /** Posição do mouse sobre a mesa, em mm (barra de status). */
+  onCursor?(mm: Point | null): void;
 }
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -118,8 +121,10 @@ export class Workspace {
       },
       onDragEnd: () => this.refresh(),
       onDoubleClick: () => this.fitPiece(),
+      onHover: (mm) => this.host.onCursor?.(mm),
     });
     this.bind();
+    this.bindProps();
     this.refresh();
   }
 
@@ -142,7 +147,7 @@ export class Workspace {
   setHead(p: Point): void {
     this.head = p;
     this.headLive = true;
-    if (!this.anim && !$("view-prepare").hidden) this.requestDraw();
+    if (!this.anim && !$("p-box").hidden) this.requestDraw();
   }
 
   private drawQueued = false;
@@ -713,6 +718,7 @@ export class Workspace {
     this.renderSelection();
     this.renderLayers();
     this.renderLegend();
+    $<HTMLButtonElement>("p-undo").disabled = !this.history.canUndo;
     this.scheduleGenerate();
     this.draw();
   }
@@ -738,82 +744,86 @@ export class Workspace {
     return `${(b.maxX - b.minX).toFixed(1)} × ${(b.maxY - b.minY).toFixed(1)} mm${s.closed ? "" : ", aberto"}`;
   }
 
+  /** Atualiza a barra de medidas e a faixa de operações (fixas no HTML). */
   private renderSelection(): void {
-    const box = $("p-selection");
     const items = this.selItems();
-    if (!items.length) {
-      box.hidden = true;
-      box.replaceChildren();
-      return;
-    }
-    box.hidden = false;
-    const b = this.selBounds()!;
-    const modes = new Set(items.map(({ s, l }) => effectiveMode(s, l)));
-    const current = modes.size === 1 ? [...modes][0]! : null;
-    const anyOpen = items.some(({ s }) => !s.closed);
+    const has = items.length > 0;
+    const b = this.selBounds();
+    const props = $("p-props");
+    props.querySelectorAll<HTMLElement>("input, button, summary").forEach((el) => {
+      if (el instanceof HTMLInputElement || el instanceof HTMLButtonElement) el.disabled = !has;
+      else el.toggleAttribute("aria-disabled", !has);
+    });
+    if (!has) props.querySelectorAll("details").forEach((d) => (d.open = false));
     const groups = new Set(items.map(({ s }) => s.group ?? s.id));
-    const first = items[0]!;
-    const title =
-      groups.size === 1
-        ? `<b>${esc(first.s.group ? first.s.name.replace(/: (furo \d+|gravação)$/, "") : first.s.name)}</b> <span class="muted">${(b.maxX - b.minX).toFixed(1)} × ${(b.maxY - b.minY).toFixed(1)} mm · camada ${esc(first.l.name)}</span>`
-        : `<b>${items.length} elementos selecionados</b>`;
-    box.innerHTML = `<p>${title}</p>
-      <div class="label">Operação</div>
-      <div class="seg" role="group" aria-label="Operação da seleção">${this.modeButtons(current, `<button type="button" data-mode="">Padrão da camada</button>`)}</div>
-      ${anyOpen ? `<p class="note">Caminhos abertos não podem ser preenchidos: ficam como Gravar linha.</p>` : ""}
-      <div class="edit">
-        <div class="label">Editar · arraste na mesa ou use as setas (Shift = 10 mm)</div>
-        <div class="fields">
-          <label class="field">X <span class="val"><input type="number" step="0.1" id="ed-x" value="${b.minX.toFixed(1)}"><span class="unit">mm</span></span></label>
-          <label class="field">Y <span class="val"><input type="number" step="0.1" id="ed-y" value="${b.minY.toFixed(1)}"><span class="unit">mm</span></span></label>
-          <label class="field">Largura <span class="val"><input type="number" step="0.1" min="0.1" id="ed-w" value="${(b.maxX - b.minX).toFixed(1)}"><span class="unit">mm</span></span></label>
-          <label class="field">Altura <span class="val"><input type="number" step="0.1" min="0.1" id="ed-h" value="${(b.maxY - b.minY).toFixed(1)}"><span class="unit">mm</span></span></label>
-        </div>
-        <div class="row">
-          <button type="button" id="ed-lock" aria-pressed="${this.lockRatio}">${this.lockRatio ? "Proporção travada" : "Proporção livre"}</button>
-          <label class="field" style="flex:1 1 150px">Girar <span class="val"><input type="number" step="1" id="ed-angle" value="15"><span class="unit">graus</span><button type="button" id="ed-rot">Girar</button></span></label>
-        </div>
-        <div class="seg" role="group" aria-label="Transformar">
-          <button type="button" id="ed-rl" title="Girar 90° anti-horário">↺ 90°</button>
-          <button type="button" id="ed-rr" title="Girar 90° horário">↻ 90°</button>
-          <button type="button" id="ed-fh">Espelhar ↔</button>
-          <button type="button" id="ed-fv">Espelhar ↕</button>
-        </div>
-        <div class="label">${groups.size > 1 ? "Alinhar entre si" : "Alinhar na mesa"}</div>
-        <div class="seg" role="group" aria-label="Alinhar">
-          <button type="button" data-align="left">Esquerda</button>
-          <button type="button" data-align="hcenter">Centro ↔</button>
-          <button type="button" data-align="right">Direita</button>
-          <button type="button" data-align="top">Topo</button>
-          <button type="button" data-align="vcenter">Centro ↕</button>
-          <button type="button" data-align="bottom">Base</button>
-          ${groups.size > 1 ? `<button type="button" data-align="table-center">Centralizar grupo na mesa</button>` : ""}
-        </div>
-        <div class="row">
-          <label class="field" style="flex:1 1 150px">Contorno deslocado <span class="val"><input type="number" step="0.1" id="ed-off" value="2"><span class="unit">mm</span><button type="button" id="ed-off-go">Criar</button></span></label>
-        </div>
-        <p class="note">Contorno deslocado cria uma cópia do contorno afastada para fora (valor positivo) ou para dentro (negativo).</p>
-        <div class="row">
-          <button type="button" id="ed-dup">Duplicar</button>
-          <button type="button" id="ed-del">Excluir</button>
-          <button type="button" id="ed-undo" ${this.history.canUndo ? "" : "disabled"}>Desfazer</button>
-          <button type="button" id="ed-clear">Limpar seleção</button>
-        </div>
-      </div>`;
+    const first = items[0];
+    $("ed-name").textContent = !first
+      ? "Nada selecionado"
+      : groups.size === 1
+        ? `${first.s.group ? first.s.name.replace(/: (furo \d+|gravação)$/, "") : first.s.name} · camada ${first.l.name}`
+        : `${items.length} elementos`;
+    $("ed-name").title = $("ed-name").textContent ?? "";
+    const setVal = (id: string, v: number | null): void => {
+      const input = $<HTMLInputElement>(id);
+      if (document.activeElement !== input) input.value = v === null ? "" : v.toFixed(1);
+    };
+    setVal("ed-x", b ? b.minX : null);
+    setVal("ed-y", b ? b.minY : null);
+    setVal("ed-w", b ? b.maxX - b.minX : null);
+    setVal("ed-h", b ? b.maxY - b.minY : null);
+    $("ed-lock").setAttribute("aria-pressed", String(this.lockRatio));
+    $("ed-align-label").textContent = groups.size > 1 ? "Alinhar entre si" : "Alinhar na mesa";
+    $("ed-align-table").hidden = groups.size <= 1;
+    // faixa de operações
+    const modes = new Set(items.map(({ s, l }) => effectiveMode(s, l)));
+    const current = has && modes.size === 1 ? [...modes][0]! : null;
+    const custom = items.some(({ s }) => s.mode !== null);
+    const anyOpen = items.some(({ s }) => !s.closed);
+    $("p-ops-buttons").querySelectorAll<HTMLButtonElement>("button").forEach((btn) => {
+      const m = btn.dataset.mode ?? "";
+      btn.disabled = !has || (anyOpen && (m === "fill" || m === "detail"));
+      btn.setAttribute("aria-pressed", String(has && (m ? current === m : !custom)));
+    });
+    $("p-ops-hint").textContent = !has
+      ? "Selecione um elemento na mesa para mudar a operação."
+      : anyOpen
+        ? "Caminhos abertos não podem ser preenchidos: ficam como Gravar linha."
+        : "";
+  }
+
+  /** Liga a barra de medidas e a faixa de operações uma vez só. */
+  private bindProps(): void {
+    $("p-ops-buttons").innerHTML =
+      MODES.map(
+        (m) => `<button type="button" data-mode="${m}" style="--c:${MODE_INFO[m].color}" title="${MODE_INFO[m].hint}"><span class="dot"></span>${MODE_INFO[m].label}</button>`,
+      ).join("") + `<button type="button" data-mode="">Padrão da camada</button>`;
+    $("p-ops-buttons").addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-mode]");
+      const items = this.selItems();
+      if (!btn || !items.length) return;
+      this.history.push(this.layers);
+      for (const { s } of items) s.mode = (btn.dataset.mode as VectorMode | "") || null;
+      this.refresh();
+    });
     const num = (id: string): number => Number($<HTMLInputElement>(id).value);
-    box.querySelectorAll<HTMLButtonElement>("button[data-mode]").forEach((btn) =>
-      btn.addEventListener("click", () => {
-        for (const { s } of items) s.mode = (btn.dataset.mode as VectorMode | "") || null;
-        this.refresh();
-      }),
-    );
-    $("ed-x").addEventListener("change", () => this.moveSel(num("ed-x") - b.minX, 0));
-    $("ed-y").addEventListener("change", () => this.moveSel(0, num("ed-y") - b.minY));
+    const bounds = (): Bounds | null => this.selBounds();
+    $("ed-x").addEventListener("change", () => {
+      const b = bounds();
+      if (b) this.moveSel(num("ed-x") - b.minX, 0);
+    });
+    $("ed-y").addEventListener("change", () => {
+      const b = bounds();
+      if (b) this.moveSel(0, num("ed-y") - b.minY);
+    });
     $("ed-w").addEventListener("change", () => {
+      const b = bounds();
+      if (!b) return;
       const k = num("ed-w") / Math.max(1e-6, b.maxX - b.minX);
       if (k > 0) this.scaleSel(k, this.lockRatio ? k : 1);
     });
     $("ed-h").addEventListener("change", () => {
+      const b = bounds();
+      if (!b) return;
       const k = num("ed-h") / Math.max(1e-6, b.maxY - b.minY);
       if (k > 0) this.scaleSel(this.lockRatio ? k : 1, k);
     });
@@ -826,14 +836,35 @@ export class Workspace {
     $("ed-rr").addEventListener("click", () => this.rotateSel(-90));
     $("ed-fh").addEventListener("click", () => this.scaleSel(-1, 1));
     $("ed-fv").addEventListener("click", () => this.scaleSel(1, -1));
-    box.querySelectorAll<HTMLButtonElement>("[data-align]").forEach((btn) => btn.addEventListener("click", () => this.alignSel(btn.dataset.align ?? "")));
-    $("ed-off-go").addEventListener("click", () => this.offsetSel(num("ed-off")));
+    $("p-props").querySelectorAll<HTMLButtonElement>("[data-align]").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        this.alignSel(btn.dataset.align ?? "");
+        $<HTMLDetailsElement>("ed-align-menu").open = false;
+      }),
+    );
+    $("ed-off-go").addEventListener("click", () => {
+      this.offsetSel(num("ed-off"));
+      $<HTMLDetailsElement>("ed-off-menu").open = false;
+    });
     $("ed-dup").addEventListener("click", () => this.duplicateSel());
     $("ed-del").addEventListener("click", () => this.deleteSel());
-    $("ed-undo").addEventListener("click", () => this.undo());
+    $("p-undo").addEventListener("click", () => this.undo());
     $("ed-clear").addEventListener("click", () => {
       this.selected.clear();
       this.refresh();
+    });
+    // um menu aberto fecha o outro e fecha ao clicar fora
+    const menus = [...$("p-props").querySelectorAll("details")];
+    for (const m of menus) {
+      m.addEventListener("toggle", () => {
+        if (!m.open) return;
+        menus.forEach((o) => o !== m && (o.open = false));
+        // perto da borda direita, o menu abre para a esquerda
+        m.classList.toggle("flip", m.getBoundingClientRect().left + 360 > window.innerWidth);
+      });
+    }
+    document.addEventListener("pointerdown", (e) => {
+      for (const m of menus) if (m.open && !m.contains(e.target as Node)) m.open = false;
     });
   }
 
@@ -1104,7 +1135,7 @@ export class Workspace {
     if (this.showTravel || anim) {
       ctx.lineWidth = 1 * d;
       ctx.setLineDash([4 * d, 4 * d]);
-      ctx.strokeStyle = "rgba(140,150,165,.4)";
+      ctx.strokeStyle = bedColors().travel;
       ctx.beginPath();
       for (const sg of segs) {
         if (sg.burn) continue;
@@ -1118,7 +1149,7 @@ export class Workspace {
     ctx.lineCap = "round";
     if (anim) {
       // tudo que já foi gravado, na cor de madeira queimada
-      ctx.strokeStyle = "#f1e3c8";
+      ctx.strokeStyle = bedColors().burned;
       ctx.lineWidth = Math.max(1, 0.2 * v.s);
       ctx.beginPath();
       for (let i = 0; i <= doneIdx; i++) {
@@ -1141,7 +1172,7 @@ export class Workspace {
         ctx.stroke();
         if (this.selected.has(s.id) && !anim) {
           ctx.globalAlpha = 1;
-          ctx.strokeStyle = "#ffffff";
+          ctx.strokeStyle = bedColors().selection;
           ctx.lineWidth = 3.4 * d;
           ctx.setLineDash([5 * d, 3 * d]);
           v.polyline(s.points);
@@ -1164,7 +1195,7 @@ export class Workspace {
         head = [next.from[0] + (next.to[0] - next.from[0]) * frac, next.from[1] + (next.to[1] - next.from[1]) * frac];
         lit = next.burn;
         if (next.burn) {
-          ctx.strokeStyle = "#fff4d6";
+          ctx.strokeStyle = bedColors().burning;
           ctx.lineWidth = 2.2 * d;
           v.polyline([next.from, head]);
           ctx.stroke();
@@ -1241,7 +1272,7 @@ export class Workspace {
   }
 
   private async sendJob(): Promise<void> {
-    if (!this.host.isConnected()) return this.host.toast("Conecte ao agente (aba Controle) para enviar o trabalho.");
+    if (!this.host.isConnected()) return this.host.toast("Conecte ao agente (aba Máquina, à direita) para enviar o trabalho.");
     const r = this.regenerateNow();
     if (!r) return;
     const name = `${this.designName || "Trabalho"}.gcode`;
@@ -1256,13 +1287,13 @@ export class Workspace {
 
   /** Guarda na fila do agente. Não liga o laser: iniciar pede confirmação depois. */
   private enqueueJob(): void {
-    if (!this.host.isConnected()) return this.host.toast("Conecte ao agente (aba Controle) para guardar na fila.");
+    if (!this.host.isConnected()) return this.host.toast("Conecte ao agente (aba Máquina, à direita) para guardar na fila.");
     const r = this.regenerateNow();
     if (!r) return;
     const name = `${this.designName || "Trabalho"}.gcode`;
     if (this.host.send({ type: "queueAdd", name, gcode: r.gcode })) {
       this.host.onQueued(name, r.gcode);
-      this.host.toast(`"${name}" enviado para a fila (${fmtTime(r.estimatedSeconds)}). Inicie pela aba Controle.`);
+      this.host.toast(`"${name}" enviado para a fila (${fmtTime(r.estimatedSeconds)}). Inicie pela aba Fila.`);
     }
   }
 
@@ -1333,7 +1364,7 @@ export class Workspace {
     };
     $("mat-note").textContent = this.host.isConnected()
       ? "A biblioteca fica salva no agente e vale para todos os aparelhos. Os valores de exemplo precisam ser ajustados com o teste de matriz na sua máquina."
-      : "Sem conexão com o agente: você pode ver os exemplos, mas para salvar precisa conectar (aba Controle).";
+      : "Sem conexão com o agente: você pode ver os exemplos, mas para salvar precisa conectar (aba Máquina).";
     render();
     dlg.addEventListener(
       "close",
@@ -1422,7 +1453,7 @@ export class Workspace {
     $("p-send").addEventListener("click", () => void this.sendJob());
     $("p-enqueue").addEventListener("click", () => this.enqueueJob());
     document.addEventListener("keydown", (e) => {
-      if ($("view-prepare").hidden) return;
+      if ($("p-box").hidden) return;
       const tag = (e.target as HTMLElement).tagName.toLowerCase();
       if (tag === "input" || tag === "select" || tag === "textarea" || document.querySelector("dialog[open]")) return;
       const key = e.key.toLowerCase();
@@ -1451,7 +1482,7 @@ export class Workspace {
     });
   }
 
-  /** Chamado ao mostrar a aba: o canvas pode ter mudado de tamanho enquanto estava escondido. */
+  /** Chamado ao mostrar a mesa "Desenho": o canvas pode ter mudado de tamanho enquanto estava escondido. */
   shown(): void {
     this.view.resize();
   }

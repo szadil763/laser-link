@@ -1,6 +1,6 @@
 # Peças prontas: caixa, carrinho e robô bípede
 
-Os três geradores ficam em **Preparar trabalho**: botão **Caixa** e botão **Peças**.
+Os geradores ficam na barra de ferramentas à esquerda da mesa: botão **Caixa** e botão **Peças**.
 Todos são projetos próprios do LaserLink, gerados do zero a partir das medidas.
 Você pode salvar o resultado como **SVG** (para abrir em outro programa) ou como **G-code**, ou mandar direto para o agente.
 

@@ -1,10 +1,11 @@
 import { parseGcode, type ParsedGcode, type Point } from "@laserlink/gcode";
 import { BedView, type Area } from "./bed-view.js";
+import { bedColors } from "./theme.js";
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 /**
- * Pré-visualização da aba Controle: trajetória do arquivo, o que o GRBL já
+ * Mesa "Na máquina": trajetória do arquivo, o que o GRBL já
  * confirmou e a posição do cabeçote em tempo real.
  */
 export class JobPreview {
@@ -19,9 +20,10 @@ export class JobPreview {
   private segSent: number[] = [];
   private drawQueued = false;
 
-  constructor(area: Area) {
+  constructor(area: Area, onHover?: (mm: Point | null) => void) {
     this.view = new BedView($<HTMLCanvasElement>("c-canvas"), area, () => this.requestDraw(), {
       onDoubleClick: () => this.fitJob(),
+      ...(onHover ? { onHover } : {}),
     });
     $("c-zoom-in").addEventListener("click", () => this.view.zoomCenter(1.4));
     $("c-zoom-out").addEventListener("click", () => this.view.zoomCenter(1 / 1.4));
@@ -33,7 +35,7 @@ export class JobPreview {
     this.view.setArea(area);
   }
 
-  /** Carrega um G-code (arquivo escolhido ou gerado na aba Preparar). */
+  /** Carrega um G-code (arquivo escolhido ou desenho enviado). */
   load(name: string, gcode: string): void {
     this.parsed = parseGcode(gcode);
     this.lineToSent.clear();
@@ -93,14 +95,15 @@ export class JobPreview {
       });
       ctx.lineCap = "round";
       ctx.setLineDash([4 * d, 4 * d]);
-      ctx.strokeStyle = "rgba(140,150,165,.4)";
+      const col = bedColors();
+      ctx.strokeStyle = col.travel;
       ctx.lineWidth = 1 * d;
       ctx.stroke(travel);
       ctx.setLineDash([]);
-      ctx.strokeStyle = "#ff7a59";
+      ctx.strokeStyle = col.todo;
       ctx.lineWidth = 1.2 * d;
       ctx.stroke(todo);
-      ctx.strokeStyle = "#fff4d6";
+      ctx.strokeStyle = col.burned;
       ctx.lineWidth = 1.8 * d;
       ctx.stroke(done);
     }

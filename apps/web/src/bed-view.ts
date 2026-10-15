@@ -1,4 +1,5 @@
 import type { Point } from "@laserlink/gcode";
+import { bedColors } from "./theme.js";
 
 export interface Area {
   x: number;
@@ -14,6 +15,8 @@ export interface BedInteractions {
   onDragMove?(dxMm: number, dyMm: number): void;
   onDragEnd?(): void;
   onDoubleClick?(): void;
+  /** Mouse sobre a mesa (sem botão apertado), em mm; null quando sai. */
+  onHover?(mm: Point | null): void;
 }
 
 /**
@@ -45,6 +48,7 @@ export class BedView {
     if (!ctx) throw new Error("Canvas 2D indisponível neste navegador.");
     this.ctx = ctx;
     new ResizeObserver(() => this.resize()).observe(canvas);
+    window.addEventListener("bedtheme", () => this.redraw());
     this.attach();
   }
 
@@ -131,10 +135,11 @@ export class BedView {
   drawBed(): void {
     const { ctx, canvas: c, area } = this;
     const d = this.dpr;
+    const col = bedColors();
     ctx.clearRect(0, 0, c.width, c.height);
-    ctx.fillStyle = "#101216";
+    ctx.fillStyle = col.outside;
     ctx.fillRect(0, 0, c.width, c.height);
-    ctx.fillStyle = "#14171c";
+    ctx.fillStyle = col.bed;
     ctx.fillRect(this.X(0), this.Y(area.y), area.x * this.s, area.y * this.s);
     const [vx0, vy0] = this.toMm(0, c.height);
     const [vx1, vy1] = this.toMm(c.width, 0);
@@ -148,24 +153,24 @@ export class BedView {
     ctx.lineWidth = 1;
     if (gx1 > gx0 && gy1 > gy0) {
       for (let x = Math.ceil(gx0 / minor) * minor; x <= gx1 + 1e-9; x += minor) {
-        ctx.strokeStyle = isMajor(x) ? "#2c323a" : "#1f2329";
+        ctx.strokeStyle = isMajor(x) ? col.gridMajor : col.gridMinor;
         ctx.beginPath();
         ctx.moveTo(this.X(x), this.Y(gy0));
         ctx.lineTo(this.X(x), this.Y(gy1));
         ctx.stroke();
       }
       for (let y = Math.ceil(gy0 / minor) * minor; y <= gy1 + 1e-9; y += minor) {
-        ctx.strokeStyle = isMajor(y) ? "#2c323a" : "#1f2329";
+        ctx.strokeStyle = isMajor(y) ? col.gridMajor : col.gridMinor;
         ctx.beginPath();
         ctx.moveTo(this.X(gx0), this.Y(y));
         ctx.lineTo(this.X(gx1), this.Y(y));
         ctx.stroke();
       }
     }
-    ctx.strokeStyle = "#3c4043";
+    ctx.strokeStyle = col.border;
     ctx.strokeRect(this.X(0), this.Y(area.y), area.x * this.s, area.y * this.s);
     const lab = [1, 2, 5, 10, 25, 50, 100].find((st) => st * this.s >= 46 * d) ?? 100;
-    ctx.fillStyle = "#9aa0a6";
+    ctx.fillStyle = col.label;
     ctx.font = `${11 * d}px ui-monospace, monospace`;
     const ly = Math.min(c.height - 5 * d, this.Y(0) + 14 * d);
     const lx = Math.max(30 * d, this.X(0) - 4 * d);
@@ -234,6 +239,7 @@ export class BedView {
       }
     });
     c.addEventListener("pointermove", (e) => {
+      if (e.pointerType === "mouse") this.interactions.onHover?.(this.toMm(...this.local(e)));
       if (!this.pointers.has(e.pointerId)) return;
       const p = this.local(e);
       this.pointers.set(e.pointerId, p);
@@ -277,6 +283,7 @@ export class BedView {
       if (tap) this.interactions.onTap?.(this.local(e), e);
       if (drag?.moved && drag.object) this.interactions.onDragEnd?.();
     };
+    c.addEventListener("pointerleave", () => this.interactions.onHover?.(null));
     c.addEventListener("pointerup", end);
     c.addEventListener("pointercancel", end);
     c.addEventListener("dblclick", () => this.interactions.onDoubleClick?.());

@@ -3,9 +3,14 @@
 Controle remoto de cortadora/gravadora a laser **GRBL**. Dois pedaços de software:
 
 - **Agente** (`apps/agent`): roda no PC ligado à laser por USB. Fala serial com o GRBL, faz o streaming do G-code e serve a interface e um WebSocket protegido por token.
-- **Interface web** (`apps/web`): abre em qualquer navegador (PC de projeto, celular). Duas abas:
-  - **Controle**: conexão, jog, origem, pausa, retomar, PARAR e a pré-visualização do trabalho com o cabeçote em tempo real.
-  - **Preparar trabalho**: importa SVG e imagens, define o que é corte, linha, preenchido ou detalhado, edita, simula, enquadra e envia. O G-code é gerado pelo próprio LaserLink (`packages/gcode`).
+- **Interface web** (`apps/web`): abre em qualquer navegador (PC de projeto, celular). Uma tela só, no estilo de programa de desenho:
+  - **barra de cima**: importar, exemplo, limpar, desfazer, baixar SVG/G-code e o estado da conexão;
+  - **barra de medidas**: X, Y, largura, altura, girar, espelhar, alinhar, contorno deslocado, duplicar e excluir o que está selecionado;
+  - **ferramentas** à esquerda: vários, texto, caixa, peças, teste de matriz, deslocamentos e mesa clara/escura;
+  - **mesa** no centro, com **Desenho** (o projeto) ou **Na máquina** (o trabalho enviado e o cabeçote em tempo real);
+  - **faixa de operações** embaixo da mesa: Cortar, Gravar linha, Preenchido, Detalhado;
+  - **painel à direita** com abas Camadas, Máquina (conexão, home, origem, mover, arquivo G-code), Fila e Registro, e embaixo o resumo com Enquadrar, Simular, Enviar e Guardar na fila. Com trabalho rodando aparecem Pausar, Retomar e PARAR.
+  O G-code é gerado pelo próprio LaserLink (`packages/gcode`).
 
 > Status: **Fases 1, 2 e 3 concluídas no simulador**, aguardando os testes na laser real (`docs/TESTES-NA-BANCADA.md`). Veja `docs/ROADMAP.md`.
 
@@ -85,18 +90,18 @@ npm run dev:agent   # agente com recarga (tsx)
 npm run dev:web     # interface em http://localhost:5173; informe ws://localhost:8787
 ```
 
-## Preparar um trabalho (aba Preparar trabalho)
+## Preparar um trabalho
 
 1. **Importe** um SVG (cada cor vira uma camada; vermelho vira Cortar) ou uma imagem PNG/JPG, ou arraste o arquivo para a mesa. Também dá para adicionar **Texto** (fonte de traço único) ou gerar um **Teste de matriz** potência × velocidade.
-2. **Escolha a operação**: cada camada tem uma operação padrão, e cada elemento pode ter a sua (toque nele na mesa ou use a lista "Elementos"):
+2. **Escolha a operação**: cada camada tem uma operação padrão, e cada elemento pode ter a sua (selecione na mesa e use a faixa de operações embaixo dela, ou a lista "Elementos" da camada):
    - **Cortar**: atravessa o material (com compensação de kerf).
    - **Gravar linha**: marca o contorno.
    - **Gravar preenchido**: hachura dentro da forma (intervalo padrão 0,2 mm).
    - **Detalhado**: preenchimento fino (0,08 mm), para textos e detalhes pequenos.
 3. **Material**: escolha na camada (MDF 3 mm e 6 mm de exemplo) ou ajuste velocidade, potência e passes à mão. O botão **Materiais** edita a biblioteca, que fica salva no agente.
-4. **Edite** se precisar: arraste o elemento selecionado, use os campos de posição e tamanho, girar, espelhar, alinhar, duplicar, contorno deslocado e desfazer (Ctrl+Z). Roda do mouse dá zoom; arrastar o fundo move a vista.
+4. **Edite** se precisar: arraste o elemento selecionado ou use a barra de medidas (posição, tamanho, girar, espelhar, alinhar, contorno deslocado, duplicar, excluir). Desfazer fica na barra de cima (Ctrl+Z). Roda do mouse dá zoom; arrastar o fundo move a vista. O botão **Mesa clara** troca o fundo da mesa entre claro e escuro.
 5. **Simular** mostra o percurso exato do G-code que será enviado. **Enquadrar** percorre o contorno na máquina com o laser desligado (ou em potência mínima, com confirmação).
-6. **Enviar para a laser** pede confirmação, manda o arquivo inteiro ao agente e abre a aba Controle para acompanhar.
+6. **Enviar para a laser** pede confirmação, manda o arquivo inteiro ao agente e troca a mesa para **Na máquina**, para acompanhar.
 7. **Guardar na fila** manda o arquivo ao agente sem ligar o laser (veja abaixo).
 
 ### Peças prontas
@@ -109,7 +114,7 @@ Medidas, montagem e o que conferir com paquímetro: `docs/PECAS.md`.
 
 ## Fila de trabalhos
 
-- **Guardar na fila** (na aba Controle, com um arquivo escolhido, ou em Preparar trabalho): o agente confere o arquivo e guarda. Nada liga o laser.
+- **Guardar na fila** (embaixo do painel direito, ou na aba Máquina com um arquivo G-code escolhido): o agente confere o arquivo e guarda. Nada liga o laser. A fila fica na aba **Fila**.
 - A fila fica no agente: o PC e o celular veem a mesma. Dá para subir, descer e tirar trabalhos.
 - **A fila nunca começa um trabalho sozinha.** Cada **Iniciar** pede confirmação, e o agente confere o arquivo de novo (a origem pode ter mudado).
 - Quando um trabalho termina, aparece um aviso no topo com som (três notas quando conclui, notas graves quando para por erro ou cancelamento), o título da aba muda e o próximo da fila aparece com o botão **Iniciar próximo da fila**. O som pode ser desligado na seção Trabalho.
@@ -134,8 +139,9 @@ apps/agent       agente Node.js (serialport + ws)
   src/sim/           simulador de GRBL
   test/              testes (vitest)
 apps/web         interface web (Vite + TypeScript)
-  src/prepare/       aba Preparar trabalho (modelo, importação, mesa, edição)
-  src/preview.ts     pré-visualização da aba Controle
+  src/prepare/       desenho: modelo, importação, mesa, edição
+  src/preview.ts     mesa "Na máquina" (trabalho enviado e cabeçote)
+  src/theme.ts       cores da mesa clara/escura
   src/chime.ts       sons de aviso (Web Audio)
 packages/gcode   gerador de G-code puro, com testes (kerf, hachura, raster, texto, matriz, caixa, peças, SVG)
 packages/shared  tipos e validação das mensagens do protocolo, materiais de exemplo

@@ -33,11 +33,12 @@
 - `box.ts`: caixa com encaixes de dentes (número ímpar de dentes por borda; frente e trás ficam com os cantos). `svg.ts`: exporta o projeto em SVG (mm).
 - `parts/`: peças planas (`shapes.ts`, `layout.ts`), chassi do carrinho (`car.ts`) e robô bípede (`otto.ts`). Cada peça vira um grupo na interface.
 
-**Interface: aba Preparar trabalho (`apps/web/src/prepare`)**
+**Interface: desenho (`apps/web/src/prepare`)**
 - `model.ts`: camadas, elementos (com operação própria), imagem, desfazer e conversão para o gerador.
 - `importers.ts`: SVG lido pelo próprio navegador (curvas amostradas, camadas por cor) e PNG/JPG.
-- `workspace.ts`: mesa, seleção e edição, materiais, simular (percorre o G-code real), enquadrar e enviar.
-- `bed-view.ts` (compartilhado com a aba Controle): câmera com zoom, arrastar, pinça e grade em mm. `preview.ts`: trajetória e cabeçote ao vivo.
+- `workspace.ts`: mesa "Desenho", seleção, barra de medidas, faixa de operações, camadas, materiais, simular (percorre o G-code real), enquadrar e enviar.
+- `bed-view.ts` (usado pelas duas mesas): câmera com zoom, arrastar, pinça, grade em mm e posição do mouse. `preview.ts`: mesa "Na máquina", com a trajetória e o cabeçote ao vivo. `theme.ts`: cores da mesa clara/escura (guardadas no navegador).
+- Tela única: barra de cima, barra de medidas, ferramentas à esquerda, mesa no centro, faixa de operações, painel à direita em abas (Camadas, Máquina, Fila, Registro) e barra de status. No computador a página não rola; no celular tudo empilha.
 
 **Shared (`packages/shared`)**
 - `protocol.ts`: tipos das mensagens e constantes do heartbeat. Única fonte de verdade.

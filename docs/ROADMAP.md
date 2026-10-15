@@ -33,6 +33,8 @@
 - [x] a) Gerador paramétrico de caixas com encaixes (finger joints) e kerf, com exportação SVG/G-code
 - [x] b) Peças dos projetos educacionais: chassi do carrinho (2 motores TT, roda boba, ESP32) e robô bípede tipo Otto em MDF (ver `PECAS.md`)
 - [x] c) Fila de trabalhos no agente (nunca inicia sozinha) e aviso com som na interface ao terminar
+- [x] Extra: tela única (barra de medidas, ferramentas à esquerda, faixa de operações, painel em abas, barra de status) e mesa clara/escura
+- [x] Extra: instalação e atualização com clique duplo no Windows
 - [ ] Testes com a laser real (ver `TESTES-NA-BANCADA.md`, seção Fase 3)
 
 ## Depois
