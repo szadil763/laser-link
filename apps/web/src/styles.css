@@ -52,6 +52,26 @@ button[aria-pressed="true"] { background: #2b3a55; border-color: var(--accent); 
   .cols > .sticky { position: sticky; top: 12px; }
 }
 .stack { display: grid; gap: 14px; min-width: 0; }
+.col { display: grid; gap: 14px; min-width: 0; align-content: start; }
+
+/* Computador: a página não rola. Barra de cima fixa, mesa com a altura toda
+   e os painéis em colunas que rolam sozinhas. */
+@media (min-width: 980px) and (min-height: 560px) {
+  html, body { height: 100%; }
+  body { overflow: hidden; }
+  main { max-width: none; height: 100%; display: flex; flex-direction: column; gap: 10px; padding: 10px 14px; }
+  main > .cols { flex: 1 1 auto; min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
+  .cols > .sticky { position: static; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .cols > .sticky .canvas-box { flex: 1 1 auto; aspect-ratio: auto; min-height: 200px; }
+  .cols > .stack { min-height: 0; overflow-y: auto; align-content: start; padding-right: 2px; }
+  .stack > .col-send { order: -1; }
+}
+@media (min-width: 1250px) and (min-height: 560px) {
+  .cols { grid-template-columns: minmax(0, 1fr) clamp(560px, 44vw, 820px); }
+  .cols > .stack { grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; padding-right: 0; }
+  .stack > .col { min-height: 0; max-height: 100%; overflow-y: auto; padding-right: 2px; }
+  .stack > .col-send { order: 0; }
+}
 .jog { display: grid; grid-template-columns: repeat(3, 56px); gap: 6px; justify-content: center; }
 .jog button { height: 48px; }
 #state { font-weight: 700; }

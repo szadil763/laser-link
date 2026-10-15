@@ -9,6 +9,10 @@
     <main>
       <div class="top">
         <h1>LaserLink</h1>
+        <div class="tabs" role="tablist" aria-label="Seções">
+          <button role="tab" id="tab-control" aria-selected="true" aria-controls="view-control">Controle</button>
+          <button role="tab" id="tab-prepare" aria-selected="false" aria-controls="view-prepare">Preparar trabalho</button>
+        </div>
         <div class="badges" aria-live="polite">
           <span id="link-badge" class="badge" data-level="bad">Desconectado</span>
           <span id="serial-badge" class="badge">Laser: —</span>
@@ -34,11 +38,6 @@
           <button id="done-close">Fechar aviso</button>
         </div>
       </section>
-
-      <div class="tabs" role="tablist" aria-label="Seções">
-        <button role="tab" id="tab-control" aria-selected="true" aria-controls="view-control">Controle</button>
-        <button role="tab" id="tab-prepare" aria-selected="false" aria-controls="view-prepare">Preparar trabalho</button>
-      </div>
 
       <!-- ================= Controle ================= -->
       <div id="view-control" class="cols" role="tabpanel" aria-labelledby="tab-control">
@@ -67,6 +66,7 @@
         </section>
 
         <div class="stack">
+          <div class="col">
           <section>
             <h2>Conexão</h2>
             <div class="row">
@@ -100,6 +100,8 @@
             </div>
           </section>
 
+          </div>
+          <div class="col">
           <section>
             <h2>Trabalho</h2>
             <div class="row">
@@ -136,6 +138,7 @@
             <h2>Registro</h2>
             <div id="log" aria-live="polite"></div>
           </section>
+          </div>
         </div>
       </div>
 
@@ -182,6 +185,7 @@
         </section>
 
         <aside class="stack" aria-label="Camadas e envio">
+          <div class="col">
           <div id="p-selection" class="selection" hidden aria-live="polite"></div>
           <section>
             <div class="row" style="justify-content: space-between; margin-bottom: 10px">
@@ -190,6 +194,8 @@
             </div>
             <div class="layers" id="p-layers"><p class="note">Nenhum desenho ainda.</p></div>
           </section>
+          </div>
+          <div class="col col-send">
           <section style="display:grid; gap:10px">
             <h2 style="margin:0">Resumo</h2>
             <div class="summary">
@@ -217,6 +223,7 @@
             </div>
             <p class="note">Ordem: imagem, detalhado, preenchido, linhas e por último os cortes (furos antes do contorno). O arquivo vai inteiro ao agente, que confere potência e área antes de começar.</p>
           </section>
+          </div>
         </aside>
       </div>
     </main>
