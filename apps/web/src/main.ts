@@ -25,13 +25,17 @@ let queue: QueueItem[] = [];
 /** G-code dos trabalhos que esta aba guardou na fila, para a pré-visualização quando forem iniciados. */
 const queuedGcode = new Map<string, string>();
 const soundInput = $<HTMLInputElement>("sound-on");
+const rememberInput = $<HTMLInputElement>("remember-token");
+/** Token da última tentativa de conexão; só é salvo quando o agente aceita (mensagem hello). */
+let pendingToken: string | null = null;
 
 /** Aberta pelo próprio agente (http://IP:8787), o endereço do WebSocket é o mesmo host. */
 const servedByAgent = location.protocol === "http:" && location.port !== "5173";
 try {
   urlInput.value = localStorage.getItem("laserlink.url") ?? (servedByAgent ? `ws://${location.host}` : "");
-  // O token fica só nesta aba (sessionStorage): sobrevive a recarregar a página, não a fechar o navegador.
-  tokenInput.value = sessionStorage.getItem("laserlink.token") ?? "";
+  // "Lembrar" (padrão): token no localStorage deste navegador. Sem lembrar: só nesta aba (sessionStorage).
+  rememberInput.checked = localStorage.getItem("laserlink.remember") !== "off";
+  tokenInput.value = localStorage.getItem("laserlink.token") ?? sessionStorage.getItem("laserlink.token") ?? "";
   soundInput.checked = localStorage.getItem("laserlink.sound") !== "off";
 } catch {
   /* armazenamento indisponível */
@@ -138,6 +142,21 @@ const LINK_LABELS: Record<LinkState, [string, "ok" | "warn" | "bad"]> = {
   reconnecting: ["Reconectando…", "warn"],
   disconnected: ["Desconectado", "bad"],
 };
+
+/** Guarda o token que o agente aceitou: no computador ou só na aba, conforme a opção. */
+function saveToken(token: string): void {
+  try {
+    if (rememberInput.checked) {
+      localStorage.setItem("laserlink.token", token);
+      sessionStorage.removeItem("laserlink.token");
+    } else {
+      sessionStorage.setItem("laserlink.token", token);
+      localStorage.removeItem("laserlink.token");
+    }
+  } catch {
+    /* armazenamento indisponível */
+  }
+}
 
 function renderLinkState(state: LinkState): void {
   const badge = $("link-badge");
@@ -331,6 +350,11 @@ document.addEventListener("visibilitychange", () => void updateWakeLock());
 function onMessage(msg: ServerMessage): void {
   switch (msg.type) {
     case "hello":
+      // o agente só manda o hello depois de aceitar o token
+      if (pendingToken) {
+        saveToken(pendingToken);
+        pendingToken = null;
+      }
       if (msg.version !== PROTOCOL_VERSION) {
         log(`Aviso: agente usa protocolo ${msg.version} e esta interface ${PROTOCOL_VERSION}. Atualize os dois.`);
       }
@@ -429,10 +453,10 @@ $("connect").addEventListener("click", () => {
   }
   try {
     localStorage.setItem("laserlink.url", base);
-    sessionStorage.setItem("laserlink.token", tokenInput.value);
   } catch {
     /* ignorar */
   }
+  pendingToken = tokenInput.value;
   conn.connect(base, tokenInput.value);
 });
 $("disconnect").addEventListener("click", async () => {
@@ -446,7 +470,10 @@ $("disconnect").addEventListener("click", async () => {
 });
 
 // Reabriu a página com o token na aba: reconecta sozinho.
-if (urlInput.value && tokenInput.value) conn.connect(urlInput.value.trim(), tokenInput.value);
+if (urlInput.value && tokenInput.value) {
+  pendingToken = tokenInput.value;
+  conn.connect(urlInput.value.trim(), tokenInput.value);
+}
 
 document.querySelectorAll<HTMLButtonElement>(".jog button").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -518,3 +545,23 @@ $("rejected-close").addEventListener("click", () => ($("rejected").hidden = true
 
 // Sem endereço ou token salvos: começa pela aba Máquina, onde fica a conexão.
 if (!urlInput.value || !tokenInput.value) showSide("st-machine");
+
+rememberInput.addEventListener("change", () => {
+  try {
+    localStorage.setItem("laserlink.remember", rememberInput.checked ? "on" : "off");
+  } catch {
+    /* ignorar */
+  }
+  // já conectado: move o token salvo para o lugar certo agora
+  if (tokenInput.value && (conn.state === "connected" || conn.state === "unstable")) saveToken(tokenInput.value);
+});
+$("forget-token").addEventListener("click", () => {
+  try {
+    localStorage.removeItem("laserlink.token");
+    sessionStorage.removeItem("laserlink.token");
+  } catch {
+    /* ignorar */
+  }
+  tokenInput.value = "";
+  toast("Token apagado deste navegador. Na próxima vez, cole o token de novo.");
+});
