@@ -1,7 +1,7 @@
 # Protocolo WebSocket
 
 Mensagens JSON. Tipos em `packages/shared/src/protocol.ts`; validação das mensagens do cliente em `packages/shared/src/validate.ts`.
-Versão atual: **0.3.0** (`PROTOCOL_VERSION`). O agente informa a versão no `hello`; a interface avisa se for diferente.
+Versão atual: **0.4.0** (`PROTOCOL_VERSION`). O agente informa a versão no `hello`; a interface avisa se for diferente.
 
 ## Endereço e autenticação
 
@@ -43,8 +43,12 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 | `job` | `name`, `gcode`, `confirmLaserOn: true` | Inicia streaming local no agente |
 | `frame` | `bounds {minX,minY,maxX,maxY}`, `laser` (`"off"` ou `"min"`); com `"min"`, `confirmLaserOn: true` | Percorre o retângulo a `frameFeed`. `"off"`: laser desligado (M5). `"min"`: M4 em `framePower`. Passa pelas mesmas conferências de área de um trabalho e aparece no log como "Enquadrar" |
 | `materialsSave` | `materials` (`Material[]`, até 200) | Grava a biblioteca em `materials.json` no agente e envia `materials` a todos |
+| `queueAdd` | `name` (1–120 caracteres), `gcode` | Confere o arquivo e guarda na fila. **Não liga o laser** nem fala com o GRBL. Se houver problema, responde `jobRejected` e não guarda |
+| `queueRemove` | `id` | Tira da fila |
+| `queueMove` | `id`, `index` (inteiro; 0 = próximo) | Muda a posição na fila |
+| `queueStart` | `id`, `confirmLaserOn: true` | Confere de novo (a origem pode ter mudado) e inicia como um `job`. Só sai da fila se iniciar |
 
-`confirmLaserOn: true` é obrigatório em `resume`, `job` e `frame` com `laser: "min"`: sem ele a mensagem é recusada. A interface só envia esse campo depois que a pessoa confirma.
+`confirmLaserOn: true` é obrigatório em `resume`, `job`, `queueStart` e `frame` com `laser: "min"`: sem ele a mensagem é recusada. A interface só envia esse campo depois que a pessoa confirma.
 
 ## Agente → Cliente
 
@@ -59,6 +63,7 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 | `jobRejected` | `name`, `problems` (`JobProblem[]`, até 20), `bounds` (`JobBounds` ou `null`) |
 | `serial` | `connected`: a porta serial abriu ou fechou |
 | `materials` | `materials` (`Material[]`): enviado logo após o `hello` e sempre que alguém salva |
+| `queue` | `items` (`QueueItem[]`): enviado logo após o `hello` e a cada mudança na fila |
 | `pong` | `t` |
 | `error` | `message` |
 
@@ -100,6 +105,23 @@ O agente não corta nem ajusta valores: qualquer problema recusa o trabalho e na
 | `message` | motivo, em português |
 
 `JobBounds`: `minX`, `maxX`, `minY`, `maxY` em mm, coordenadas de trabalho.
+
+### Fila de trabalhos (`QueueItem`)
+
+A fila fica no agente, na memória: todos os aparelhos conectados veem a mesma. Ela **nunca inicia um trabalho sozinha**. Quando um trabalho termina, a interface avisa (som e mensagem) e mostra o próximo, mas iniciar exige `queueStart` com `confirmLaserOn: true`, depois da confirmação na tela.
+
+Limites: até 20 trabalhos (`QUEUE_MAX_ITEMS`) e 64 MB de G-code somados. A fila se perde se o agente reiniciar.
+
+| Campo | Descrição |
+|---|---|
+| `id` | identificador |
+| `name` | nome do arquivo |
+| `lines` | linhas de G-code (sem comentários) |
+| `addedAt` | ISO 8601 |
+| `estimatedSec` | tempo estimado, em segundos (aproximado: não conta aceleração) |
+| `bounds` | `JobBounds` ou `null` |
+
+O G-code não volta para a interface: só o agente guarda o arquivo.
 
 ### `Material`
 

@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import {
   HEARTBEAT_TIMEOUT_MS,
   PROTOCOL_VERSION,
+  QUEUE_MAX_ITEMS,
   parseClientMessage,
   type ClientMessage,
   type JobInfo,
   type JobResult,
   type JobState,
+  type QueueItem,
   type ServerMessage,
 } from "@laserlink/shared";
 import type { AgentConfig } from "./config.js";
@@ -14,7 +16,7 @@ import { checkGcode, stripComment, type CheckContext } from "./gcode-check.js";
 import type { Grbl, JobEnd, JobProgress } from "./grbl.js";
 import type { JobLog } from "./job-log.js";
 import type { MaterialStore } from "./materials.js";
-import { frameGcode } from "@laserlink/gcode";
+import { frameGcode, parseGcode, segmentSeconds } from "@laserlink/gcode";
 
 /** Um cliente já autenticado. O transporte (WebSocket) fica fora desta classe. */
 export interface ClientConn {
@@ -50,7 +52,13 @@ interface ActiveJob {
   total: number;
 }
 
+interface QueuedJob extends QueueItem {
+  gcode: string;
+}
+
 const TICK_MS = 500;
+/** Soma do tamanho dos G-codes guardados na fila (fica na memória do agente). */
+const QUEUE_MAX_BYTES = 64 * 1024 * 1024;
 const PROGRESS_INTERVAL_MS = 100;
 
 /** Remove comentários, linhas vazias e delimitadores % do G-code. */
@@ -84,6 +92,8 @@ export class Agent {
   private lastResult: JobResult | null = null;
 
   private job: ActiveJob | null = null;
+  /** Fila de trabalhos conferidos, esperando alguém iniciar. Nunca inicia sozinha. */
+  private queue: QueuedJob[] = [];
   /** Desde quando não há nenhum cliente vivo com o trabalho pausado por perda de conexão. */
   private orphanSince: number | null = null;
 
@@ -155,6 +165,11 @@ export class Agent {
     const last = this.grbl.lastStatus;
     if (last) client.send({ type: "status", ...last });
     if (this.materials) client.send({ type: "materials", materials: this.materials.all });
+    client.send({ type: "queue", items: this.queueItems() });
+  }
+
+  get queueLength(): number {
+    return this.queue.length;
   }
 
   disconnect(client: ClientConn): void {
@@ -285,6 +300,45 @@ export class Agent {
         this.startJob(client, label, frameGcode(msg.bounds, { feed: this.config.frameFeed, s }));
         break;
       }
+      case "queueAdd":
+        this.queueAdd(client, msg.name, msg.gcode);
+        break;
+      case "queueRemove": {
+        const item = this.queue.find((q) => q.id === msg.id);
+        if (!item) {
+          client.send({ type: "error", message: "Esse trabalho não está mais na fila." });
+          break;
+        }
+        this.queue = this.queue.filter((q) => q !== item);
+        this.broadcast({ type: "log", level: "info", text: `Tirado da fila: ${item.name}` });
+        this.broadcastQueue();
+        break;
+      }
+      case "queueMove": {
+        const from = this.queue.findIndex((q) => q.id === msg.id);
+        if (from < 0) {
+          client.send({ type: "error", message: "Esse trabalho não está mais na fila." });
+          break;
+        }
+        const to = Math.max(0, Math.min(this.queue.length - 1, msg.index));
+        const [item] = this.queue.splice(from, 1);
+        this.queue.splice(to, 0, item!);
+        this.broadcastQueue();
+        break;
+      }
+      case "queueStart": {
+        const item = this.queue.find((q) => q.id === msg.id);
+        if (!item) {
+          client.send({ type: "error", message: "Esse trabalho não está mais na fila." });
+          break;
+        }
+        // Confere de novo: a origem ou a posição podem ter mudado desde que entrou na fila.
+        if (this.startJob(client, item.name, item.gcode)) {
+          this.queue = this.queue.filter((q) => q !== item);
+          this.broadcastQueue();
+        }
+        break;
+      }
       case "materialsSave":
         if (!this.materials) {
           client.send({ type: "error", message: "Este agente não guarda materiais." });
@@ -301,10 +355,60 @@ export class Agent {
     }
   }
 
-  private startJob(client: ClientConn, name: string, gcode: string): void {
+  /** Confere e guarda na fila. Não fala com o GRBL. */
+  private queueAdd(client: ClientConn, name: string, gcode: string): void {
+    if (this.queue.length >= QUEUE_MAX_ITEMS) {
+      client.send({ type: "error", message: `A fila já tem ${QUEUE_MAX_ITEMS} trabalhos. Tire algum antes de guardar outro.` });
+      return;
+    }
+    const bytes = this.queue.reduce((acc, q) => acc + q.gcode.length, 0);
+    if (bytes + gcode.length > QUEUE_MAX_BYTES) {
+      client.send({ type: "error", message: "A fila está cheia (arquivos grandes demais). Tire algum trabalho antes de guardar outro." });
+      return;
+    }
+    const lines = cleanGcode(gcode);
+    if (lines.length === 0) {
+      client.send({ type: "error", message: "O arquivo não tem nenhuma linha de G-code." });
+      return;
+    }
+    const check = this.check(client, name, gcode);
+    if (!check) return;
+    const ctx = this.checkContext();
+    const parsed = parseGcode(gcode, ctx.start ? [ctx.start.x, ctx.start.y] : [0, 0]);
+    const estimatedSec = Math.round(parsed.segments.reduce((acc, sg) => acc + segmentSeconds(sg, this.config.maxFeed), 0));
+    this.queue.push({
+      id: randomUUID(),
+      name,
+      lines: lines.length,
+      addedAt: new Date().toISOString(),
+      estimatedSec,
+      bounds: check.bounds,
+      gcode,
+    });
+    this.broadcast({ type: "log", level: "info", text: `Guardado na fila: ${name}` });
+    this.broadcastQueue();
+  }
+
+  /** Confere o G-code. Se houver problemas, avisa e devolve null. */
+  private check(client: ClientConn, name: string, gcode: string): ReturnType<typeof checkGcode> | null {
+    const check = checkGcode(gcode, this.config, this.checkContext());
+    if (check.problems.length === 0) return check;
+    client.send({ type: "jobRejected", name, problems: check.problems, bounds: check.bounds });
+    this.jobLog?.write({
+      event: "rejected",
+      name,
+      at: new Date().toISOString(),
+      problems: check.problems.length,
+      first: check.problems[0]!.message,
+    });
+    this.broadcast({ type: "log", level: "warn", text: `Trabalho recusado: ${name} (${check.problems.length} problema(s)).` });
+    return null;
+  }
+
+  private startJob(client: ClientConn, name: string, gcode: string): boolean {
     if (this.job || this.grbl.isRunning) {
       client.send({ type: "error", message: "Já existe um trabalho em andamento." });
-      return;
+      return false;
     }
     if (!this.grbl.isReady) {
       client.send({
@@ -313,26 +417,14 @@ export class Agent {
           ? "A laser está reiniciando. Tente de novo em alguns segundos."
           : "A laser não está conectada ao agente. Confira o cabo USB.",
       });
-      return;
+      return false;
     }
     const lines = cleanGcode(gcode);
     if (lines.length === 0) {
       client.send({ type: "error", message: "O arquivo não tem nenhuma linha de G-code." });
-      return;
+      return false;
     }
-    const check = checkGcode(gcode, this.config, this.checkContext());
-    if (check.problems.length > 0) {
-      client.send({ type: "jobRejected", name, problems: check.problems, bounds: check.bounds });
-      this.jobLog?.write({
-        event: "rejected",
-        name,
-        at: new Date().toISOString(),
-        problems: check.problems.length,
-        first: check.problems[0]!.message,
-      });
-      this.broadcast({ type: "log", level: "warn", text: `Trabalho recusado: ${name} (${check.problems.length} problema(s)).` });
-      return;
-    }
+    if (!this.check(client, name, gcode)) return false;
     this.job = {
       id: randomUUID(),
       name,
@@ -345,11 +437,12 @@ export class Agent {
     if (!this.grbl.startJob(lines)) {
       this.job = null;
       client.send({ type: "error", message: "O GRBL não aceitou o trabalho agora. Tente de novo em alguns segundos." });
-      return;
+      return false;
     }
     this.jobLog?.write({ event: "start", id: this.job.id, name, at: new Date(this.job.startedAt).toISOString(), lines: lines.length });
     this.broadcast({ type: "log", level: "info", text: `Iniciando: ${name}` });
     this.broadcastJob();
+    return true;
   }
 
   private checkContext(): CheckContext {
@@ -463,6 +556,14 @@ export class Agent {
     this.job.state = state;
     if (state !== "connectionLost") delete this.job.reason;
     this.broadcastJob();
+  }
+
+  private queueItems(): QueueItem[] {
+    return this.queue.map(({ gcode: _gcode, ...item }) => item);
+  }
+
+  private broadcastQueue(): void {
+    this.broadcast({ type: "queue", items: this.queueItems() });
   }
 
   private broadcastJob(): void {
