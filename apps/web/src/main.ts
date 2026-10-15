@@ -1,5 +1,6 @@
 import "./styles.css";
-import { PROTOCOL_VERSION, type JobInfo, type JobResult, type ServerMessage } from "@laserlink/shared";
+import { PROTOCOL_VERSION, type JobInfo, type JobResult, type QueueItem, type ServerMessage } from "@laserlink/shared";
+import { chime } from "./chime.js";
 import { confirmDialog } from "./confirm-dialog.js";
 import { Connection, type LinkState } from "./connection.js";
 import { Workspace } from "./prepare/workspace.js";
@@ -18,6 +19,10 @@ const logEl = $("log");
 let reconnectGraceSec = 60;
 let currentJob: JobInfo | null = null;
 let wakeLock: WakeLockSentinel | null = null;
+let queue: QueueItem[] = [];
+/** G-code dos trabalhos que esta aba guardou na fila, para a pré-visualização quando forem iniciados. */
+const queuedGcode = new Map<string, string>();
+const soundInput = $<HTMLInputElement>("sound-on");
 
 /** Aberta pelo próprio agente (http://IP:8787), o endereço do WebSocket é o mesmo host. */
 const servedByAgent = location.protocol === "http:" && location.port !== "5173";
@@ -25,9 +30,17 @@ try {
   urlInput.value = localStorage.getItem("laserlink.url") ?? (servedByAgent ? `ws://${location.host}` : "");
   // O token fica só nesta aba (sessionStorage): sobrevive a recarregar a página, não a fechar o navegador.
   tokenInput.value = sessionStorage.getItem("laserlink.token") ?? "";
+  soundInput.checked = localStorage.getItem("laserlink.sound") !== "off";
 } catch {
   /* armazenamento indisponível */
 }
+soundInput.addEventListener("change", () => {
+  try {
+    localStorage.setItem("laserlink.sound", soundInput.checked ? "on" : "off");
+  } catch {
+    /* ignorar */
+  }
+});
 
 function log(text: string): void {
   logEl.textContent += `${new Date().toLocaleTimeString("pt-BR")}  ${text}\n`;
@@ -75,6 +88,10 @@ const workspace = new Workspace({
     showTab("tab-control");
     toast(`"${name}" enviado ao agente. Acompanhe aqui.`);
   },
+  onQueued: (name, gcode) => {
+    $("rejected").hidden = true;
+    queuedGcode.set(name, gcode);
+  },
 });
 
 const LINK_LABELS: Record<LinkState, [string, "ok" | "warn" | "bad"]> = {
@@ -120,6 +137,7 @@ function renderJob(job: JobInfo | null): void {
     $("job-alert-hint").textContent =
       `Confira a máquina antes de retomar. Se nenhum computador estiver conectado por ${reconnectGraceSec} s, o agente cancela o trabalho.`;
   }
+  renderQueue();
   void updateWakeLock();
 }
 
@@ -136,6 +154,119 @@ function renderResult(result: JobResult): void {
   const at = new Date(result.endedAt).toLocaleTimeString("pt-BR");
   el.textContent = `Último trabalho: ${result.name}, ${OUTCOME_LABELS[result.outcome]} às ${at}. ${result.reason}`;
 }
+
+// ---------- fila ----------
+
+function fmtDuration(sec: number): string {
+  if (sec < 60) return `${Math.max(1, Math.round(sec))} s`;
+  const m = Math.round(sec / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`;
+}
+
+function button(text: string, onClick: () => void, opts: { label?: string; cls?: string; disabled?: boolean } = {}): HTMLButtonElement {
+  const b = document.createElement("button");
+  b.textContent = text;
+  if (opts.label) b.setAttribute("aria-label", opts.label);
+  if (opts.cls) b.className = opts.cls;
+  b.disabled = opts.disabled ?? false;
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function renderQueue(): void {
+  const list = $("queue-list");
+  $("queue-empty").hidden = queue.length > 0;
+  $("queue-count").textContent = queue.length ? `(${queue.length})` : "";
+  const busy = currentJob !== null;
+  list.replaceChildren(
+    ...queue.map((item, i) => {
+      const li = document.createElement("li");
+      const name = document.createElement("div");
+      name.className = "q-name";
+      name.textContent = item.name;
+      const meta = document.createElement("div");
+      meta.className = "q-meta";
+      const size = item.bounds ? ` · ${(item.bounds.maxX - item.bounds.minX).toFixed(0)} × ${(item.bounds.maxY - item.bounds.minY).toFixed(0)} mm` : "";
+      meta.textContent = `~${fmtDuration(item.estimatedSec)} · ${item.lines} linhas${size}`;
+      const row = document.createElement("div");
+      row.className = "row";
+      row.append(
+        button("Iniciar", () => void startQueued(item), {
+          cls: "warn",
+          disabled: busy,
+          label: busy ? `Iniciar ${item.name} (espere o trabalho atual terminar)` : `Iniciar ${item.name}`,
+        }),
+        button("↑", () => conn.send({ type: "queueMove", id: item.id, index: i - 1 }), { label: `Subir ${item.name}`, disabled: i === 0 }),
+        button("↓", () => conn.send({ type: "queueMove", id: item.id, index: i + 1 }), { label: `Descer ${item.name}`, disabled: i === queue.length - 1 }),
+        button("Tirar da fila", () => void removeQueued(item)),
+      );
+      li.append(name, meta, row);
+      return li;
+    }),
+  );
+  renderNext();
+}
+
+async function startQueued(item: QueueItem): Promise<void> {
+  const ok = await confirmDialog(
+    `Iniciar "${item.name}"?`,
+    `Isto liga o laser. Tempo estimado: ${fmtDuration(item.estimatedSec)}.\n\nTroque o material se precisar, confira a origem, a área livre e a exaustão ligada, e mantenha alguém presente ou câmera ao vivo.\n\nMantenha esta aba aberta: se ela fechar ou perder a conexão, o agente pausa o trabalho.`,
+    "Iniciar e ligar o laser",
+  );
+  if (!ok) return;
+  $("rejected").hidden = true;
+  if (conn.send({ type: "queueStart", id: item.id, confirmLaserOn: true })) {
+    hideDone();
+    const gcode = queuedGcode.get(item.name);
+    if (gcode) preview.load(item.name, gcode);
+  }
+}
+
+async function removeQueued(item: QueueItem): Promise<void> {
+  if (await confirmDialog(`Tirar "${item.name}" da fila?`, "O arquivo sai do agente. Para cortar depois, envie de novo.", "Tirar da fila")) {
+    conn.send({ type: "queueRemove", id: item.id });
+  }
+}
+
+// ---------- aviso de fim de trabalho ----------
+
+const TITLE = document.title;
+
+function hideDone(): void {
+  $("done-banner").hidden = true;
+  document.title = TITLE;
+}
+
+/** Mostra o próximo da fila no aviso, se ele estiver aberto. */
+function renderNext(): void {
+  const next = queue[0];
+  const canStart = next !== undefined && currentJob === null;
+  $("done-next").hidden = !next;
+  $("done-next").textContent = next ? `Próximo da fila: ${next.name} (~${fmtDuration(next.estimatedSec)}). Ele só começa quando você confirmar.` : "";
+  $("done-start-next").hidden = !canStart;
+}
+
+function announceEnd(result: JobResult): void {
+  // Enquadrar também termina como trabalho, mas não precisa de aviso.
+  if (result.name.startsWith("Enquadrar")) return;
+  const ok = result.outcome === "completed";
+  const banner = $("done-banner");
+  banner.dataset.outcome = ok ? "ok" : "bad";
+  $("done-title").textContent = ok ? `Trabalho concluído: ${result.name}` : `Trabalho ${OUTCOME_LABELS[result.outcome]}: ${result.name}`;
+  $("done-text").textContent = ok
+    ? `Terminou às ${new Date(result.endedAt).toLocaleTimeString("pt-BR")}. Espere a fumaça sair antes de abrir a tampa.`
+    : result.reason;
+  renderNext();
+  banner.hidden = false;
+  document.title = `${ok ? "✔ Concluído" : "⚠ Parou"} · ${TITLE}`;
+  if (soundInput.checked) chime(ok ? "ok" : "bad");
+}
+
+$("done-close").addEventListener("click", hideDone);
+$("done-start-next").addEventListener("click", () => {
+  const next = queue[0];
+  if (next) void startQueued(next);
+});
 
 /** Mantém a tela do celular acesa enquanto este aparelho protege um trabalho. */
 async function updateWakeLock(): Promise<void> {
@@ -199,8 +330,13 @@ function onMessage(msg: ServerMessage): void {
     case "job":
       renderJob(msg.job);
       break;
+    case "queue":
+      queue = msg.items;
+      renderQueue();
+      break;
     case "jobEnded":
       renderResult(msg.result);
+      announceEnd(msg.result);
       log(`Trabalho ${OUTCOME_LABELS[msg.result.outcome]}: ${msg.result.reason}`);
       break;
     case "jobRejected": {
@@ -309,6 +445,20 @@ $("start").addEventListener("click", async () => {
   $("rejected").hidden = true;
   const gcode = await file.text();
   if (conn.send({ type: "job", name: file.name, gcode, confirmLaserOn: true })) preview.load(file.name, gcode);
+});
+
+$("enqueue").addEventListener("click", async () => {
+  const file = $<HTMLInputElement>("file").files?.[0];
+  if (!file) {
+    log("Escolha um arquivo G-code.");
+    return;
+  }
+  $("rejected").hidden = true;
+  const gcode = await file.text();
+  if (conn.send({ type: "queueAdd", name: file.name, gcode })) {
+    queuedGcode.set(file.name, gcode);
+    toast(`"${file.name}" enviado para a fila. O agente confere antes de guardar.`);
+  }
 });
 
 // arquivo escolhido: mostra a trajetória antes de iniciar

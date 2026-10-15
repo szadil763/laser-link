@@ -25,6 +25,16 @@
         </div>
       </section>
 
+      <section id="done-banner" class="done" hidden role="status" aria-live="polite">
+        <h2 id="done-title"></h2>
+        <p id="done-text"></p>
+        <p id="done-next" class="muted" hidden></p>
+        <div class="row">
+          <button id="done-start-next" class="warn" hidden>Iniciar próximo da fila</button>
+          <button id="done-close">Fechar aviso</button>
+        </div>
+      </section>
+
       <div class="tabs" role="tablist" aria-label="Seções">
         <button role="tab" id="tab-control" aria-selected="true" aria-controls="view-control">Controle</button>
         <button role="tab" id="tab-prepare" aria-selected="false" aria-controls="view-prepare">Preparar trabalho</button>
@@ -95,6 +105,7 @@
             <div class="row">
               <input id="file" type="file" accept=".gcode,.nc,.gc,.txt" aria-label="Arquivo G-code" />
               <button id="start" class="warn">Iniciar trabalho</button>
+              <button id="enqueue">Guardar na fila</button>
             </div>
             <div id="rejected" class="alert" hidden role="alert" style="padding:10px;border-radius:8px;margin-top:10px">
               <strong id="rejected-title"></strong>
@@ -109,6 +120,16 @@
               <button id="stop" class="danger">PARAR</button>
             </div>
             <p id="last-result" class="muted" hidden></p>
+            <label class="check"><input type="checkbox" id="sound-on" checked /> Tocar som quando um trabalho terminar</label>
+          </section>
+
+          <section>
+            <div class="row" style="justify-content: space-between">
+              <h2 style="margin:0">Fila <small class="muted" id="queue-count"></small></h2>
+            </div>
+            <p class="note">A fila fica no agente e todos os aparelhos veem a mesma. Ela nunca começa um trabalho sozinha: cada início pede confirmação.</p>
+            <ol class="queue" id="queue-list"></ol>
+            <p class="muted" id="queue-empty">Nenhum trabalho na fila. Use "Guardar na fila" aqui ou em Preparar trabalho.</p>
           </section>
 
           <section>
@@ -188,6 +209,7 @@
               <button id="p-frame">Enquadrar</button>
               <button id="p-sim">Simular</button>
               <button id="p-send" class="warn">Enviar para a laser</button>
+              <button id="p-enqueue">Guardar na fila</button>
             </div>
             <div class="row">
               <button id="p-export-svg">Baixar SVG</button>

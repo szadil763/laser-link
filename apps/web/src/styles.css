@@ -128,3 +128,17 @@ table.mat { width: 100%; border-collapse: collapse; font-size: 13px; font-varian
 table.mat th, table.mat td { border-bottom: 1px solid var(--line); padding: 5px 4px; text-align: left; }
 table.mat input { width: 100%; min-width: 56px; min-height: 34px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
 .toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line); padding: 10px 14px; border-radius: 10px; width: max-content; max-width: calc(100vw - 32px); font-size: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.4); z-index: 5; }
+
+/* ---------- fila e aviso de fim ---------- */
+.done { border: 2px solid #34a853; background: #12261a; }
+.done[data-outcome="bad"] { border-color: #ea4335; background: #2b1414; }
+.done h2 { margin-top: 0; text-transform: none; letter-spacing: 0; font-size: 17px; }
+.check { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; }
+.check input { width: 20px; height: 20px; }
+.queue { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; counter-reset: q; }
+.queue li { background: var(--panel-2); border-radius: 8px; padding: 8px 10px; display: grid; gap: 6px; counter-increment: q; min-width: 0; }
+.queue li:first-child { border-left: 4px solid var(--accent); }
+.queue .q-name { font-weight: 600; overflow-wrap: anywhere; }
+.queue .q-name::before { content: counter(q) ". "; color: var(--muted); font-weight: 400; }
+.queue .q-meta { font-size: 13px; color: var(--muted); }
+.queue .row button { min-width: 44px; padding: 6px 10px; }

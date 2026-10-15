@@ -49,6 +49,8 @@ export interface PrepareHost {
   isConnected(): boolean;
   /** Trabalho enviado: a interface mostra a aba Controle com a pré-visualização. */
   onJobSent(name: string, gcode: string): void;
+  /** G-code mandado para a fila do agente (ainda não iniciado). */
+  onQueued(name: string, gcode: string): void;
 }
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -1036,6 +1038,7 @@ export class Workspace {
     } else limitsEl.textContent = "";
     const empty = !r;
     $<HTMLButtonElement>("p-send").disabled = empty || out;
+    $<HTMLButtonElement>("p-enqueue").disabled = empty || out;
     $<HTMLButtonElement>("p-sim").disabled = empty;
     $<HTMLButtonElement>("p-frame").disabled = empty || out;
   }
@@ -1251,6 +1254,18 @@ export class Workspace {
     if (this.host.send({ type: "job", name, gcode: r.gcode, confirmLaserOn: true })) this.host.onJobSent(name, r.gcode);
   }
 
+  /** Guarda na fila do agente. Não liga o laser: iniciar pede confirmação depois. */
+  private enqueueJob(): void {
+    if (!this.host.isConnected()) return this.host.toast("Conecte ao agente (aba Controle) para guardar na fila.");
+    const r = this.regenerateNow();
+    if (!r) return;
+    const name = `${this.designName || "Trabalho"}.gcode`;
+    if (this.host.send({ type: "queueAdd", name, gcode: r.gcode })) {
+      this.host.onQueued(name, r.gcode);
+      this.host.toast(`"${name}" enviado para a fila (${fmtTime(r.estimatedSeconds)}). Inicie pela aba Controle.`);
+    }
+  }
+
   // ---------- materiais ----------
 
   private openMaterials(): void {
@@ -1405,6 +1420,7 @@ export class Workspace {
     $("p-sim").addEventListener("click", () => this.startSim());
     $("p-sim-stop").addEventListener("click", () => this.stopAnim());
     $("p-send").addEventListener("click", () => void this.sendJob());
+    $("p-enqueue").addEventListener("click", () => this.enqueueJob());
     document.addEventListener("keydown", (e) => {
       if ($("view-prepare").hidden) return;
       const tag = (e.target as HTMLElement).tagName.toLowerCase();
