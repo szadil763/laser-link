@@ -4,8 +4,8 @@ Controle remoto de cortadora/gravadora a laser **GRBL**. Dois pedaços de softwa
 
 - **Agente** (`apps/agent`): roda no PC ligado à laser por USB. Fala serial com o GRBL, faz o streaming do G-code e serve a interface e um WebSocket protegido por token.
 - **Interface web** (`apps/web`): abre em qualquer navegador (PC de projeto, celular). Uma tela só, no estilo de programa de desenho:
-  - **barra de cima**: menu **Arquivo** (abrir projeto, salvar, salvar como, importar SVG/DXF/imagem, exemplo, exportar SVG/DXF/G-code), desfazer e o estado da conexão;
-  - **barra de medidas**: X, Y, largura, altura, girar, espelhar, alinhar, contorno deslocado, agrupar, desagrupar, duplicar e excluir o que está selecionado;
+  - **barra de cima**: menu **Arquivo** (abrir projeto, salvar, salvar como, importar SVG/DXF/imagem, exemplo, exportar SVG/DXF/G-code), menu **Editar** (desfazer, copiar, recortar, colar, duplicar, excluir, selecionar tudo, agrupar, desagrupar, alinhar, distribuir, travar e destravar), desfazer e o estado da conexão;
+  - **barra de medidas**: X, Y, largura, altura, girar, espelhar, contorno deslocado, agrupar, desagrupar, duplicar e excluir o que está selecionado;
   - **ferramentas** à esquerda: vários, área (caixa de seleção), texto, caixa, peças, teste de matriz, deslocamentos e mesa clara/escura;
   - **mesa** no centro, com **Desenho** (o projeto) ou **Na máquina** (o trabalho enviado e o cabeçote em tempo real), e o botão **Limpar mesa** para a vista que está à mostra;
   - **faixa de operações** embaixo da mesa: Cortar, Gravar linha, Preenchido, Detalhado;
@@ -106,6 +106,8 @@ npm run dev:web     # interface em http://localhost:5173; informe ws://localhost
 8. **Salvar** (Ctrl+S) guarda o projeto num arquivo `.laserlink` (formato próprio, com camadas, operações e a imagem). **Arquivo > Abrir projeto** (Ctrl+O) reabre. No Chrome/Edge abertos em `localhost`, o navegador pergunta onde salvar; pelo endereço do Tailscale o arquivo vai para a pasta de downloads.
 
 **Selecionar e agrupar:** com a ferramenta **Área** ligada (ou segurando Shift), arraste no espaço vazio da mesa para desenhar uma caixa de seleção. Arrastando para a **direita**, entra o que fica inteiro dentro da caixa; para a **esquerda**, entra também o que a caixa só encosta. **Agrupar** (Ctrl+G) faz os selecionados andarem juntos; **Desagrupar** (Ctrl+Shift+G) separa, por exemplo, os furos de uma peça para mexer em um só. Ctrl+A seleciona tudo.
+
+**Menu Editar:** **Copiar/Recortar/Colar** (Ctrl+C/X/V; cada colagem fica 10 mm mais ao lado, na mesma camada), **Alinhar** (entre si, ou na mesa quando é uma peça só), **Distribuir** (três ou mais peças com espaços iguais, mantendo as das pontas) e **Travar peça** (Ctrl+L): a peça continua na mesa e no corte, mas não se move, não gira e não é excluída até **Destravar** (Ctrl+Shift+L). Na barra de medidas, a peça travada aparece com 🔒.
 
 **Textos editáveis:** dê **dois cliques** num texto da mesa (o da ferramenta Texto, os nomes gravados da caixa ou o texto do carrinho) para reescrever. O texto novo fica no mesmo lugar.
 

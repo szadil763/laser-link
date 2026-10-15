@@ -22,6 +22,8 @@ export interface Shape {
   group?: string;
   /** Letra de um texto editável (dois cliques na mesa). */
   text?: ShapeText;
+  /** Travado: continua na mesa e no trabalho, mas não se move, não gira e não é excluído. */
+  locked?: boolean;
 }
 
 /** O que está escrito num texto, para editar com dois cliques. Todas as letras do texto têm o mesmo `id`. */

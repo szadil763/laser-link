@@ -94,6 +94,13 @@ summary[aria-disabled] { opacity: .5; pointer-events: none; }
 .file-menu button { justify-content: space-between; display: flex; align-items: center; gap: 16px; text-align: left; min-height: 38px; background: transparent; border-color: transparent; }
 .file-menu button:hover { background: #343841; }
 .file-menu .label { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
+.edit-menu { max-height: min(80vh, 640px); overflow-y: auto; }
+.edit-menu button { min-height: 32px; }
+.edit-menu .label { margin-top: 2px; padding-top: 4px; }
+.menu-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.menu-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.menu-grid button { justify-content: center !important; border-color: var(--line) !important; font-size: 13px; padding: 4px 6px; }
+.file-menu button:disabled { opacity: .4; }
 kbd { font: 11px var(--mono); color: var(--muted); }
 .stage-clear { margin-left: auto; min-height: 36px; order: 3; }
 details.menu.flip .menu-body { left: auto; right: 0; }

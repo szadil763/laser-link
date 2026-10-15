@@ -25,6 +25,41 @@
               <button data-file="export-gcode" role="menuitem">Exportar G-code</button>
             </div>
           </details>
+          <details class="menu" id="edit-menu">
+            <summary>Editar</summary>
+            <div class="menu-body file-menu edit-menu" role="menu">
+              <button data-edit="undo" role="menuitem">Desfazer <kbd>Ctrl+Z</kbd></button>
+              <p class="label">Área de transferência</p>
+              <button data-edit="copy" role="menuitem">Copiar <kbd>Ctrl+C</kbd></button>
+              <button data-edit="cut" role="menuitem">Recortar <kbd>Ctrl+X</kbd></button>
+              <button data-edit="paste" role="menuitem">Colar <kbd>Ctrl+V</kbd></button>
+              <button data-edit="duplicate" role="menuitem">Duplicar <kbd>Ctrl+D</kbd></button>
+              <button data-edit="delete" role="menuitem">Excluir <kbd>Delete</kbd></button>
+              <button data-edit="selectall" role="menuitem">Selecionar tudo <kbd>Ctrl+A</kbd></button>
+              <p class="label">Grupos</p>
+              <button data-edit="group" role="menuitem">Agrupar <kbd>Ctrl+G</kbd></button>
+              <button data-edit="ungroup" role="menuitem">Desagrupar <kbd>Ctrl+Shift+G</kbd></button>
+              <p class="label" id="ed-align-label">Alinhar</p>
+              <div class="menu-grid">
+                <button data-align="left">Esquerda</button>
+                <button data-align="hcenter">Centro ↔</button>
+                <button data-align="right">Direita</button>
+                <button data-align="top">Topo</button>
+                <button data-align="vcenter">Centro ↕</button>
+                <button data-align="bottom">Base</button>
+              </div>
+              <button data-align="table-center" role="menuitem">Centralizar na mesa</button>
+              <p class="label">Distribuir (espaços iguais)</p>
+              <div class="menu-grid two">
+                <button data-edit="dist-h">Na horizontal ↔</button>
+                <button data-edit="dist-v">Na vertical ↕</button>
+              </div>
+              <p class="label">Travar</p>
+              <button data-edit="lock" role="menuitem">Travar peça <kbd>Ctrl+L</kbd></button>
+              <button data-edit="unlock" role="menuitem">Destravar peça <kbd>Ctrl+Shift+L</kbd></button>
+              <button data-edit="unlockall" role="menuitem">Destravar tudo</button>
+            </div>
+          </details>
           <button id="p-undo" title="Desfazer (Ctrl+Z)">Desfazer</button>
           <input type="file" id="p-file-import" accept=".svg,.dxf,image/svg+xml,image/png,image/jpeg" hidden />
           <input type="file" id="p-file-project" accept=".laserlink,application/json" hidden />
@@ -80,21 +115,6 @@
         <button id="ed-fh" class="icon-btn" title="Espelhar na horizontal"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v18" stroke-dasharray="2 2"/><path d="M9 7L3 12l6 5zM15 7l6 5-6 5z"/></svg><span class="sr">Espelhar na horizontal</span></button>
         <button id="ed-fv" class="icon-btn" title="Espelhar na vertical"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 12h18" stroke-dasharray="2 2"/><path d="M7 9l5-6 5 6zM7 15l5 6 5-6z"/></svg><span class="sr">Espelhar na vertical</span></button>
         <span class="sep"></span>
-        <details class="menu" id="ed-align-menu">
-          <summary>Alinhar</summary>
-          <div class="menu-body">
-            <p class="label" id="ed-align-label">Alinhar na mesa</p>
-            <div class="seg">
-              <button data-align="left">Esquerda</button>
-              <button data-align="hcenter">Centro ↔</button>
-              <button data-align="right">Direita</button>
-              <button data-align="top">Topo</button>
-              <button data-align="vcenter">Centro ↕</button>
-              <button data-align="bottom">Base</button>
-              <button data-align="table-center" id="ed-align-table">Centralizar grupo na mesa</button>
-            </div>
-          </div>
-        </details>
         <details class="menu" id="ed-off-menu">
           <summary title="Contorno deslocado">Deslocar</summary>
           <div class="menu-body">

@@ -116,6 +116,9 @@ export class Workspace {
   private dragSaved = false;
   /** Ferramenta "Área": arrastar no vazio desenha a caixa de seleção. */
   private areaMode = false;
+  /** Copiar/colar: cópia dos elementos com a camada de onde vieram. */
+  private clipboard: Array<{ layer: Pick<Layer, "id" | "name" | "color" | "mode" | "materialId" | "settings">; shape: Shape }> = [];
+  private pasteCount = 0;
   /** Caixa de seleção sendo desenhada, em pixels do canvas. */
   private marquee: { a: Point; b: Point } | null = null;
 
@@ -126,7 +129,7 @@ export class Workspace {
         if (this.anim) return false;
         const hit = this.hitTest(px);
         this.dragSaved = false;
-        if (hit && this.selected.has(hit.id)) return true;
+        if (hit && this.selected.has(hit.id) && !hit.locked) return true;
         return this.areaMode || ev.shiftKey ? "marquee" : false;
       },
       onMarquee: (a, b) => {
@@ -143,8 +146,8 @@ export class Workspace {
           this.history.push(this.layers);
           this.dragSaved = true;
         }
-        for (const { s } of this.selItems()) s.points = s.points.map(([x, y]) => [x + dx, y + dy] as Point);
-        this.draw();
+        for (const { s } of this.movable()) s.points = s.points.map(([x, y]) => [x + dx, y + dy] as Point);
+        this.requestDraw();
       },
       onDragEnd: () => this.refresh(),
       onDoubleClick: (px) => this.doubleClick(px),
@@ -734,7 +737,7 @@ export class Workspace {
       if (!only) ids.forEach((x) => this.selected.add(x));
     } else if (already) ids.forEach((x) => this.selected.delete(x));
     else ids.forEach((x) => this.selected.add(x));
-    this.refresh();
+    this.refreshSelection();
   }
 
   /** O elemento e todos os do mesmo grupo (em qualquer camada). */
@@ -763,7 +766,7 @@ export class Workspace {
     }
     if (!add) this.selected.clear();
     for (const s of picked) for (const id of this.groupIds(s)) this.selected.add(id);
-    this.refresh();
+    this.refreshSelection();
     if (!picked.length) this.host.toast(touching ? "A caixa não encostou em nenhum elemento." : "Nenhum elemento ficou inteiro dentro da caixa. Arraste para a esquerda para pegar o que ela só encosta.");
   }
 
@@ -823,16 +826,35 @@ export class Workspace {
     if (hit) this.select(hit.id, this.multi || ev.shiftKey || ev.ctrlKey || ev.metaKey);
     else if (this.selected.size) {
       this.selected.clear();
-      this.refresh();
+      this.refreshSelection();
     }
   }
 
+  /** Selecionados que podem ser mexidos (os travados ficam onde estão). */
+  private movable(): Array<{ s: Shape; l: Layer }> {
+    return this.selItems().filter(({ s }) => !s.locked);
+  }
+
+  private warnLocked(): boolean {
+    const locked = this.selItems().filter(({ s }) => s.locked).length;
+    if (locked && !this.movable().length) {
+      this.host.toast("Peça travada: use Editar > Destravar peça para mexer nela.");
+      return true;
+    }
+    if (locked) this.host.toast(`${locked} elemento(s) travado(s) ficaram onde estavam.`);
+    return false;
+  }
+
   private transform(fn: (p: Point) => Point): void {
-    const items = this.selItems();
-    if (!items.length) return;
+    const items = this.movable();
+    if (this.warnLocked() || !items.length) return;
     this.history.push(this.layers);
     for (const { s } of items) s.points = s.points.map(fn);
     this.refresh();
+  }
+
+  private movableBounds(): Bounds | null {
+    return boundsOf(this.movable().flatMap(({ s }) => s.points));
   }
 
   private moveSel(dx: number, dy: number): void {
@@ -840,7 +862,7 @@ export class Workspace {
   }
 
   private rotateSel(deg: number): void {
-    const b = this.selBounds();
+    const b = this.movableBounds();
     if (!b) return;
     const cx = (b.minX + b.maxX) / 2;
     const cy = (b.minY + b.maxY) / 2;
@@ -851,7 +873,7 @@ export class Workspace {
   }
 
   private scaleSel(sx: number, sy: number): void {
-    const b = this.selBounds();
+    const b = this.movableBounds();
     if (!b) return;
     const cx = (b.minX + b.maxX) / 2;
     const cy = (b.minY + b.maxY) / 2;
@@ -859,9 +881,9 @@ export class Workspace {
   }
 
   private alignSel(how: string): void {
-    const items = this.selItems();
-    const all = this.selBounds();
-    if (!items.length || !all) return;
+    const items = this.movable();
+    const all = boundsOf(items.flatMap(({ s }) => s.points));
+    if (this.warnLocked() || !items.length || !all) return;
     this.history.push(this.layers);
     const area = this.limits.workArea;
     // agrupa por grupo (texto) para alinhar o texto inteiro, não cada letra
@@ -915,13 +937,121 @@ export class Workspace {
   }
 
   private deleteSel(): void {
-    const items = this.selItems();
-    if (!items.length) return;
+    const items = this.movable();
+    if (this.warnLocked() || !items.length) return;
     this.history.push(this.layers);
     for (const { s, l } of items) l.shapes = l.shapes.filter((x) => x.id !== s.id);
     this.selected.clear();
     this.refresh();
     this.host.toast(`${items.length} elemento(s) excluído(s). Ctrl+Z desfaz.`);
+  }
+
+  /** Espaços iguais entre as peças (grupos contam como uma peça), mantendo as duas das pontas. */
+  private distributeSel(axis: "x" | "y"): void {
+    const units = new Map<string, Shape[]>();
+    for (const { s } of this.movable()) units.set(s.group ?? s.id, [...(units.get(s.group ?? s.id) ?? []), s]);
+    if (units.size < 3) return this.host.toast("Selecione três ou mais peças (destravadas) para distribuir.");
+    const list = [...units.values()].map((shapes) => ({ shapes, b: boundsOf(shapes.flatMap((s) => s.points))! }));
+    const lo = (b: Bounds): number => (axis === "x" ? b.minX : b.minY);
+    const size = (b: Bounds): number => (axis === "x" ? b.maxX - b.minX : b.maxY - b.minY);
+    list.sort((a, b) => lo(a.b) - lo(b.b));
+    const first = list[0]!.b;
+    const last = list[list.length - 1]!.b;
+    const span = (axis === "x" ? last.maxX : last.maxY) - lo(first);
+    const gap = (span - list.reduce((acc, u) => acc + size(u.b), 0)) / (list.length - 1);
+    this.history.push(this.layers);
+    let pos = lo(first);
+    for (const u of list) {
+      const d = pos - lo(u.b);
+      for (const s of u.shapes) s.points = s.points.map(([x, y]) => (axis === "x" ? [x + d, y] : [x, y + d]) as Point);
+      pos += size(u.b) + gap;
+    }
+    this.refresh();
+    this.host.toast(gap < 0 ? "Distribuído, mas as peças se sobrepõem: afaste as das pontas." : `Distribuído: ${gap.toFixed(1)} mm entre as peças.`);
+  }
+
+  private copySel(): boolean {
+    const items = this.selItems();
+    if (!items.length) return false;
+    this.clipboard = items.map(({ s, l }) => ({
+      layer: { id: l.id, name: l.name, color: l.color, mode: l.mode, materialId: l.materialId, settings: structuredClone(l.settings) },
+      shape: structuredClone(s),
+    }));
+    this.pasteCount = 0;
+    this.renderSelection();
+    return true;
+  }
+
+  private cutSel(): void {
+    if (!this.copySel()) return;
+    const locked = this.selItems().some(({ s }) => s.locked);
+    this.deleteSel();
+    this.host.toast(locked ? "Recortado (os travados foram copiados, mas ficaram na mesa)." : "Recortado. Ctrl+V cola.");
+  }
+
+  /** Cola os copiados 10 mm ao lado (cada colagem anda mais 10 mm), na mesma camada de onde vieram. */
+  private paste(): void {
+    if (!this.clipboard.length) return this.host.toast("Nada copiado ainda: selecione e use Copiar (Ctrl+C).");
+    this.history.push(this.layers);
+    this.pasteCount++;
+    const off = 10 * this.pasteCount;
+    const groups = new Map<string, string>();
+    const texts = new Map<string, string>();
+    const remap = (map: Map<string, string>, key: string, prefix: string): string => {
+      if (!map.has(key)) map.set(key, newId(prefix));
+      return map.get(key)!;
+    };
+    this.selected.clear();
+    for (const { layer, shape } of this.clipboard) {
+      let target = this.layers.find((l) => l.id === layer.id) ?? this.layers.find((l) => l.name === layer.name);
+      if (!target) {
+        target = { ...structuredClone(layer), id: newId("L"), enabled: true, shapes: [] };
+        this.layers.push(target);
+      }
+      const copy: Shape = { ...structuredClone(shape), id: newId("S"), points: shape.points.map(([x, y]) => [x + off, y - off] as Point) };
+      delete copy.locked;
+      if (shape.group) copy.group = remap(groups, shape.group, "G");
+      if (shape.text) copy.text = { ...shape.text, id: remap(texts, shape.text.id, "T") };
+      target.shapes.push(copy);
+      this.selected.add(copy.id);
+    }
+    this.refresh();
+    this.host.toast(`${this.clipboard.length} elemento(s) colado(s) ${off} mm ao lado.`);
+  }
+
+  private setLocked(locked: boolean, all = false): void {
+    const items = all ? this.layers.flatMap((l) => l.shapes.map((s) => ({ s, l }))) : this.selItems();
+    const change = items.filter(({ s }) => !!s.locked !== locked);
+    if (!change.length) return this.host.toast(locked ? "Já está travado." : "Nada travado.");
+    this.history.push(this.layers);
+    for (const { s } of change) {
+      if (locked) s.locked = true;
+      else delete s.locked;
+    }
+    this.refresh();
+    this.host.toast(locked ? `${change.length} elemento(s) travado(s): não se movem nem são excluídos.` : `${change.length} elemento(s) destravado(s).`);
+  }
+
+  /** Ações do menu Editar (e atalhos). */
+  private editAction(act: string): void {
+    if (act === "undo") this.undo();
+    else if (act === "copy") {
+      if (this.copySel()) this.host.toast(`${this.clipboard.length} elemento(s) copiado(s). Ctrl+V cola.`);
+    } else if (act === "cut") this.cutSel();
+    else if (act === "paste") this.paste();
+    else if (act === "duplicate") this.duplicateSel();
+    else if (act === "delete") this.deleteSel();
+    else if (act === "selectall") {
+      this.selected.clear();
+      for (const l of this.layers) if (l.enabled) for (const s of l.shapes) this.selected.add(s.id);
+      this.refreshSelection();
+    } else if (act === "group") this.groupSel();
+    else if (act === "ungroup") this.ungroupSel();
+    else if (act === "dist-h") this.distributeSel("x");
+    else if (act === "dist-v") this.distributeSel("y");
+    else if (act === "lock") this.setLocked(true);
+    else if (act === "unlock") this.setLocked(false);
+    else if (act === "unlockall") this.setLocked(false, true);
   }
 
   /** Cria cópias deslocadas (offset) do contorno selecionado. */
@@ -971,13 +1101,13 @@ export class Workspace {
       this.resultError = (err as Error).message;
     }
     this.renderSummary();
-    this.draw();
+    this.requestDraw();
     return this.result;
   }
 
   private scheduleGenerate(): void {
     window.clearTimeout(this.genTimer);
-    this.genTimer = window.setTimeout(() => this.regenerateNow(), 150);
+    this.genTimer = window.setTimeout(() => this.regenerateNow(), 250);
   }
 
   // ---------- painéis ----------
@@ -989,7 +1119,18 @@ export class Workspace {
     this.renderLegend();
     $<HTMLButtonElement>("p-undo").disabled = !this.history.canUndo;
     this.scheduleGenerate();
-    this.draw();
+    this.requestDraw();
+  }
+
+  /**
+   * Só a seleção mudou: atualiza a barra de medidas, marca os itens da lista e
+   * redesenha. Não reconstrói as camadas nem refaz o G-code (era o que deixava
+   * cada clique lento).
+   */
+  private refreshSelection(): void {
+    this.renderSelection();
+    for (const el of $("p-layers").querySelectorAll<HTMLElement>(".item")) el.dataset.sel = String(this.selected.has(el.dataset.id ?? ""));
+    this.requestDraw();
   }
 
   private modeButtons(current: VectorMode | null, extra = ""): string {
@@ -1044,7 +1185,27 @@ export class Workspace {
     setVal("ed-h", b ? b.maxY - b.minY : null);
     $("ed-lock").setAttribute("aria-pressed", String(this.lockRatio));
     $("ed-align-label").textContent = groups.size > 1 ? "Alinhar entre si" : "Alinhar na mesa";
-    $("ed-align-table").hidden = groups.size <= 1;
+    const lockedSel = items.filter(({ s }) => s.locked).length;
+    const anyLocked = this.layers.some((l) => l.shapes.some((s) => s.locked));
+    const enable: Record<string, boolean> = {
+      undo: this.history.canUndo,
+      copy: has,
+      cut: has,
+      paste: this.clipboard.length > 0,
+      duplicate: has,
+      delete: has && lockedSel < items.length,
+      selectall: this.layers.some((l) => l.shapes.length),
+      group: groups.size >= 2,
+      ungroup: items.some(({ s }) => s.group),
+      "dist-h": groups.size >= 3,
+      "dist-v": groups.size >= 3,
+      lock: has && lockedSel < items.length,
+      unlock: lockedSel > 0,
+      unlockall: anyLocked,
+    };
+    for (const btn of $("edit-menu").querySelectorAll<HTMLButtonElement>("button[data-edit]")) btn.disabled = !enable[btn.dataset.edit ?? ""];
+    for (const btn of $("edit-menu").querySelectorAll<HTMLButtonElement>("button[data-align]")) btn.disabled = !has;
+    if (lockedSel) $("ed-name").textContent = `🔒 ${$("ed-name").textContent ?? ""}`;
     $<HTMLButtonElement>("ed-group").disabled = groups.size < 2;
     $<HTMLButtonElement>("ed-ungroup").disabled = !items.some(({ s }) => s.group);
     // faixa de operações
@@ -1109,12 +1270,13 @@ export class Workspace {
     $("ed-rr").addEventListener("click", () => this.rotateSel(-90));
     $("ed-fh").addEventListener("click", () => this.scaleSel(-1, 1));
     $("ed-fv").addEventListener("click", () => this.scaleSel(1, -1));
-    $("p-props").querySelectorAll<HTMLButtonElement>("[data-align]").forEach((btn) =>
-      btn.addEventListener("click", () => {
-        this.alignSel(btn.dataset.align ?? "");
-        $<HTMLDetailsElement>("ed-align-menu").open = false;
-      }),
-    );
+    $("edit-menu").addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-edit], button[data-align]");
+      if (!btn || btn.disabled) return;
+      $<HTMLDetailsElement>("edit-menu").open = false;
+      if (btn.dataset.align) this.alignSel(btn.dataset.align);
+      else this.editAction(btn.dataset.edit ?? "");
+    });
     $("ed-off-go").addEventListener("click", () => {
       this.offsetSel(num("ed-off"));
       $<HTMLDetailsElement>("ed-off-menu").open = false;
@@ -1126,7 +1288,7 @@ export class Workspace {
     $("p-undo").addEventListener("click", () => this.undo());
     $("ed-clear").addEventListener("click", () => {
       this.selected.clear();
-      this.refresh();
+      this.refreshSelection();
     });
     // um menu aberto fecha o outro e fecha ao clicar fora
     const menus = [...document.querySelectorAll<HTMLDetailsElement>("details.menu")];
@@ -1447,7 +1609,7 @@ export class Workspace {
         ctx.stroke();
         if (this.selected.has(s.id) && !anim) {
           ctx.globalAlpha = 1;
-          ctx.strokeStyle = bedColors().selection;
+          ctx.strokeStyle = s.locked ? "#9aa0a6" : bedColors().selection;
           ctx.lineWidth = 3.4 * d;
           ctx.setLineDash([5 * d, 3 * d]);
           v.polyline(s.points);
@@ -1777,11 +1939,16 @@ export class Workspace {
         this.undo();
         return;
       }
+      if ((e.ctrlKey || e.metaKey) && (key === "c" || key === "x" || key === "v" || key === "l")) {
+        e.preventDefault();
+        this.editAction(key === "c" ? "copy" : key === "x" ? "cut" : key === "v" ? "paste" : e.shiftKey ? "unlock" : "lock");
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && key === "a") {
         e.preventDefault();
         this.selected.clear();
         for (const l of this.layers) if (l.enabled) for (const s of l.shapes) this.selected.add(s.id);
-        this.refresh();
+        this.refreshSelection();
         return;
       }
       if ((e.ctrlKey || e.metaKey) && key === "g") {
@@ -1805,7 +1972,7 @@ export class Workspace {
         this.duplicateSel();
       } else if (e.key === "Escape") {
         this.selected.clear();
-        this.refresh();
+        this.refreshSelection();
       }
     });
   }

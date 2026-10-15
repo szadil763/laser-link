@@ -37,6 +37,7 @@
 - [x] Extra: instalação e atualização com clique duplo no Windows
 - [x] Extra: menu Arquivo (projeto .laserlink, salvar como, importar SVG/DXF/imagem, exportar SVG/DXF/G-code), textos editáveis com dois cliques e Limpar mesa nas duas vistas
 - [x] Extra: caixa de seleção (ferramenta Área ou Shift + arrastar), agrupar e desagrupar
+- [x] Extra: menu Editar (copiar, recortar, colar, alinhar, distribuir, agrupar, travar) e seleção mais rápida (não refaz o G-code a cada clique)
 - [ ] Testes com a laser real (ver `TESTES-NA-BANCADA.md`, seção Fase 3)
 
 ## Depois
