@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boxDesign, DEFAULT_BOX, frameGcode, generateGcode, matrixTest, DEFAULT_MATRIX, textToPaths, type JobDesign } from "@laserlink/gcode";
+import { boxDesign, carDesign, DEFAULT_BOX, DEFAULT_CAR, DEFAULT_OTTO, ottoDesign, frameGcode, generateGcode, matrixTest, DEFAULT_MATRIX, textToPaths, type JobDesign } from "@laserlink/gcode";
 import { checkGcode } from "../src/gcode-check.js";
 
 const limits = { maxSpindle: 1000, workArea: { x: 400, y: 300 } };
@@ -19,8 +19,10 @@ describe("G-code gerado pelo LaserLink passa no verificador do agente", () => {
     expect(checkGcode(r.gcode, limits).problems).toEqual([]);
   });
 
-  it("caixa com encaixes", () => {
-    expect(checkGcode(generateGcode(boxDesign(DEFAULT_BOX), { maxSpindle: 1000 }).gcode, limits).problems).toEqual([]);
+  it("caixa com encaixes, chassi do carrinho e robô bípede", () => {
+    for (const d of [boxDesign(DEFAULT_BOX), carDesign(DEFAULT_CAR), ottoDesign(DEFAULT_OTTO)]) {
+      expect(checkGcode(generateGcode(d, { maxSpindle: 1000 }).gcode, limits).problems, d.name).toEqual([]);
+    }
   });
 
   it("teste de matriz e enquadrar", () => {

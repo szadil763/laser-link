@@ -127,6 +127,7 @@
               <label class="btn">Importar imagem<input type="file" id="p-file-img" accept="image/png,image/jpeg" /></label>
               <button id="p-text">Texto</button>
               <button id="p-box-gen">Caixa</button>
+              <button id="p-parts">Peças</button>
               <button id="p-matrix">Teste de matriz</button>
               <button id="p-sample">Exemplo</button>
               <button id="p-clear">Limpar</button>
@@ -268,6 +269,59 @@
         <div class="row end">
           <button value="cancel">Voltar</button>
           <button value="ok" class="primary">Gerar caixa</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="dlg-parts" aria-labelledby="pt-title">
+      <form method="dialog">
+        <h2 id="pt-title">Peças dos projetos</h2>
+        <p class="note">Projetos próprios do LaserLink, com medidas ajustáveis. As medidas de motores, servos e placas mudam entre fabricantes: confira com paquímetro antes de cortar. Montagem em <b>docs/PECAS.md</b>.</p>
+        <div class="fields" style="margin-top:10px">
+          <label class="field" style="grid-column: 1 / -1">Projeto <select id="pt-kind"><option value="car">Carrinho RC (2 motores TT, roda boba, ESP32)</option><option value="otto">Robô bípede tipo Otto (4 servos SG90, HC-SR04)</option></select></label>
+          <label class="field">Material <select id="pt-material"></select></label>
+          <label class="field">Espessura <span class="val"><input type="number" id="pt-t" value="3" min="1" max="10" step="0.1" /><span class="unit">mm</span></span></label>
+          <label class="field">Kerf <span class="val"><input type="number" id="pt-kerf" value="0.15" min="0" max="1" step="0.01" /><span class="unit">mm</span></span></label>
+        </div>
+        <fieldset id="pt-car" style="border:0;padding:0;margin:10px 0 0">
+          <div class="label">Chassi</div>
+          <div class="fields">
+            <label class="field">Comprimento <span class="val"><input type="number" id="car-l" value="150" min="110" /><span class="unit">mm</span></span></label>
+            <label class="field">Largura <span class="val"><input type="number" id="car-w" value="120" min="110" /><span class="unit">mm</span></span></label>
+            <label class="field" style="grid-column: span 2">Texto gravado <input type="text" id="car-label" value="LASERLINK" maxlength="24" /></label>
+          </div>
+          <div class="label" style="margin-top:8px">Motor TT</div>
+          <div class="fields">
+            <label class="field">Espessura <span class="val"><input type="number" id="car-mt" value="18.8" step="0.1" /><span class="unit">mm</span></span></label>
+            <label class="field">Fim → eixo <span class="val"><input type="number" id="car-axle" value="11.3" step="0.1" /><span class="unit">mm</span></span></label>
+            <label class="field">Eixo → 1º furo <span class="val"><input type="number" id="car-h1" value="8.5" step="0.1" /><span class="unit">mm</span></span></label>
+            <label class="field">Entre furos <span class="val"><input type="number" id="car-hs" value="17.5" step="0.1" /><span class="unit">mm</span></span></label>
+          </div>
+          <div class="label" style="margin-top:8px">ESP32 DevKit e roda boba</div>
+          <div class="fields">
+            <label class="field">Furos ESP32 (comprimento) <span class="val"><input type="number" id="car-bx" value="47" step="0.1" /><span class="unit">mm</span></span></label>
+            <label class="field">Furos ESP32 (largura) <span class="val"><input type="number" id="car-by" value="23.5" step="0.1" /><span class="unit">mm</span></span></label>
+            <label class="field">Furos da roda boba <span class="val"><input type="number" id="car-cs" value="23" step="0.1" /><span class="unit">mm</span></span></label>
+          </div>
+        </fieldset>
+        <fieldset id="pt-otto" hidden style="border:0;padding:0;margin:10px 0 0">
+          <div class="label">Corpo (medidas externas)</div>
+          <div class="fields">
+            <label class="field">Largura <span class="val"><input type="number" id="ot-w" value="64" min="50" /><span class="unit">mm</span></span></label>
+            <label class="field">Profundidade <span class="val"><input type="number" id="ot-d" value="56" min="45" /><span class="unit">mm</span></span></label>
+            <label class="field">Altura <span class="val"><input type="number" id="ot-h" value="52" min="45" /><span class="unit">mm</span></span></label>
+            <label class="field">Altura da perna <span class="val"><input type="number" id="ot-leg" value="36" min="30" /><span class="unit">mm</span></span></label>
+          </div>
+          <div class="label" style="margin-top:8px">Sensor HC-SR04</div>
+          <div class="fields">
+            <label class="field">Entre centros <span class="val"><input type="number" id="ot-ss" value="26" step="0.1" /><span class="unit">mm</span></span></label>
+            <label class="field">Diâmetro do furo <span class="val"><input type="number" id="ot-sd" value="16.5" step="0.1" /><span class="unit">mm</span></span></label>
+          </div>
+        </fieldset>
+        <p class="note" id="pt-error" role="alert"></p>
+        <div class="row end">
+          <button value="cancel">Voltar</button>
+          <button value="ok" class="primary">Gerar peças</button>
         </div>
       </form>
     </dialog>

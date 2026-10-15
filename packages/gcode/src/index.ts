@@ -11,3 +11,4 @@ export * from "./matrix.js";
 export * from "./parse.js";
 export * from "./box.js";
 export * from "./svg.js";
+export * from "./parts/index.js";

@@ -1,7 +1,11 @@
 import {
   boundsOf,
   boxDesign,
+  carDesign,
   DEFAULT_BOX,
+  DEFAULT_CAR,
+  DEFAULT_OTTO,
+  ottoDesign,
   DEFAULT_MATRIX,
   designToSvg,
   generateGcode,
@@ -279,6 +283,112 @@ export class Workspace {
       if (err) {
         // reabre com o motivo, sem perder o que foi digitado
         $("bx-error").textContent = err;
+        dlg.returnValue = "";
+        dlg.addEventListener("close", onClose, { once: true });
+        dlg.showModal();
+      }
+    };
+    dlg.addEventListener("close", onClose, { once: true });
+    dlg.returnValue = "";
+    dlg.showModal();
+  }
+
+  /** Peças educacionais: carrinho ou robô bípede. Devolve a mensagem de erro, se houver. */
+  private loadParts(): string | null {
+    const num = (id: string): number => Number($<HTMLInputElement>(id).value);
+    const mat = this.material($<HTMLSelectElement>("pt-material").value || null);
+    const cut = presetFor(mat, "cut");
+    cut.kerf = Math.max(0, num("pt-kerf"));
+    const engrave = presetFor(mat, "line");
+    const t = num("pt-t");
+    const area = this.limits.workArea;
+    const common = { x: 10, y: 10, gap: 5, maxRowWidth: area.x - 20, cut, engrave, thickness: t };
+    let design: ReturnType<typeof carDesign>;
+    try {
+      if ($<HTMLSelectElement>("pt-kind").value === "otto") {
+        design = ottoDesign({
+          ...DEFAULT_OTTO,
+          ...common,
+          body: { ...DEFAULT_OTTO.body, width: num("ot-w"), depth: num("ot-d"), height: num("ot-h") },
+          legHeight: num("ot-leg"),
+          sensor: { spacing: num("ot-ss"), holeD: num("ot-sd") },
+        });
+      } else {
+        design = carDesign({
+          ...DEFAULT_CAR,
+          ...common,
+          length: num("car-l"),
+          width: num("car-w"),
+          label: $<HTMLInputElement>("car-label").value,
+          motor: { ...DEFAULT_CAR.motor, thickness: num("car-mt"), axleFromEnd: num("car-axle"), axleToFirstHole: num("car-h1"), holeSpacing: num("car-hs") },
+          board: { ...DEFAULT_CAR.board, holesX: num("car-bx"), holesY: num("car-by") },
+          caster: { ...DEFAULT_CAR.caster, holeSpacing: num("car-cs") },
+        });
+      }
+    } catch (err) {
+      return (err as Error).message;
+    }
+    this.resetDesign(design.name);
+    const groups = new Map<string, string>();
+    const groupOf = (owner: string): string => {
+      if (!groups.has(owner)) groups.set(owner, newId("G"));
+      return groups.get(owner)!;
+    };
+    for (const g of design.vectors) {
+      const isCut = g.mode === "cut";
+      const owners = isCut ? design.cutOwners : design.engraveOwners;
+      const layer = makeLayer(isCut ? "Peças" : "Gravações", isCut ? "#ff5c5c" : "#4da3ff", g.mode, mat);
+      layer.settings[g.mode] = { ...g.settings };
+      const isHole = new Map<string, number>();
+      g.paths.forEach((p, i) => {
+        const owner = owners[i] ?? `Peça ${i + 1}`;
+        // nos cortes, os caminhos de cada peça vêm como furos… e por último o contorno
+        const next = owners[i + 1];
+        const label = isCut ? (next === owner ? `${owner}: furo ${(isHole.get(owner) ?? 0) + 1}` : owner) : `${owner}: gravação`;
+        if (isCut && next === owner) isHole.set(owner, (isHole.get(owner) ?? 0) + 1);
+        const sh = makeShape(p.points.slice(), label, p.closed);
+        sh.group = groupOf(owner);
+        layer.shapes.push(sh);
+      });
+      this.layers.push(layer);
+    }
+    this.view.fitTo(null);
+    this.refresh();
+    const b = designBounds(this.layers, null);
+    const fits = !!b && b.maxX <= area.x && b.maxY <= area.y;
+    this.host.toast(
+      fits
+        ? `${design.placed.length} peças geradas. Tocar numa peça seleciona ela inteira, com os furos.`
+        : "As peças não cabem todas na mesa: corte em duas vezes (desligue peças) ou use uma mesa maior.",
+    );
+    return null;
+  }
+
+  private openParts(): void {
+    const dlg = $<HTMLDialogElement>("dlg-parts");
+    const sel = $<HTMLSelectElement>("pt-material");
+    sel.innerHTML = this.materials.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("");
+    const syncMaterial = (): void => {
+      const mat = this.material(sel.value || null);
+      if (!mat) return;
+      $<HTMLInputElement>("pt-t").value = String(mat.thickness || 3);
+      $<HTMLInputElement>("pt-kerf").value = String(presetFor(mat, "cut").kerf ?? 0.15);
+    };
+    const syncKind = (): void => {
+      const otto = $<HTMLSelectElement>("pt-kind").value === "otto";
+      $("pt-car").hidden = otto;
+      $("pt-otto").hidden = !otto;
+    };
+    sel.onchange = syncMaterial;
+    $<HTMLSelectElement>("pt-kind").onchange = syncKind;
+    syncMaterial();
+    syncKind();
+    $("pt-error").textContent = "";
+    const onClose = (): void => {
+      if (dlg.returnValue !== "ok") return;
+      const err = this.loadParts();
+      if (err) {
+        $("pt-error").textContent = err;
         dlg.returnValue = "";
         dlg.addEventListener("close", onClose, { once: true });
         dlg.showModal();
@@ -643,7 +753,7 @@ export class Workspace {
     const first = items[0]!;
     const title =
       groups.size === 1
-        ? `<b>${esc(first.s.name)}</b> <span class="muted">${(b.maxX - b.minX).toFixed(1)} × ${(b.maxY - b.minY).toFixed(1)} mm · camada ${esc(first.l.name)}</span>`
+        ? `<b>${esc(first.s.group ? first.s.name.replace(/: (furo \d+|gravação)$/, "") : first.s.name)}</b> <span class="muted">${(b.maxX - b.minX).toFixed(1)} × ${(b.maxY - b.minY).toFixed(1)} mm · camada ${esc(first.l.name)}</span>`
         : `<b>${items.length} elementos selecionados</b>`;
     box.innerHTML = `<p>${title}</p>
       <div class="label">Operação</div>
@@ -1268,6 +1378,7 @@ export class Workspace {
     });
     $("p-materials").addEventListener("click", () => this.openMaterials());
     $("p-box-gen").addEventListener("click", () => this.openBox());
+    $("p-parts").addEventListener("click", () => this.openParts());
     $("p-export-svg").addEventListener("click", () => this.exportSvg());
     $("p-export-gcode").addEventListener("click", () => this.exportGcode());
     $("p-multi").addEventListener("click", (e) => {
