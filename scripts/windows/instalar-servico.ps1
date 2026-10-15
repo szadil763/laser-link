@@ -50,11 +50,19 @@ $NssmCmd = Get-Command $Nssm -ErrorAction SilentlyContinue
 if (-not $NssmCmd) { Fail "nssm.exe não encontrado. Baixe em https://nssm.cc/download, copie o nssm.exe (pasta win64) para C:\Windows\System32 ou passe -Nssm C:\caminho\nssm.exe." }
 $NssmExe = $NssmCmd.Source
 
+# O serviço em execução prende arquivos de node_modules (o driver da porta serial).
+# Para antes de reinstalar as dependências; o serviço volta a rodar no fim.
+if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
+  Write-Host "Parando o serviço $ServiceName para atualizar..." -ForegroundColor Yellow
+  & $NssmExe stop $ServiceName | Out-Null
+  Start-Sleep -Seconds 2
+}
+
 Write-Host "Compilando o LaserLink em $Root ..." -ForegroundColor Cyan
 Push-Location $Root
 try {
   npm ci
-  if ($LASTEXITCODE -ne 0) { Fail "npm ci falhou. Confira a conexão com a internet e tente de novo." }
+  if ($LASTEXITCODE -ne 0) { Fail "npm ci falhou. Veja as mensagens acima. Se aparecer EPERM, feche programas que usam a pasta C:\LaserLink (editor, antivírus) e rode este script de novo. Se falar de rede, confira a internet. O serviço ficou parado: rode o script de novo para religar." }
   npm run build
   if ($LASTEXITCODE -ne 0) { Fail "npm run build falhou. Veja as mensagens acima." }
 } finally {

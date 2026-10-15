@@ -85,7 +85,7 @@ Get-Service LaserLink      # estado
 Get-Content C:\LaserLink\apps\agent\logs\agente.log -Tail 30 -Wait   # acompanha o log
 ```
 
-Para atualizar o LaserLink: `git pull` e rode o `instalar-servico.ps1` de novo.
+Para atualizar o LaserLink: `git pull` e rode o `instalar-servico.ps1` de novo. O script para o serviço antes de reinstalar as dependências (o agente em execução prende o driver da porta serial) e religa no fim. Não atualize com um trabalho em andamento: parar o serviço cancela o trabalho com segurança.
 Para remover: `scripts\windows\desinstalar-servico.ps1`.
 
 ## 6. Acesso de fora de casa: Tailscale
