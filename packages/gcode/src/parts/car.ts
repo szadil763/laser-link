@@ -110,8 +110,8 @@ export function carPieces(o: CarOptions): Piece[] {
   const b = o.board;
   for (const sx of [-1, 1]) for (const sy of [-1, 1]) holes.push(circle(ex + (sx * b.holesX) / 2, W / 2 + (sy * b.holesY) / 2, b.holeD));
   engrave.push(rectC(ex, W / 2, b.length, b.width));
-  engrave.push(...textToPaths("ESP32", { height: 4, x: ex, y: W / 2 - 2, align: "center" }));
-  if (o.label.trim()) engrave.push(...textToPaths(o.label, { height: 5, x: L / 2, y: 6, align: "center" }));
+  engrave.push(...textToPaths("ESP32", { height: 4, x: ex, y: W / 2 - 2, align: "center", tag: "esp32" }));
+  if (o.label.trim()) engrave.push(...textToPaths(o.label, { height: 5, x: L / 2, y: 6, align: "center", tag: "label" }));
   const plate: Piece = { name: "Base do carrinho", outline: roundedRectPoints(0, 0, L, W, o.cornerRadius), holes, engrave, count: 1 };
 
   // suporte do motor: placa vertical pendurada, abas em cima

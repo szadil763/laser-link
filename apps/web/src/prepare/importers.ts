@@ -1,4 +1,4 @@
-import { boundsOf, type Point } from "@laserlink/gcode";
+import { boundsOf, parseDxf, type Point } from "@laserlink/gcode";
 import type { Material } from "@laserlink/shared";
 import { makeLayer, makeShape, rebuildImage, type ImageItem, type Layer } from "./model.js";
 
@@ -103,6 +103,40 @@ export function importSvg(text: string, materials: readonly Material[]): SvgImpo
     layers.push(layer);
   }
   return { layers, count };
+}
+
+/** Cores ACI mais comuns do DXF. */
+const ACI: Record<number, [string, string]> = {
+  1: ["#ff5c5c", "Vermelho"],
+  2: ["#e0c34d", "Amarelo"],
+  3: ["#45c46a", "Verde"],
+  4: ["#3fc6d1", "Ciano"],
+  5: ["#4da3ff", "Azul"],
+  6: ["#d36be0", "Magenta"],
+  7: ["#c7cbd1", "Branco/preto"],
+};
+
+/**
+ * Lê um DXF (pacote gcode, sem navegador): uma camada do LaserLink por camada do DXF.
+ * Vermelho (cor 1) vira Cortar; as outras, Gravar linha. Posiciona a 20 mm da origem.
+ */
+export function importDxf(text: string, materials: readonly Material[]): SvgImport & { skipped: number } {
+  const r = parseDxf(text);
+  const b = boundsOf(r.layers.flatMap((l) => l.paths.flatMap((p) => p.points)))!;
+  const mdf = materials[0];
+  let count = 0;
+  const layers = r.layers.map((dl) => {
+    const [color, colorName] = ACI[dl.color] ?? ["#c7cbd1", `Cor ${dl.color}`];
+    const layer = makeLayer(dl.name === "0" ? colorName : dl.name, color, dl.color === 1 ? "cut" : "line", mdf);
+    dl.paths.forEach((p, k) => {
+      const pts = p.points.map(([x, y]) => [x - b.minX + 20, y - b.minY + 20] as Point);
+      layer.shapes.push(makeShape(pts, `${layer.name} ${k + 1}`, p.closed));
+      count++;
+    });
+    return layer;
+  });
+  const skipped = Object.values(r.skipped).reduce((a, n) => a + n, 0);
+  return { layers, count, skipped };
 }
 
 /** Abre PNG/JPG e cria a imagem com 60 mm de largura a 20 mm da origem. */

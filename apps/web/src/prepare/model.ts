@@ -20,6 +20,18 @@ export interface Shape {
   mode: VectorMode | null;
   /** Elementos do mesmo grupo (ex.: letras de um texto) são selecionados juntos. */
   group?: string;
+  /** Letra de um texto editável (dois cliques na mesa). */
+  text?: ShapeText;
+}
+
+/** O que está escrito num texto, para editar com dois cliques. Todas as letras do texto têm o mesmo `id`. */
+export interface ShapeText {
+  id: string;
+  value: string;
+  height: number;
+  align: "left" | "center" | "right";
+  /** Altura do texto na mesa quando foi escrito (para saber se ele foi esticado depois). */
+  h0: number;
 }
 
 export interface Layer {

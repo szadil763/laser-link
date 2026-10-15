@@ -205,14 +205,14 @@ export function boxDesign(o: BoxOptions = DEFAULT_BOX): JobDesign & { panels: Ar
   const vectors: JobDesign["vectors"] = [{ name: "Peças da caixa", mode: "cut", settings: o.cut, paths: cut }];
   if (o.labels) {
     const labels: Path[] = [];
-    for (const p of placed) {
+    placed.forEach((p, i) => {
       // letra entre 2,5 e 6 mm, reduzida até o nome caber longe dos dentes
       const usable = p.width - 4 * o.thickness - 2 * o.finger;
       const h = Math.min(6, p.height * 0.12, usable / textWidth(p.name, 1));
       if (h >= 2.5) {
-        labels.push(...textToPaths(p.name, { height: h, x: p.at[0] + p.width / 2, y: p.at[1] + p.height / 2 - h / 2, align: "center" }));
+        labels.push(...textToPaths(p.name, { height: h, x: p.at[0] + p.width / 2, y: p.at[1] + p.height / 2 - h / 2, align: "center", tag: `nome-${i}` }));
       }
-    }
+    });
     if (labels.length) vectors.push({ name: "Nomes das peças", mode: "line", settings: o.label, paths: labels });
   }
   const kind = o.lid ? "com tampa" : "aberta";

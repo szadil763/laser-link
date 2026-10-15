@@ -51,6 +51,17 @@ export class JobPreview {
     this.requestDraw();
   }
 
+  /** Tira o trabalho da mesa "Na máquina" (o cabeçote continua aparecendo). */
+  clear(): void {
+    this.parsed = null;
+    this.lineToSent.clear();
+    this.segSent = [];
+    this.sent = 0;
+    $("c-name").textContent = "";
+    $("c-empty").hidden = false;
+    this.requestDraw();
+  }
+
   setProgress(sent: number): void {
     this.sent = sent;
     this.requestDraw();

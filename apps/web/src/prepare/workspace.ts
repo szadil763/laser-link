@@ -7,6 +7,7 @@ import {
   DEFAULT_OTTO,
   ottoDesign,
   DEFAULT_MATRIX,
+  designToDxf,
   designToSvg,
   generateGcode,
   matrixTest,
@@ -19,12 +20,14 @@ import {
   type GenerateResult,
   type Point,
   type Segment,
+  type TextTag,
   type VectorMode,
 } from "@laserlink/gcode";
 import { DEFAULT_MATERIALS, type AgentLimits, type ClientMessage, type Material, type MaterialMode, type MaterialPreset } from "@laserlink/shared";
 import { BedView } from "../bed-view.js";
 import { bedColors } from "../theme.js";
-import { importImage, importSvg } from "./importers.js";
+import { importDxf, importImage, importSvg } from "./importers.js";
+import { parseProject, PROJECT_EXT, serializeProject } from "./project.js";
 import {
   History,
   MODE_INFO,
@@ -71,6 +74,13 @@ const fmtTime = (sec: number): string => {
   return h ? `${h} h ${m} min` : m ? `${m} min ${String(r).padStart(2, "0")} s` : `${r} s`;
 };
 
+/** Arquivo aberto com o seletor do navegador (Chrome/Edge em https ou localhost), para "Salvar" sem perguntar de novo. */
+interface FileHandle {
+  readonly name: string;
+  createWritable(): Promise<{ write(data: string): Promise<void>; close(): Promise<void> }>;
+}
+type SavePicker = (options: { suggestedName: string; types: Array<{ description: string; accept: Record<string, string[]> }> }) => Promise<FileHandle>;
+
 interface Anim {
   segments: Segment[];
   cumulative: number[];
@@ -102,6 +112,8 @@ export class Workspace {
   private head: Point = [0, 0];
   private headLive = false;
   private readonly view: BedView;
+  private fileHandle: FileHandle | null = null;
+  private dragSaved = false;
 
   constructor(private readonly host: PrepareHost) {
     this.view = new BedView($<HTMLCanvasElement>("p-canvas"), this.limits.workArea, () => this.requestDraw(), {
@@ -109,18 +121,20 @@ export class Workspace {
       onDragStart: (px) => {
         if (this.anim) return false;
         const hit = this.hitTest(px);
-        if (hit && this.selected.has(hit.id)) {
-          this.history.push(this.layers);
-          return true;
-        }
-        return false;
+        this.dragSaved = false;
+        return !!hit && this.selected.has(hit.id);
       },
       onDragMove: (dx, dy) => {
+        // só grava o "desfazer" quando o elemento realmente se move (um clique simples não conta)
+        if (!this.dragSaved) {
+          this.history.push(this.layers);
+          this.dragSaved = true;
+        }
         for (const { s } of this.selItems()) s.points = s.points.map(([x, y]) => [x + dx, y + dy] as Point);
         this.draw();
       },
       onDragEnd: () => this.refresh(),
-      onDoubleClick: () => this.fitPiece(),
+      onDoubleClick: (px) => this.doubleClick(px),
       onHover: (mm) => this.host.onCursor?.(mm),
     });
     this.bind();
@@ -254,11 +268,13 @@ export class Workspace {
         for (const p of g.paths) {
           const sh = makeShape(p.points.slice(), "Nomes das peças", p.closed);
           sh.group = group;
+          this.tagShape(sh, p.text);
           layer.shapes.push(sh);
         }
       }
       this.layers.push(layer);
     }
+    this.finishTexts();
     this.view.fitTo(null);
     this.refresh();
     const b = designBounds(this.layers, null);
@@ -355,10 +371,12 @@ export class Workspace {
         if (isCut && next === owner) isHole.set(owner, (isHole.get(owner) ?? 0) + 1);
         const sh = makeShape(p.points.slice(), label, p.closed);
         sh.group = groupOf(owner);
+        this.tagShape(sh, p.text);
         layer.shapes.push(sh);
       });
       this.layers.push(layer);
     }
+    this.finishTexts();
     this.view.fitTo(null);
     this.refresh();
     const b = designBounds(this.layers, null);
@@ -429,6 +447,13 @@ export class Workspace {
     if (this.image?.enabled) this.host.toast("SVG baixado. A imagem não entra no SVG; use Baixar G-code para levá-la junto.");
   }
 
+  private exportDxf(): void {
+    const design = toJobDesign(this.designName || "Trabalho", this.layers, null);
+    if (!design.vectors.length) return this.host.toast("Nada para exportar: a mesa não tem linhas nem cortes (imagens não vão no DXF).");
+    this.download(`${this.fileBase()}.dxf`, designToDxf(design), "application/dxf");
+    this.host.toast("DXF baixado em mm, uma camada por operação (CORTAR, GRAVAR_LINHA…).");
+  }
+
   private exportGcode(): void {
     const r = this.regenerateNow();
     if (!r) return this.host.toast("Nada para exportar.");
@@ -450,12 +475,14 @@ export class Workspace {
     const group = newId("G");
     const label = text.length > 24 ? `${text.slice(0, 24)}…` : text;
     this.selected.clear();
-    for (const p of textToPaths(text, { height, x, y })) {
+    for (const p of textToPaths(text, { height, x, y, tag: newId("T") })) {
       const s = makeShape(p.points, `Texto “${label}”`, p.closed);
       s.group = group;
+      if (p.text) s.text = { ...p.text, h0: 0 };
       layer.shapes.push(s);
       this.selected.add(s.id);
     }
+    this.finishTexts();
     if (!this.designName) this.designName = "Texto";
     this.refresh();
     this.host.toast("Texto adicionado e selecionado: arraste ou use os campos para posicionar.");
@@ -464,7 +491,18 @@ export class Workspace {
   private async handleFile(file: File | undefined): Promise<void> {
     if (!file) return;
     try {
-      if (/\.svg$/i.test(file.name) || file.type === "image/svg+xml") {
+      if (/\.laserlink$/i.test(file.name)) {
+        await this.openProjectText(await file.text());
+      } else if (/\.dxf$/i.test(file.name)) {
+        const { layers, count, skipped } = importDxf(await file.text(), this.materials);
+        this.resetDesign(file.name);
+        this.layers = layers;
+        this.view.fitTo(null);
+        this.refresh();
+        this.host.toast(
+          `${file.name}: ${count} elementos em ${layers.length} camada(s).${skipped ? ` ${skipped} item(ns) sem linhas (textos, cotas, hachuras) ficaram de fora.` : ""}`,
+        );
+      } else if (/\.svg$/i.test(file.name) || file.type === "image/svg+xml") {
         const { layers, count } = importSvg(await file.text(), this.materials);
         this.resetDesign(file.name);
         this.layers = layers;
@@ -480,10 +518,179 @@ export class Workspace {
         this.refresh();
         this.host.toast(`${file.name}: ${img.w} × ${img.h} mm, ${img.res} linhas/mm. Ajuste posição e tamanho no cartão da imagem.`);
       } else {
-        this.host.toast("Formato não suportado. Use SVG, PNG ou JPG.");
+        this.host.toast("Formato não suportado. Use SVG, DXF, PNG, JPG ou um projeto .laserlink.");
       }
     } catch (err) {
       this.host.toast((err as Error).message);
+    }
+  }
+
+  // ---------- textos editáveis ----------
+
+  /** Copia a marca de texto do gerador para o elemento (o id ganha um prefixo único por desenho). */
+  private tagShape(sh: Shape, tag: TextTag | undefined): void {
+    if (!tag) return;
+    sh.text = { id: `${this.textPrefix}${tag.id}`, value: tag.value, height: tag.height, align: tag.align, h0: 0 };
+  }
+
+  private textPrefix = "";
+
+  /** Calcula a altura na mesa de cada texto recém-criado (h0) e troca o prefixo para o próximo desenho. */
+  private finishTexts(): void {
+    const boxes = this.textBoxes(false);
+    for (const l of this.layers) for (const s of l.shapes) if (s.text && !s.text.h0) s.text.h0 = boxes.get(s.text.id)?.h ?? s.text.height;
+    this.textPrefix = `${newId("T")}:`;
+  }
+
+  /** Retângulo de cada texto na mesa. */
+  private textBoxes(enabledOnly = true): Map<string, Bounds & { h: number }> {
+    const boxes = new Map<string, Bounds & { h: number }>();
+    for (const l of this.layers) {
+      if (enabledOnly && !l.enabled) continue;
+      for (const s of l.shapes) {
+        if (!s.text) continue;
+        const b = boundsOf(s.points)!;
+        const cur = boxes.get(s.text.id);
+        const u = cur ? { minX: Math.min(cur.minX, b.minX), minY: Math.min(cur.minY, b.minY), maxX: Math.max(cur.maxX, b.maxX), maxY: Math.max(cur.maxY, b.maxY) } : b;
+        boxes.set(s.text.id, { ...u, h: u.maxY - u.minY });
+      }
+    }
+    return boxes;
+  }
+
+  /** Dois cliques: num texto, abre a edição; fora, ajusta a vista ao desenho. */
+  private doubleClick(px: Point): void {
+    if (this.anim) return;
+    const p = this.view.toMm(px[0], px[1]);
+    const pad = (6 * this.view.dpr) / this.view.s;
+    let best: string | null = null;
+    let bestArea = Infinity;
+    for (const [id, b] of this.textBoxes()) {
+      if (p[0] < b.minX - pad || p[0] > b.maxX + pad || p[1] < b.minY - pad || p[1] > b.maxY + pad) continue;
+      const area = (b.maxX - b.minX) * (b.maxY - b.minY);
+      if (area < bestArea) {
+        bestArea = area;
+        best = id;
+      }
+    }
+    if (best) this.editText(best);
+    else this.fitPiece();
+  }
+
+  private editText(id: string): void {
+    const found = this.layers.flatMap((l) => l.shapes.filter((s) => s.text?.id === id).map((s) => ({ s, l })));
+    const first = found[0];
+    if (!first?.s.text) return;
+    const tag = first.s.text;
+    const old = boundsOf(found.flatMap(({ s }) => s.points))!;
+    const stretch = tag.h0 > 0 ? (old.maxY - old.minY) / tag.h0 : 1;
+    $<HTMLInputElement>("te-text").value = tag.value;
+    $<HTMLInputElement>("te-height").value = String(Math.round(tag.height * stretch * 10) / 10);
+    const dlg = $<HTMLDialogElement>("dlg-text-edit");
+    dlg.addEventListener(
+      "close",
+      () => {
+        if (dlg.returnValue !== "ok") return;
+        const value = $<HTMLInputElement>("te-text").value.trim();
+        const height = Math.max(1, Number($<HTMLInputElement>("te-height").value) || tag.height);
+        const paths = value ? textToPaths(value, { height, x: 0, y: 0, align: tag.align }) : [];
+        const nb = boundsOf(paths.flatMap((p) => p.points));
+        if (!nb) return this.host.toast("Escreva o texto. Para apagar o texto, selecione e use Excluir.");
+        // o texto novo fica onde o antigo estava (mesmo centro; mesma ponta quando alinhado à esquerda/direita)
+        const dx = tag.align === "left" ? old.minX - nb.minX : tag.align === "right" ? old.maxX - nb.maxX : (old.minX + old.maxX) / 2 - (nb.minX + nb.maxX) / 2;
+        const dy = (old.minY + old.maxY) / 2 - (nb.minY + nb.maxY) / 2;
+        this.history.push(this.layers);
+        const layer = first.l;
+        const index = layer.shapes.indexOf(first.s);
+        for (const l of this.layers) l.shapes = l.shapes.filter((s) => s.text?.id !== id);
+        const label = value.length > 24 ? `${value.slice(0, 24)}…` : value;
+        const name = first.s.name.startsWith("Texto “") ? `Texto “${label}”` : first.s.name;
+        const text = { ...tag, value, height, h0: nb.maxY - nb.minY };
+        const fresh = paths.map((p) => {
+          const sh = makeShape(p.points.map(([x, y]) => [x + dx, y + dy] as Point), name, p.closed, first.s.mode);
+          if (first.s.group) sh.group = first.s.group;
+          sh.text = text;
+          return sh;
+        });
+        layer.shapes.splice(Math.max(0, Math.min(index, layer.shapes.length)), 0, ...fresh);
+        this.selected.clear();
+        for (const sh of fresh) this.selected.add(sh.id);
+        this.refresh();
+        this.host.toast("Texto trocado. Ctrl+Z desfaz.");
+      },
+      { once: true },
+    );
+    dlg.returnValue = "";
+    dlg.showModal();
+    $<HTMLInputElement>("te-text").select();
+  }
+
+  // ---------- projeto (Arquivo) ----------
+
+  private async openProjectText(text: string): Promise<void> {
+    const p = await parseProject(text, this.materials);
+    this.resetDesign(p.name);
+    this.layers = p.layers;
+    this.image = p.image;
+    this.fileHandle = null;
+    this.finishTexts();
+    this.view.fitTo(null);
+    this.refresh();
+    this.host.toast(`Projeto "${p.name}" aberto.`);
+  }
+
+  /** Salvar (asNew = Salvar como). Com o seletor de arquivos do navegador quando existe; senão, baixa o arquivo. */
+  async saveProject(asNew: boolean): Promise<void> {
+    if (!this.layers.some((l) => l.shapes.length) && !this.image) return this.host.toast("Nada para salvar: a mesa está vazia.");
+    const picker = (window as unknown as { showSaveFilePicker?: SavePicker }).showSaveFilePicker;
+    if (picker) {
+      try {
+        if (asNew || !this.fileHandle) {
+          this.fileHandle = await picker({
+            suggestedName: `${this.fileBase()}${PROJECT_EXT}`,
+            types: [{ description: "Projeto do LaserLink", accept: { "application/json": [PROJECT_EXT] } }],
+          });
+          this.designName = this.fileHandle.name.replace(/\.laserlink$/i, "");
+        }
+        const w = await this.fileHandle.createWritable();
+        await w.write(serializeProject(this.designName || "Projeto", this.layers, this.image));
+        await w.close();
+        this.renderLegend();
+        return this.host.toast(`Projeto salvo: ${this.fileHandle.name}`);
+      } catch (err) {
+        if ((err as DOMException).name === "AbortError") return;
+        this.fileHandle = null; // sem permissão: cai no download
+      }
+    }
+    if (asNew) {
+      const name = await this.askName();
+      if (!name) return;
+      this.designName = name;
+      this.renderLegend();
+    }
+    this.download(`${this.fileBase()}${PROJECT_EXT}`, serializeProject(this.designName || "Projeto", this.layers, this.image), "application/json");
+    this.host.toast(`Projeto baixado como ${this.fileBase()}${PROJECT_EXT} (pasta de downloads).`);
+  }
+
+  private askName(): Promise<string | null> {
+    const dlg = $<HTMLDialogElement>("dlg-saveas");
+    const input = $<HTMLInputElement>("sa-name");
+    input.value = this.designName || "Projeto";
+    return new Promise((resolve) => {
+      dlg.addEventListener("close", () => resolve(dlg.returnValue === "ok" && input.value.trim() ? input.value.trim() : null), { once: true });
+      dlg.returnValue = "";
+      dlg.showModal();
+      input.select();
+    });
+  }
+
+  /** "Limpar mesa" na vista Desenho. */
+  async clear(): Promise<void> {
+    if (!this.layers.some((l) => l.shapes.length) && !this.image) return this.host.toast("A mesa já está vazia.");
+    if (await this.host.confirm("Limpar a mesa?", "Todos os elementos e a imagem saem da mesa. Salve antes se quiser guardar o projeto.", "Limpar mesa", true)) {
+      this.resetDesign("");
+      this.fileHandle = null;
+      this.refresh();
     }
   }
 
@@ -854,7 +1061,7 @@ export class Workspace {
       this.refresh();
     });
     // um menu aberto fecha o outro e fecha ao clicar fora
-    const menus = [...$("p-props").querySelectorAll("details")];
+    const menus = [...document.querySelectorAll<HTMLDetailsElement>("details.menu")];
     for (const m of menus) {
       m.addEventListener("toggle", () => {
         if (!m.open) return;
@@ -1383,13 +1590,40 @@ export class Workspace {
   // ---------- eventos ----------
 
   private bind(): void {
-    $<HTMLInputElement>("p-file-svg").addEventListener("change", (e) => {
+    $<HTMLInputElement>("p-file-import").addEventListener("change", (e) => {
       const input = e.target as HTMLInputElement;
       void this.handleFile(input.files?.[0]).finally(() => (input.value = ""));
     });
-    $<HTMLInputElement>("p-file-img").addEventListener("change", (e) => {
+    $<HTMLInputElement>("p-file-project").addEventListener("change", (e) => {
       const input = e.target as HTMLInputElement;
-      void this.handleFile(input.files?.[0]).finally(() => (input.value = ""));
+      const file = input.files?.[0];
+      input.value = "";
+      if (file) void file.text().then((t) => this.openProjectText(t)).catch((err: Error) => this.host.toast(err.message));
+    });
+    $("file-menu").addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-file]");
+      if (!btn) return;
+      $<HTMLDetailsElement>("file-menu").open = false;
+      const act = btn.dataset.file;
+      if (act === "open") $("p-file-project").click();
+      else if (act === "save") void this.saveProject(false);
+      else if (act === "saveas") void this.saveProject(true);
+      else if (act === "import") $("p-file-import").click();
+      else if (act === "sample") this.loadSample();
+      else if (act === "export-svg") this.exportSvg();
+      else if (act === "export-dxf") this.exportDxf();
+      else if (act === "export-gcode") this.exportGcode();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (!(e.ctrlKey || e.metaKey) || document.querySelector("dialog[open]")) return;
+      const key = e.key.toLowerCase();
+      if (key === "s") {
+        e.preventDefault();
+        void this.saveProject(e.shiftKey);
+      } else if (key === "o") {
+        e.preventDefault();
+        $("p-file-project").click();
+      }
     });
     const box = $("p-box");
     box.addEventListener("dragover", (e) => {
@@ -1401,14 +1635,6 @@ export class Workspace {
       e.preventDefault();
       box.classList.remove("drag");
       void this.handleFile(e.dataTransfer?.files[0]);
-    });
-    $("p-sample").addEventListener("click", () => this.loadSample());
-    $("p-clear").addEventListener("click", async () => {
-      if (!this.layers.length && !this.image) return;
-      if (await this.host.confirm("Limpar o desenho?", "Todos os elementos e a imagem saem da mesa.", "Limpar", true)) {
-        this.resetDesign("");
-        this.refresh();
-      }
     });
     $("p-text").addEventListener("click", () => {
       const dlg = $<HTMLDialogElement>("dlg-text");
@@ -1425,8 +1651,6 @@ export class Workspace {
     $("p-materials").addEventListener("click", () => this.openMaterials());
     $("p-box-gen").addEventListener("click", () => this.openBox());
     $("p-parts").addEventListener("click", () => this.openParts());
-    $("p-export-svg").addEventListener("click", () => this.exportSvg());
-    $("p-export-gcode").addEventListener("click", () => this.exportGcode());
     $("p-multi").addEventListener("click", (e) => {
       this.multi = !this.multi;
       (e.currentTarget as HTMLElement).setAttribute("aria-pressed", String(this.multi));

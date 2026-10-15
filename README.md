@@ -4,10 +4,10 @@ Controle remoto de cortadora/gravadora a laser **GRBL**. Dois pedaços de softwa
 
 - **Agente** (`apps/agent`): roda no PC ligado à laser por USB. Fala serial com o GRBL, faz o streaming do G-code e serve a interface e um WebSocket protegido por token.
 - **Interface web** (`apps/web`): abre em qualquer navegador (PC de projeto, celular). Uma tela só, no estilo de programa de desenho:
-  - **barra de cima**: importar, exemplo, limpar, desfazer, baixar SVG/G-code e o estado da conexão;
+  - **barra de cima**: menu **Arquivo** (abrir projeto, salvar, salvar como, importar SVG/DXF/imagem, exemplo, exportar SVG/DXF/G-code), desfazer e o estado da conexão;
   - **barra de medidas**: X, Y, largura, altura, girar, espelhar, alinhar, contorno deslocado, duplicar e excluir o que está selecionado;
   - **ferramentas** à esquerda: vários, texto, caixa, peças, teste de matriz, deslocamentos e mesa clara/escura;
-  - **mesa** no centro, com **Desenho** (o projeto) ou **Na máquina** (o trabalho enviado e o cabeçote em tempo real);
+  - **mesa** no centro, com **Desenho** (o projeto) ou **Na máquina** (o trabalho enviado e o cabeçote em tempo real), e o botão **Limpar mesa** para a vista que está à mostra;
   - **faixa de operações** embaixo da mesa: Cortar, Gravar linha, Preenchido, Detalhado;
   - **painel à direita** com abas Camadas, Máquina (conexão, home, origem, mover, arquivo G-code), Fila e Registro, e embaixo o resumo com Enquadrar, Simular, Enviar e Guardar na fila. Com trabalho rodando aparecem Pausar, Retomar e PARAR.
   O G-code é gerado pelo próprio LaserLink (`packages/gcode`).
@@ -92,7 +92,7 @@ npm run dev:web     # interface em http://localhost:5173; informe ws://localhost
 
 ## Preparar um trabalho
 
-1. **Importe** um SVG (cada cor vira uma camada; vermelho vira Cortar) ou uma imagem PNG/JPG, ou arraste o arquivo para a mesa. Também dá para adicionar **Texto** (fonte de traço único) ou gerar um **Teste de matriz** potência × velocidade.
+1. **Importe** (Arquivo > Importar) um SVG ou DXF (cada cor ou camada do DXF vira uma camada; vermelho vira Cortar) ou uma imagem PNG/JPG, ou arraste o arquivo para a mesa. Também dá para adicionar **Texto** (fonte de traço único) ou gerar um **Teste de matriz** potência × velocidade.
 2. **Escolha a operação**: cada camada tem uma operação padrão, e cada elemento pode ter a sua (selecione na mesa e use a faixa de operações embaixo dela, ou a lista "Elementos" da camada):
    - **Cortar**: atravessa o material (com compensação de kerf).
    - **Gravar linha**: marca o contorno.
@@ -103,6 +103,11 @@ npm run dev:web     # interface em http://localhost:5173; informe ws://localhost
 5. **Simular** mostra o percurso exato do G-code que será enviado. **Enquadrar** percorre o contorno na máquina com o laser desligado (ou em potência mínima, com confirmação).
 6. **Enviar para a laser** pede confirmação, manda o arquivo inteiro ao agente e troca a mesa para **Na máquina**, para acompanhar.
 7. **Guardar na fila** manda o arquivo ao agente sem ligar o laser (veja abaixo).
+8. **Salvar** (Ctrl+S) guarda o projeto num arquivo `.laserlink` (formato próprio, com camadas, operações e a imagem). **Arquivo > Abrir projeto** (Ctrl+O) reabre. No Chrome/Edge abertos em `localhost`, o navegador pergunta onde salvar; pelo endereço do Tailscale o arquivo vai para a pasta de downloads.
+
+**Textos editáveis:** dê **dois cliques** num texto da mesa (o da ferramenta Texto, os nomes gravados da caixa ou o texto do carrinho) para reescrever. O texto novo fica no mesmo lugar.
+
+**DXF:** linhas, polilinhas (com arcos), círculos, arcos, elipses, splines e blocos. Textos, cotas e hachuras do DXF ficam de fora (converta em linhas no programa de desenho). A unidade vem do arquivo; sem ela, milímetros.
 
 ### Peças prontas
 
@@ -142,6 +147,7 @@ apps/web         interface web (Vite + TypeScript)
   src/prepare/       desenho: modelo, importação, mesa, edição
   src/preview.ts     mesa "Na máquina" (trabalho enviado e cabeçote)
   src/theme.ts       cores da mesa clara/escura
+  src/prepare/project.ts  arquivo de projeto .laserlink
   src/chime.ts       sons de aviso (Web Audio)
 packages/gcode   gerador de G-code puro, com testes (kerf, hachura, raster, texto, matriz, caixa, peças, SVG)
 packages/shared  tipos e validação das mensagens do protocolo, materiais de exemplo

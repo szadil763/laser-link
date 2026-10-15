@@ -30,12 +30,15 @@
 - `offset.ts`: kerf e contorno deslocado com clipper-lib (Clipper de Angus Johnson, licença Boost).
 - `hatch.ts`: hachura par-ímpar em zigue-zague. `raster.ts`: limiar, Floyd-Steinberg e trechos por linha.
 - `text.ts`: fonte própria de traço único. `matrix.ts`: teste potência × velocidade. `frame.ts`: enquadrar. `parse.ts`: lê G-code para pré-visualizar e simular (o agente usa para estimar o tempo dos trabalhos da fila).
+- `dxf.ts`: leitura de DXF (linhas, polilinhas com bulge, círculos, arcos, elipses, splines, blocos, unidades) e exportação em DXF R12 com uma camada por operação.
+- `text.ts` marca as letras com o texto escrito (`Path.text`), para a interface editar com dois cliques.
 - `box.ts`: caixa com encaixes de dentes (número ímpar de dentes por borda; frente e trás ficam com os cantos). `svg.ts`: exporta o projeto em SVG (mm).
 - `parts/`: peças planas (`shapes.ts`, `layout.ts`), chassi do carrinho (`car.ts`) e robô bípede (`otto.ts`). Cada peça vira um grupo na interface.
 
 **Interface: desenho (`apps/web/src/prepare`)**
 - `model.ts`: camadas, elementos (com operação própria), imagem, desfazer e conversão para o gerador.
-- `importers.ts`: SVG lido pelo próprio navegador (curvas amostradas, camadas por cor) e PNG/JPG.
+- `importers.ts`: SVG lido pelo próprio navegador (curvas amostradas, camadas por cor), DXF (pelo `packages/gcode`) e PNG/JPG.
+- `project.ts`: projeto `.laserlink` (JSON próprio com camadas, elementos e a imagem em PNG embutido).
 - `workspace.ts`: mesa "Desenho", seleção, barra de medidas, faixa de operações, camadas, materiais, simular (percorre o G-code real), enquadrar e enviar.
 - `bed-view.ts` (usado pelas duas mesas): câmera com zoom, arrastar, pinça, grade em mm e posição do mouse. `preview.ts`: mesa "Na máquina", com a trajetória e o cabeçote ao vivo. `theme.ts`: cores da mesa clara/escura (guardadas no navegador).
 - Tela única: barra de cima, barra de medidas, ferramentas à esquerda, mesa no centro, faixa de operações, painel à direita em abas (Camadas, Máquina, Fila, Registro) e barra de status. No computador a página não rola; no celular tudo empilha.

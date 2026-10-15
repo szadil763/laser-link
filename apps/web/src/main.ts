@@ -98,6 +98,12 @@ function showView(view: View): void {
   if (design) workspace.shown();
 }
 $("view-design").addEventListener("click", () => showView("design"));
+$("stage-clear").addEventListener("click", () => {
+  if (!$("p-box").hidden) return void workspace.clear();
+  if (currentJob) return toast("Há um trabalho em andamento: a mesa mostra o progresso dele. Pare ou espere terminar para limpar.");
+  preview.clear();
+  $<HTMLInputElement>("file").value = "";
+});
 $("view-machine").addEventListener("click", () => showView("machine"));
 
 // ---------- mesa clara ou escura ----------

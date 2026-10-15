@@ -38,7 +38,12 @@ export function layoutPieces(
     const at = pos[i]!;
     const dx = at[0] - s.minX;
     const dy = at[1] - s.minY;
-    const move = (path: Path): Path => ({ closed: path.closed, points: path.points.map(([x, y]) => [x + dx, y + dy] as Point) });
+    const move = (path: Path): Path => {
+      const moved: Path = { closed: path.closed, points: path.points.map(([x, y]) => [x + dx, y + dy] as Point) };
+      // cada cópia da peça tem o seu próprio texto
+      if (path.text) moved.text = { ...path.text, id: `${i}:${path.text.id}` };
+      return moved;
+    };
     cut.push(...p.holes.map(move), { closed: true, points: p.outline.map(([x, y]) => [x + dx, y + dy] as Point) });
     engrave.push(...p.engrave.map(move));
     for (let k = 0; k <= p.holes.length; k++) cutOwners.push(p.name);

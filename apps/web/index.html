@@ -9,14 +9,25 @@
     <div class="app">
       <header class="app-top">
         <h1>LaserLink</h1>
-        <div class="filebar" role="toolbar" aria-label="Arquivo">
-          <label class="btn">Importar SVG<input type="file" id="p-file-svg" accept=".svg,image/svg+xml" /></label>
-          <label class="btn">Importar imagem<input type="file" id="p-file-img" accept="image/png,image/jpeg" /></label>
-          <button id="p-sample">Exemplo</button>
-          <button id="p-clear">Limpar</button>
+        <div class="filebar" role="toolbar" aria-label="Arquivo e edição">
+          <details class="menu" id="file-menu">
+            <summary>Arquivo</summary>
+            <div class="menu-body file-menu" role="menu">
+              <button data-file="open" role="menuitem">Abrir projeto… <kbd>Ctrl+O</kbd></button>
+              <button data-file="save" role="menuitem">Salvar <kbd>Ctrl+S</kbd></button>
+              <button data-file="saveas" role="menuitem">Salvar como… <kbd>Ctrl+Shift+S</kbd></button>
+              <p class="label">Importar</p>
+              <button data-file="import" role="menuitem">Importar SVG, DXF ou imagem…</button>
+              <button data-file="sample" role="menuitem">Abrir exemplo</button>
+              <p class="label">Exportar</p>
+              <button data-file="export-svg" role="menuitem">Exportar SVG</button>
+              <button data-file="export-dxf" role="menuitem">Exportar DXF</button>
+              <button data-file="export-gcode" role="menuitem">Exportar G-code</button>
+            </div>
+          </details>
           <button id="p-undo" title="Desfazer (Ctrl+Z)">Desfazer</button>
-          <button id="p-export-svg">Baixar SVG</button>
-          <button id="p-export-gcode">Baixar G-code</button>
+          <input type="file" id="p-file-import" accept=".svg,.dxf,image/svg+xml,image/png,image/jpeg" hidden />
+          <input type="file" id="p-file-project" accept=".laserlink,application/json" hidden />
         </div>
         <div class="badges" aria-live="polite">
           <span id="link-badge" class="badge" data-level="bad">Desconectado</span>
@@ -114,6 +125,7 @@
             <button role="tab" id="view-machine" aria-selected="false" aria-controls="c-box">Na máquina</button>
           </div>
           <div class="legend" id="p-legend"></div>
+          <button id="stage-clear" class="stage-clear" title="Limpar a mesa que está à mostra">Limpar mesa</button>
           <div class="legend" id="c-legend" hidden>
             <span style="--c:var(--bed-todo)">Grava (laser aceso)</span>
             <span class="dash" style="--c:#6b7480">Deslocamento sem laser</span>
@@ -305,6 +317,33 @@
         <div class="row end">
           <button value="cancel">Voltar</button>
           <button value="ok" class="primary">Gerar matriz</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="dlg-text-edit" aria-labelledby="te-title">
+      <form method="dialog">
+        <h2 id="te-title">Editar texto</h2>
+        <p class="note">O texto novo fica no mesmo lugar do antigo. Fonte de traço único: maiúsculas, números e sinais comuns; acentos são removidos.</p>
+        <div class="fields" style="margin-top:10px">
+          <label class="field" style="grid-column: 1 / -1">Texto <input type="text" id="te-text" maxlength="200" /></label>
+          <label class="field">Altura <span class="val"><input type="number" id="te-height" min="1" max="200" step="0.5" /><span class="unit">mm</span></span></label>
+        </div>
+        <div class="row end">
+          <button value="cancel">Voltar</button>
+          <button value="ok" class="primary">Trocar texto</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="dlg-saveas" aria-labelledby="sa-title">
+      <form method="dialog">
+        <h2 id="sa-title">Salvar como</h2>
+        <p class="note">O projeto vai para a pasta de downloads do navegador, com a extensão .laserlink. Para abrir depois: Arquivo &gt; Abrir projeto.</p>
+        <label class="field" style="margin-top:10px">Nome do projeto <input type="text" id="sa-name" maxlength="80" /></label>
+        <div class="row end">
+          <button value="cancel">Voltar</button>
+          <button value="ok" class="primary">Salvar</button>
         </div>
       </form>
     </dialog>

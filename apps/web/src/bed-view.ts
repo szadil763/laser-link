@@ -14,7 +14,8 @@ export interface BedInteractions {
   /** Arraste de objeto, deslocamento em mm desde o último evento. */
   onDragMove?(dxMm: number, dyMm: number): void;
   onDragEnd?(): void;
-  onDoubleClick?(): void;
+  /** Dois cliques, em pixels do canvas. */
+  onDoubleClick?(px: Point): void;
   /** Mouse sobre a mesa (sem botão apertado), em mm; null quando sai. */
   onHover?(mm: Point | null): void;
 }
@@ -286,6 +287,6 @@ export class BedView {
     c.addEventListener("pointerleave", () => this.interactions.onHover?.(null));
     c.addEventListener("pointerup", end);
     c.addEventListener("pointercancel", end);
-    c.addEventListener("dblclick", () => this.interactions.onDoubleClick?.());
+    c.addEventListener("dblclick", (e) => this.interactions.onDoubleClick?.(this.local(e)));
   }
 }

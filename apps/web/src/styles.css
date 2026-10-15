@@ -63,7 +63,8 @@ button[aria-pressed="true"] { background: #2b3a55; border-color: var(--accent); 
 .app-top { grid-area: top; display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; background: var(--panel); border-radius: 10px; padding: 6px 10px; }
 .app-top h1 { font-size: 18px; }
 .filebar { display: flex; gap: 6px; flex-wrap: wrap; flex: 1 1 auto; }
-.filebar button, .filebar .btn { min-height: 38px; padding: 6px 10px; font-size: 14px; }
+.filebar button, .filebar .btn, .filebar summary { min-height: 38px; padding: 6px 12px; font-size: 14px; }
+.filebar .file-menu button { font-size: 14px; }
 .app-top .badges { margin-left: auto; }
 #alerts { grid-area: alerts; display: grid; gap: 8px; }
 #alerts:not(:has(> :not([hidden]))) { display: none; }
@@ -88,6 +89,12 @@ details.menu > summary:focus-visible { outline: 2px solid var(--accent); outline
 summary[aria-disabled] { opacity: .5; pointer-events: none; }
 .menu-body { position: absolute; z-index: 6; top: calc(100% + 4px); left: 0; width: max-content; max-width: min(360px, 90vw); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, .45); }
 .menu-body .label { margin: 0; }
+.file-menu { min-width: 260px; gap: 4px; }
+.file-menu button { justify-content: space-between; display: flex; align-items: center; gap: 16px; text-align: left; min-height: 38px; background: transparent; border-color: transparent; }
+.file-menu button:hover { background: #343841; }
+.file-menu .label { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
+kbd { font: 11px var(--mono); color: var(--muted); }
+.stage-clear { margin-left: auto; min-height: 36px; order: 3; }
 details.menu.flip .menu-body { left: auto; right: 0; }
 
 .rail { grid-area: rail; display: flex; gap: 6px; overflow-x: auto; background: var(--panel); border-radius: 10px; padding: 6px; }
@@ -96,7 +103,7 @@ details.menu.flip .menu-body { left: auto; right: 0; }
 
 .stage { grid-area: stage; display: flex; flex-direction: column; gap: 8px; padding: 10px; }
 .stage-head { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; }
-.stage-head .legend { margin-top: 0; }
+.stage-head .legend { margin-top: 0; flex: 1 1 200px; min-width: 0; }
 .viewswitch button { min-height: 36px; }
 .viewswitch button[aria-selected="true"] { background: #2b3a55; border-color: var(--accent); font-weight: 600; }
 #p-sim-bar { margin: 0; }
