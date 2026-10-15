@@ -14,7 +14,7 @@
 - `serial-link.ts`: interface `SerialLink` e a implementação com `serialport`. Reabre a porta criando uma instância nova.
 - `grbl.ts`: streaming com contagem de caracteres (fila única para jog, comandos e trabalho), espera o `Grbl 1.1…` após cada reset, interpreta `ok`, `error:`, `ALARM:` e `<Estado|MPos:…|WCO:…>`, `abortJob` (hold, reset, `M5`) e `safetyHold` (hold e `0x9E` quando o GRBL confirma o Hold).
 - `gcode-check.ts`: verificação pura do arquivo inteiro antes do envio (potência, área útil, arcos, comandos recusados).
-- `agent.ts`: regras independentes do transporte: dono do trabalho, heartbeat, pausa por perda de conexão, cancelamento após `reconnectGraceSec`, reabertura da serial, log de trabalhos e recuperação após reinício.
+- `agent.ts`: regras independentes do transporte: dono do trabalho, heartbeat, pausa por perda de conexão, cancelamento após `reconnectGraceSec`, reabertura da serial, log de trabalhos, recuperação após reinício e fila de trabalhos (na memória, conferida ao guardar e de novo ao iniciar; nunca inicia sozinha).
 - `job-log.ts`: log JSON Lines em `apps/agent/logs/jobs.jsonl`.
 - `static.ts`: serve a interface compilada (`apps/web/dist`) na mesma porta do WebSocket.
 - `sim/fake-grbl.ts`: GRBL falso para testes e para `"serialPort": "sim"`.
@@ -22,14 +22,16 @@
 
 **Interface (`apps/web`)**
 - `connection.ts`: WebSocket com reconexão automática e ping a cada 2 s, com timer num Web Worker (`tick-worker.ts`) para não sofrer o limite de timers de abas em segundo plano.
-- `main.ts`: estado da conexão e da laser, posição, jog, origem, envio de arquivo com confirmação, aviso de trabalho pausado (Retomar/Cancelar), problemas de trabalho recusado, último resultado e Wake Lock na aba dona.
+- `main.ts`: estado da conexão e da laser, posição, jog, origem, envio de arquivo com confirmação, aviso de trabalho pausado (Retomar/Cancelar), problemas de trabalho recusado, último resultado, Wake Lock na aba dona, fila e aviso de fim de trabalho (com som de `chime.ts`).
 
 **Gerador (`packages/gcode`)**, puro e testado
 - `emit.ts`: gera o G-code do projeto (M4, S proporcional, ordem imagem → detalhado → preenchido → linhas → cortes, passes, comentários por camada, sem repetir palavras modais).
 - `order.ts`: vizinho mais próximo; no corte, nada é cortado antes do que está dentro dele.
 - `offset.ts`: kerf e contorno deslocado com clipper-lib (Clipper de Angus Johnson, licença Boost).
 - `hatch.ts`: hachura par-ímpar em zigue-zague. `raster.ts`: limiar, Floyd-Steinberg e trechos por linha.
-- `text.ts`: fonte própria de traço único. `matrix.ts`: teste potência × velocidade. `frame.ts`: enquadrar. `parse.ts`: lê G-code para pré-visualizar e simular.
+- `text.ts`: fonte própria de traço único. `matrix.ts`: teste potência × velocidade. `frame.ts`: enquadrar. `parse.ts`: lê G-code para pré-visualizar e simular (o agente usa para estimar o tempo dos trabalhos da fila).
+- `box.ts`: caixa com encaixes de dentes (número ímpar de dentes por borda; frente e trás ficam com os cantos). `svg.ts`: exporta o projeto em SVG (mm).
+- `parts/`: peças planas (`shapes.ts`, `layout.ts`), chassi do carrinho (`car.ts`) e robô bípede (`otto.ts`). Cada peça vira um grupo na interface.
 
 **Interface: aba Preparar trabalho (`apps/web/src/prepare`)**
 - `model.ts`: camadas, elementos (com operação própria), imagem, desfazer e conversão para o gerador.
@@ -66,4 +68,4 @@
 
 ## Fases futuras
 
-Geradores paramétricos (caixas com encaixes, peças educacionais), fila de trabalhos e notificação. Veja `ROADMAP.md`.
+Câmera, nesting e editor vetorial completo. Veja `ROADMAP.md`.

@@ -21,7 +21,7 @@ Monorepo npm workspaces:
 2. Se o cliente desconectar (ou ficar mudo 6 s) com trabalho em andamento: `!` (feed hold) e, já em Hold, `0x9E` para desligar o laser. Se ninguém reconectar em `reconnectGraceSec`, cancelar com reset e `M5`. Um `M5` direto durante o Hold não serve: ele fica na fila e só roda ao retomar.
 3. Todo WebSocket exige token. Sem token válido, fechar a conexão.
 4. Comandos de tempo real do GRBL (`!`, `~`, `?`, `0x18`, `0x9E`) passam fora da fila de linhas.
-5. Não adicionar funcionalidade que ligue o laser sem confirmação explícita do usuário na UI (no protocolo: `confirmLaserOn: true`).
+5. Não adicionar funcionalidade que ligue o laser sem confirmação explícita do usuário na UI (no protocolo: `confirmLaserOn: true`). Isso vale para a fila: o próximo trabalho nunca começa sozinho (`queueStart` exige `confirmLaserOn: true`).
 6. Não expor portas na internet; documentar Tailscale ou LAN.
 
 ## Streaming GRBL
@@ -48,4 +48,4 @@ npm run dev:web
 
 ## Próximos passos
 
-Veja `docs/ROADMAP.md`. Fases 1 e 2 prontas no simulador; falta validar na bancada (`docs/TESTES-NA-BANCADA.md`). Próxima: **3 (diferenciais)**.
+Veja `docs/ROADMAP.md`. Fases 1, 2 e 3 prontas no simulador; falta validar na bancada (`docs/TESTES-NA-BANCADA.md`). Depois: câmera, nesting e editor vetorial (seção "Depois" do roadmap).

@@ -7,7 +7,7 @@ Controle remoto de cortadora/gravadora a laser **GRBL**. Dois pedaços de softwa
   - **Controle**: conexão, jog, origem, pausa, retomar, PARAR e a pré-visualização do trabalho com o cabeçote em tempo real.
   - **Preparar trabalho**: importa SVG e imagens, define o que é corte, linha, preenchido ou detalhado, edita, simula, enquadra e envia. O G-code é gerado pelo próprio LaserLink (`packages/gcode`).
 
-> Status: **Fases 1 e 2 concluídas no simulador**, aguardando os testes na laser real (`docs/TESTES-NA-BANCADA.md`). Próxima: Fase 3 (geradores paramétricos e fila de trabalhos). Veja `docs/ROADMAP.md`.
+> Status: **Fases 1, 2 e 3 concluídas no simulador**, aguardando os testes na laser real (`docs/TESTES-NA-BANCADA.md`). Veja `docs/ROADMAP.md`.
 
 ## Por que assim
 
@@ -97,6 +97,24 @@ npm run dev:web     # interface em http://localhost:5173; informe ws://localhost
 4. **Edite** se precisar: arraste o elemento selecionado, use os campos de posição e tamanho, girar, espelhar, alinhar, duplicar, contorno deslocado e desfazer (Ctrl+Z). Roda do mouse dá zoom; arrastar o fundo move a vista.
 5. **Simular** mostra o percurso exato do G-code que será enviado. **Enquadrar** percorre o contorno na máquina com o laser desligado (ou em potência mínima, com confirmação).
 6. **Enviar para a laser** pede confirmação, manda o arquivo inteiro ao agente e abre a aba Controle para acompanhar.
+7. **Guardar na fila** manda o arquivo ao agente sem ligar o laser (veja abaixo).
+
+### Peças prontas
+
+- **Caixa**: caixa com encaixes de dentes, com ou sem tampa, medidas internas ou externas, kerf do material.
+- **Peças**: chassi do carrinho (2 motores TT, roda boba, ESP32 DevKit) e robô bípede tipo Otto, todo em MDF.
+- **Baixar SVG** e **Baixar G-code** salvam o projeto no seu computador.
+
+Medidas, montagem e o que conferir com paquímetro: `docs/PECAS.md`.
+
+## Fila de trabalhos
+
+- **Guardar na fila** (na aba Controle, com um arquivo escolhido, ou em Preparar trabalho): o agente confere o arquivo e guarda. Nada liga o laser.
+- A fila fica no agente: o PC e o celular veem a mesma. Dá para subir, descer e tirar trabalhos.
+- **A fila nunca começa um trabalho sozinha.** Cada **Iniciar** pede confirmação, e o agente confere o arquivo de novo (a origem pode ter mudado).
+- Quando um trabalho termina, aparece um aviso no topo com som (três notas quando conclui, notas graves quando para por erro ou cancelamento), o título da aba muda e o próximo da fila aparece com o botão **Iniciar próximo da fila**. O som pode ser desligado na seção Trabalho.
+- O navegador só libera o som depois do primeiro clique na página.
+- A fila fica na memória do agente: se ele reiniciar, a fila se perde.
 
 ## Logs
 
@@ -118,7 +136,8 @@ apps/agent       agente Node.js (serialport + ws)
 apps/web         interface web (Vite + TypeScript)
   src/prepare/       aba Preparar trabalho (modelo, importação, mesa, edição)
   src/preview.ts     pré-visualização da aba Controle
-packages/gcode   gerador de G-code puro, com testes (kerf, hachura, raster, texto, matriz)
+  src/chime.ts       sons de aviso (Web Audio)
+packages/gcode   gerador de G-code puro, com testes (kerf, hachura, raster, texto, matriz, caixa, peças, SVG)
 packages/shared  tipos e validação das mensagens do protocolo, materiais de exemplo
 scripts/windows  instalação do agente como serviço (NSSM)
 docs/            arquitetura, protocolo, segurança, Windows, testes na bancada, roadmap

@@ -29,12 +29,16 @@
 - [x] Extra (adiantado): texto em fonte de traço único e contorno deslocado (offset)
 - [ ] Testes com a laser real (ver `TESTES-NA-BANCADA.md`, seção Fase 2)
 
-## Fase 3: diferenciais
-- [ ] a) Gerador paramétrico de caixas com encaixes (finger joints) e kerf
-- [ ] b) Peças dos projetos educacionais (carrinho RC em MDF, robô bípede tipo Otto)
-- [ ] c) Fila de trabalhos e notificação ao terminar
+## Fase 3: diferenciais (concluída no simulador; falta a bancada)
+- [x] a) Gerador paramétrico de caixas com encaixes (finger joints) e kerf, com exportação SVG/G-code
+- [x] b) Peças dos projetos educacionais: chassi do carrinho (2 motores TT, roda boba, ESP32) e robô bípede tipo Otto em MDF (ver `PECAS.md`)
+- [x] c) Fila de trabalhos no agente (nunca inicia sozinha) e aviso com som na interface ao terminar
+- [ ] Testes com a laser real (ver `TESTES-NA-BANCADA.md`, seção Fase 3)
 
 ## Depois
+- [ ] Guardar a fila em disco para sobreviver a um reinício do agente
+- [ ] Notificação fora da interface (ntfy ou Telegram), se um dia fizer falta
+- [ ] Otto versão 2 depois da montagem de teste (folgas, braços)
 - [ ] Câmera e timelapse
 - [ ] Nesting
 - [ ] Editor vetorial completo: edição de nós, booleanas (unir, subtrair, interseção), matriz de cópias
