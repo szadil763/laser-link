@@ -161,4 +161,8 @@ docs/            arquitetura, protocolo, segurança, Windows, testes na bancada,
 
 ## Licença
 
-MIT. Este projeto é independente e não é afiliado ao LightBurn nem copia seu código, interface ou formato de arquivo.
+Software proprietário: © 2026 Adilson, todos os direitos reservados (veja `LICENSE`). Cópia, modificação, distribuição ou uso comercial só com autorização escrita.
+
+As bibliotecas de terceiros incluídas (serialport, ws, clipper-lib e dependências) continuam sob as próprias licenças, todas compatíveis com uso comercial: veja `LICENCAS-DE-TERCEIROS.md`. Depois de mudar dependências, gere o arquivo de novo com `node scripts/licencas-terceiros.mjs`.
+
+Este projeto é independente e não é afiliado ao LightBurn nem copia seu código, interface ou formato de arquivo.

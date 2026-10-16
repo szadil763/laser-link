@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Controle remoto de laser GRBL: agente no PC da máquina + interface web no PC de projeto",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "workspaces": [
     "packages/*",
     "apps/*"
