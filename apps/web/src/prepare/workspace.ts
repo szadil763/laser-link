@@ -1501,9 +1501,11 @@ export class Workspace {
     if (this.resultError) limitsEl.innerHTML = `<div class="warnbox">${esc(this.resultError)}</div>`;
     else if (out) {
       limitsEl.innerHTML = `<div class="warnbox">O trabalho passa da área útil (${area.x} × ${area.y} mm${this.image ? ", contando o overscan da imagem" : ""}). O agente vai recusar. Mova os elementos ou reduza o desenho.</div>`;
-    } else if (r) {
-      limitsEl.textContent = `Área útil ${area.x} × ${area.y} mm · maior potência S${r.maxS} de S${this.limits.maxSpindle} · M4 (potência dinâmica)${this.haveLimits ? "" : " · conecte ao agente para usar os limites reais da máquina"}`;
     } else limitsEl.textContent = "";
+    // detalhes do trabalho: aparecem ao parar o mouse sobre o resumo, sem ocupar espaço na barra
+    $("p-summary").title = r
+      ? `Área útil ${area.x} × ${area.y} mm · maior potência S${r.maxS} de S${this.limits.maxSpindle} · M4 (potência dinâmica)${this.haveLimits ? "" : " · conecte ao agente para usar os limites reais da máquina"}`
+      : "";
     const empty = !r;
     $<HTMLButtonElement>("p-send").disabled = empty || out;
     $<HTMLButtonElement>("p-enqueue").disabled = empty || out;

@@ -41,7 +41,7 @@
 - `project.ts`: projeto `.laserlink` (JSON próprio com camadas, elementos e a imagem em PNG embutido).
 - `workspace.ts`: mesa "Desenho", seleção, barra de medidas, faixa de operações, camadas, materiais, simular (percorre o G-code real), enquadrar e enviar.
 - `bed-view.ts` (usado pelas duas mesas): câmera com zoom, arrastar, pinça, grade em mm e posição do mouse. `preview.ts`: mesa "Na máquina", com a trajetória e o cabeçote ao vivo. `theme.ts`: cores da mesa clara/escura (guardadas no navegador).
-- Tela única: barra de cima, barra de medidas, ferramentas à esquerda, mesa no centro, faixa de operações, painel à direita em abas (Camadas, Máquina, Fila, Registro) e barra de status. No computador a página não rola; no celular tudo empilha.
+- Tela única: barra de cima, barra de medidas, ferramentas à esquerda, mesa no centro, faixa de operações, barra de envio (com Pausar e PARAR durante o trabalho), janela à direita com abas (Camadas, Máquina, Fila, Registro; pode ser ampliada sobre a mesa sem mudar o tamanho dela) e barra de status. No computador a página não rola; no celular tudo empilha.
 
 **Shared (`packages/shared`)**
 - `protocol.ts`: tipos das mensagens e constantes do heartbeat. Única fonte de verdade.

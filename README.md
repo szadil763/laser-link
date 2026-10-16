@@ -9,7 +9,8 @@ Controle remoto de cortadora/gravadora a laser **GRBL**. Dois pedaços de softwa
   - **ferramentas** à esquerda: vários, área (caixa de seleção), texto, caixa, peças, teste de matriz, deslocamentos e mesa clara/escura;
   - **mesa** no centro, com **Desenho** (o projeto) ou **Na máquina** (o trabalho enviado e o cabeçote em tempo real), e o botão **Limpar mesa** para a vista que está à mostra;
   - **faixa de operações** embaixo da mesa: Cortar, Gravar linha, Preenchido, Detalhado;
-  - **painel à direita** com abas Camadas, Máquina (conexão, home, origem, mover, arquivo G-code), Fila e Registro, e embaixo o resumo com Enquadrar, Simular, Enviar e Guardar na fila. Com trabalho rodando aparecem Pausar, Retomar e PARAR.
+  - **janela à direita** com Camadas, Máquina (conexão, home, origem, mover, arquivo G-code), Fila e Registro. A janela ativa usa a coluna inteira. Para ver tudo de uma vez, use o botão **Ampliar** (⤢, ao lado das abas) ou o menu **Janelas**: a janela cobre a mesa e o Esc volta. Atalhos: Alt+1 a Alt+4 trocam de janela e Alt+0 amplia ou reduz.
+  - **barra de envio** embaixo da mesa, sempre à vista: resumo, Enquadrar, Simular, Enviar e Guardar na fila. Com trabalho rodando aparecem Pausar, Retomar e PARAR.
   O G-code é gerado pelo próprio LaserLink (`packages/gcode`).
 
 > Status: **Fases 1, 2 e 3 concluídas no simulador**, aguardando os testes na laser real (`docs/TESTES-NA-BANCADA.md`). Veja `docs/ROADMAP.md`.
@@ -123,7 +124,7 @@ Medidas, montagem e o que conferir com paquímetro: `docs/PECAS.md`.
 
 ## Fila de trabalhos
 
-- **Guardar na fila** (embaixo do painel direito, ou na aba Máquina com um arquivo G-code escolhido): o agente confere o arquivo e guarda. Nada liga o laser. A fila fica na aba **Fila**.
+- **Guardar na fila** (na barra de envio embaixo da mesa, ou na janela Máquina com um arquivo G-code escolhido): o agente confere o arquivo e guarda. Nada liga o laser. A fila fica na aba **Fila**.
 - A fila fica no agente: o PC e o celular veem a mesma. Dá para subir, descer e tirar trabalhos.
 - **A fila nunca começa um trabalho sozinha.** Cada **Iniciar** pede confirmação, e o agente confere o arquivo de novo (a origem pode ter mudado).
 - Quando um trabalho termina, aparece um aviso no topo com som (três notas quando conclui, notas graves quando para por erro ou cancelamento), o título da aba muda e o próximo da fila aparece com o botão **Iniciar próximo da fila**. O som pode ser desligado na seção Trabalho.

@@ -60,6 +60,17 @@
               <button data-edit="unlockall" role="menuitem">Destravar tudo</button>
             </div>
           </details>
+          <details class="menu" id="win-menu">
+            <summary>Janelas</summary>
+            <div class="menu-body file-menu" role="menu">
+              <button data-win="st-layers" role="menuitem">Camadas <kbd>Alt+1</kbd></button>
+              <button data-win="st-machine" role="menuitem">Máquina <kbd>Alt+2</kbd></button>
+              <button data-win="st-queue" role="menuitem">Fila <kbd>Alt+3</kbd></button>
+              <button data-win="st-log" role="menuitem">Registro <kbd>Alt+4</kbd></button>
+              <span class="label">Tamanho</span>
+              <button data-win="wide" role="menuitem">Ampliar ou reduzir a janela <kbd>Alt+0</kbd></button>
+            </div>
+          </details>
           <button id="p-undo" title="Desfazer (Ctrl+Z)">Desfazer</button>
           <input type="file" id="p-file-import" accept=".svg,.dxf,image/svg+xml,image/png,image/jpeg" hidden />
           <input type="file" id="p-file-project" accept=".laserlink,application/json" hidden />
@@ -158,6 +169,7 @@
         </div>
         <div class="canvas-box" id="p-box">
           <canvas id="p-canvas" aria-label="Área útil da laser com o desenho. Toque num elemento para selecioná-lo; arraste o selecionado para mover. Roda do mouse dá zoom."></canvas>
+          <div class="bed-warn" id="p-limits" role="status"></div>
           <div class="empty" id="p-empty">Importe um SVG ou uma imagem (ou arraste o arquivo para cá), use as ferramentas à esquerda ou carregue o exemplo.</div>
           <div class="hud">
             <span class="chip" id="p-hud-pos">X 0.0 Y 0.0</span>
@@ -198,81 +210,7 @@
         <span class="note" id="p-ops-hint">Selecione um elemento na mesa para mudar a operação.</span>
       </div>
 
-      <aside class="side" aria-label="Painéis">
-        <div class="tabs side-tabs" role="tablist" aria-label="Painéis">
-          <button role="tab" id="st-layers" aria-controls="sp-layers" aria-selected="true">Camadas</button>
-          <button role="tab" id="st-machine" aria-controls="sp-machine" aria-selected="false">Máquina</button>
-          <button role="tab" id="st-queue" aria-controls="sp-queue" aria-selected="false">Fila <span id="queue-count"></span></button>
-          <button role="tab" id="st-log" aria-controls="sp-log" aria-selected="false">Registro</button>
-        </div>
-        <div class="side-body">
-          <div id="sp-layers" role="tabpanel" aria-labelledby="st-layers">
-            <div class="row" style="justify-content: space-between; margin-bottom: 10px">
-              <h2 style="margin:0">Camadas</h2>
-              <button id="p-materials">Materiais</button>
-            </div>
-            <div class="layers" id="p-layers"><p class="note">Nenhum desenho ainda.</p></div>
-          </div>
-
-          <div id="sp-machine" role="tabpanel" aria-labelledby="st-machine" hidden>
-            <section>
-              <h2>Conexão</h2>
-              <div class="row">
-                <input id="url" placeholder="ws://IP-DA-LASER:8787" size="26" aria-label="Endereço do agente" />
-                <input id="token" type="password" placeholder="token" size="18" aria-label="Token" />
-                <button id="connect">Conectar</button>
-                <button id="disconnect">Desconectar</button>
-              </div>
-              <div class="row">
-                <label class="check"><input type="checkbox" id="remember-token" checked /> Lembrar o token neste computador</label>
-                <button id="forget-token">Esquecer token</button>
-              </div>
-              <p class="note">Desmarque em computador compartilhado: aí o token some quando o navegador fecha.</p>
-            </section>
-            <section>
-              <h2>Máquina</h2>
-              <div class="row">
-                <button id="home">Home</button>
-                <button id="origin">Definir origem</button>
-                <button id="unlock">Destravar</button>
-              </div>
-            </section>
-            <section>
-              <h2>Mover</h2>
-              <div class="row" style="margin-bottom:10px">
-                <label>Passo (mm) <input id="step" type="number" value="10" min="0.1" max="500" step="0.1" style="width:80px" /></label>
-                <label>Velocidade (mm/min) <input id="feed" type="number" value="3000" min="10" max="6000" step="100" style="width:90px" /></label>
-              </div>
-              <div class="jog">
-                <span></span><button data-axis="Y" data-dir="1">Y+</button><span></span>
-                <button data-axis="X" data-dir="-1">X−</button><span></span><button data-axis="X" data-dir="1">X+</button>
-                <span></span><button data-axis="Y" data-dir="-1">Y−</button><span></span>
-              </div>
-            </section>
-            <section>
-              <h2>Arquivo G-code</h2>
-              <div class="row">
-                <input id="file" type="file" accept=".gcode,.nc,.gc,.txt" aria-label="Arquivo G-code" />
-                <button id="start" class="warn">Iniciar trabalho</button>
-                <button id="enqueue">Guardar na fila</button>
-              </div>
-              <p id="limits" class="muted"></p>
-              <p id="last-result" class="muted" hidden></p>
-              <label class="check"><input type="checkbox" id="sound-on" checked /> Tocar som quando um trabalho terminar</label>
-            </section>
-          </div>
-
-          <div id="sp-queue" role="tabpanel" aria-labelledby="st-queue" hidden>
-            <p class="note">A fila fica no agente e todos os aparelhos veem a mesma. Ela nunca começa um trabalho sozinha: cada início pede confirmação.</p>
-            <ol class="queue" id="queue-list"></ol>
-            <p class="muted" id="queue-empty">Nenhum trabalho na fila. Use "Guardar na fila" aqui embaixo ou na aba Máquina.</p>
-          </div>
-
-          <div id="sp-log" role="tabpanel" aria-labelledby="st-log" hidden>
-            <div id="log" aria-live="polite"></div>
-          </div>
-        </div>
-
+      <div class="sendbar" id="sendbar" role="group" aria-label="Enviar e acompanhar o trabalho">
         <div class="dock" id="dock-job" hidden>
           <p id="job-line" class="muted">Nenhum trabalho em andamento.</p>
           <progress id="progress" value="0" max="1"></progress>
@@ -284,12 +222,11 @@
         </div>
 
         <div class="dock" id="dock-send">
-          <div class="summary">
+          <div class="summary" id="p-summary">
             <div class="stat"><b id="p-sum-size">—</b><span>tamanho (mm)</span></div>
             <div class="stat"><b id="p-sum-time">—</b><span>tempo estimado</span></div>
             <div class="stat"><b id="p-sum-lines">—</b><span>linhas G-code</span></div>
           </div>
-          <div id="p-limits" class="note"></div>
           <div class="frame-row">
             <span class="label">Enquadrar com</span>
             <div class="seg" id="p-frame-mode">
@@ -304,6 +241,83 @@
             <button id="p-enqueue">Guardar na fila</button>
           </div>
         </div>
+      </div>
+
+      <aside class="side" id="side" aria-label="Janelas">
+        <div class="tabs side-tabs" role="tablist" aria-label="Janelas">
+          <button role="tab" id="st-layers" aria-controls="sp-layers" aria-selected="true">Camadas</button>
+          <button role="tab" id="st-machine" aria-controls="sp-machine" aria-selected="false">Máquina</button>
+          <button role="tab" id="st-queue" aria-controls="sp-queue" aria-selected="false">Fila <span id="queue-count"></span></button>
+          <button role="tab" id="st-log" aria-controls="sp-log" aria-selected="false">Registro</button>
+          <button id="side-wide" class="icon-btn side-wide" aria-pressed="false" title="Ampliar a janela sobre a mesa (Esc volta)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg><span class="sr">Ampliar janela</span></button>
+        </div>
+        <div class="side-body">
+          <div id="sp-layers" role="tabpanel" aria-labelledby="st-layers">
+            <div class="row" style="justify-content: space-between; margin-bottom: 10px">
+              <h2 style="margin:0">Camadas</h2>
+              <button id="p-materials">Materiais</button>
+            </div>
+            <div class="layers" id="p-layers"><p class="note">Nenhum desenho ainda.</p></div>
+          </div>
+
+          <div id="sp-machine" role="tabpanel" aria-labelledby="st-machine" hidden>
+            <details class="conn" id="conn-box" open>
+              <summary><h2>Conexão</h2> <span class="note" id="conn-sum">Desconectado</span></summary>
+              <div class="row">
+                <input id="url" placeholder="ws://IP-DA-LASER:8787" size="26" aria-label="Endereço do agente" />
+                <input id="token" type="password" placeholder="token" size="18" aria-label="Token" />
+                <button id="connect">Conectar</button>
+                <button id="disconnect">Desconectar</button>
+              </div>
+              <div class="row">
+                <label class="check"><input type="checkbox" id="remember-token" checked /> Lembrar o token neste computador</label>
+                <button id="forget-token">Esquecer token</button>
+              </div>
+              <p class="note">Desmarque em computador compartilhado: aí o token some quando o navegador fecha.</p>
+              <p id="limits" class="note"></p>
+            </details>
+            <section>
+              <h2>Máquina e movimento</h2>
+              <div class="row" style="margin-bottom:10px">
+                <button id="home">Home</button>
+                <button id="origin">Definir origem</button>
+                <button id="unlock">Destravar</button>
+              </div>
+              <div class="move-grid">
+                <div class="move-fields">
+                  <label class="field">Passo (mm) <input id="step" type="number" value="10" min="0.1" max="500" step="0.1" /></label>
+                  <label class="field">Velocidade (mm/min) <input id="feed" type="number" value="3000" min="10" max="6000" step="100" /></label>
+                </div>
+                <div class="jog">
+                  <span></span><button data-axis="Y" data-dir="1">Y+</button><span></span>
+                  <button data-axis="X" data-dir="-1">X−</button><span></span><button data-axis="X" data-dir="1">X+</button>
+                  <span></span><button data-axis="Y" data-dir="-1">Y−</button><span></span>
+                </div>
+              </div>
+            </section>
+            <section>
+              <h2>Arquivo G-code</h2>
+              <div class="row">
+                <input id="file" type="file" accept=".gcode,.nc,.gc,.txt" aria-label="Arquivo G-code" />
+                <button id="start" class="warn">Iniciar trabalho</button>
+                <button id="enqueue">Guardar na fila</button>
+              </div>
+              <p id="last-result" class="muted" hidden></p>
+              <label class="check"><input type="checkbox" id="sound-on" checked /> Tocar som quando um trabalho terminar</label>
+            </section>
+          </div>
+
+          <div id="sp-queue" role="tabpanel" aria-labelledby="st-queue" hidden>
+            <p class="note">A fila fica no agente e todos os aparelhos veem a mesma. Ela nunca começa um trabalho sozinha: cada início pede confirmação.</p>
+            <ol class="queue" id="queue-list"></ol>
+            <p class="muted" id="queue-empty">Nenhum trabalho na fila. Use "Guardar na fila" embaixo da mesa ou na janela Máquina.</p>
+          </div>
+
+          <div id="sp-log" role="tabpanel" aria-labelledby="st-log" hidden>
+            <div id="log" aria-live="polite"></div>
+          </div>
+        </div>
+
       </aside>
 
       <footer class="statusbar" aria-label="Situação">

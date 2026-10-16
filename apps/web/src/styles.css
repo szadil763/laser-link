@@ -58,7 +58,7 @@ button[aria-pressed="true"] { background: #2b3a55; border-color: var(--accent); 
 .app {
   display: grid; gap: 8px; padding: 8px;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "top" "alerts" "props" "rail" "stage" "ops" "side" "status";
+  grid-template-areas: "top" "alerts" "props" "rail" "stage" "ops" "send" "side" "status";
 }
 .app-top { grid-area: top; display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; background: var(--panel); border-radius: 10px; padding: 6px 10px; }
 .app-top h1 { font-size: 18px; }
@@ -125,11 +125,21 @@ details.menu.flip .menu-body { left: auto; right: 0; }
 .side-tabs button { flex: 1 1 0; min-width: 0; padding: 8px 4px; font-size: 14px; white-space: nowrap; }
 .side-body { padding: 10px; }
 .side-body > [role="tabpanel"] { display: grid; gap: 10px; align-content: start; }
-.side-body section { background: var(--panel-2); padding: 10px; }
-.dock { border-top: 1px solid var(--line); padding: 10px; display: grid; gap: 8px; }
+.side-body section, .side-body details.conn { background: var(--panel-2); padding: 10px; border-radius: 8px; }
+details.conn > summary { cursor: pointer; display: flex; align-items: baseline; gap: 10px; min-height: 32px; }
+details.conn > summary h2 { margin: 0; }
+details.conn[open] > summary { margin-bottom: 8px; }
+details.conn > :not(summary) + :not(summary) { margin-top: 8px; }
+.side-wide { flex: 0 0 auto !important; min-width: 40px !important; display: none !important; }
+/* o conteúdo não cabe: o botão de ampliar fica destacado */
+.side-wide.more { border: 1px solid var(--accent) !important; color: var(--accent); }
+/* barra de envio: embaixo da mesa, sempre à vista (Pausar e PARAR aparecem aqui durante o trabalho) */
+.sendbar { grid-area: send; background: var(--panel); border-radius: 10px; display: grid; min-width: 0; }
+.dock { padding: 10px; display: grid; gap: 8px; min-width: 0; }
+.dock + .dock { border-top: 1px solid var(--line); }
 .dock p { margin: 0; }
-#dock-job { background: #1d2a40; }
-.side.job-on #dock-send .summary, .side.job-on #p-limits, .side.job-on #dock-send .frame-row { display: none; }
+#dock-job { background: #1d2a40; border-radius: 10px; }
+.sendbar.job-on #dock-send .summary, .sendbar.job-on #dock-send .frame-row { display: none; }
 .frame-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .frame-row .seg button { min-height: 36px; }
 
@@ -146,32 +156,67 @@ details.menu.flip .menu-body { left: auto; right: 0; }
   .app {
     height: 100%;
     grid-template-columns: 66px minmax(0, 1fr) clamp(340px, 28vw, 440px);
-    grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto auto auto;
     grid-template-areas:
       "top top top"
       "alerts alerts alerts"
       "props props props"
       "rail stage side"
       "rail ops side"
+      "rail send send"
       "status status status";
   }
+  /* janela ampliada: cobre a mesa sem mexer no tamanho dela; a barra de envio continua à vista */
+  .side-wide { display: inline-flex !important; }
+  .side.wide { grid-column: stage-start / side-end; grid-row: stage-start / ops-end; z-index: 4; box-shadow: 0 10px 40px rgba(0, 0, 0, .55); border: 1px solid var(--accent); }
+  .side.wide .side-tabs button[role="tab"] { flex: 0 1 160px; }
+  .side.wide .layers { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); align-items: start; }
+  .side.wide #sp-machine:not([hidden]) { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); align-items: start; }
+  .side-body > #sp-log:not([hidden]) { height: 100%; grid-template-rows: minmax(0, 1fr); }
+  .side-body #log { height: 100%; min-height: 200px; box-sizing: border-box; }
+  /* uma linha só: o conteúdo muda (tempo, linhas), a altura não */
+  .sendbar { display: flex; align-items: stretch; }
+  .sendbar .dock { display: flex; align-items: center; gap: 10px; padding: 6px 10px; flex-wrap: nowrap; }
+  .dock + .dock { border-top: 0; }
+  #dock-job { flex: 1 1 0; }
+  #dock-job #job-line { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #dock-job progress { flex: 0 0 160px; }
+  #dock-job .row { flex-wrap: nowrap; }
+  #dock-send { flex: 1 1 0; }
+  .sendbar.job-on #dock-send { flex: 0 0 auto; }
+  #dock-send .summary { display: flex; gap: 6px; flex: 0 0 auto; }
+  #dock-send .stat { padding: 3px 8px; min-width: 76px; }
+  #dock-send .stat b { font-size: 14px; white-space: nowrap; }
+  #dock-send .stat span { font-size: 11px; white-space: nowrap; }
+  #dock-send .frame-row, #dock-send .frame-row .seg { flex-wrap: nowrap; flex: 0 0 auto; white-space: nowrap; }
+  #dock-send .send { flex-wrap: nowrap; flex: 0 0 auto; }
+  #dock-send .send button { flex: 0 0 auto; min-height: 38px; }
+
   .rail { flex-direction: column; overflow-x: hidden; overflow-y: auto; }
   .rail-sep { margin: 2px 4px; }
   .stage { min-height: 0; }
   .stage .canvas-box { flex: 1 1 auto; aspect-ratio: auto; min-height: 160px; }
   .side { min-height: 0; overflow: hidden; }
-  .side-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-  #log { height: auto; min-height: 320px; }
+  .side-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 8px; }
+  .side-body > [role="tabpanel"] { gap: 8px; }
   /* faixas em volta da mesa com altura fixa: a mesa não muda de tamanho quando a seleção ou o desenho mudam */
-  .opsbar { flex-wrap: nowrap; }
+  .opsbar { flex-wrap: nowrap; overflow: hidden; }
   .opsbar .seg { flex-wrap: nowrap; flex: 0 0 auto; }
   #p-ops-hint { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .stage-head { flex-wrap: nowrap; }
   .stage-head .legend { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
   .stage-head .legend b { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 }
-.jog { display: grid; grid-template-columns: repeat(3, 56px); gap: 6px; justify-content: center; }
-.jog button { height: 48px; }
+/* tela de computador estreita: a barra de envio pode usar duas linhas */
+@media (min-width: 980px) and (max-width: 1279px) and (min-height: 560px) {
+  #dock-send { flex-wrap: wrap !important; }
+  #dock-send .frame-row .label { display: none; }
+}
+.move-grid { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.move-fields { display: grid; gap: 8px; flex: 1 1 100px; }
+.move-fields input { width: 100%; max-width: 130px; }
+.jog { display: grid; grid-template-columns: repeat(3, 52px); gap: 4px; justify-content: center; }
+.jog button { height: 44px; padding: 0; }
 #state { font-weight: 700; }
 #log { height: 160px; overflow: auto; font: 12px var(--mono); background: #111317; padding: 8px; border-radius: 6px; white-space: pre-wrap; }
 progress { width: 100%; accent-color: var(--accent); }
@@ -181,6 +226,10 @@ progress { width: 100%; accent-color: var(--accent); }
 
 /* mesa */
 .canvas-box { position: relative; width: 100%; aspect-ratio: 4 / 3.15; background: var(--bed-outside); border-radius: 8px; overflow: hidden; }
+/* aviso sobre a mesa (fora da área, erro ao gerar): não muda o tamanho de nada */
+.bed-warn { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 2; pointer-events: none; }
+.bed-warn:empty { display: none; }
+.bed-warn .warnbox { background: rgba(43, 36, 16, .95); }
 .canvas-box.drag { outline: 2px dashed var(--accent); outline-offset: -6px; }
 .canvas-box canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
 .canvas-box canvas.panning { cursor: grabbing; }

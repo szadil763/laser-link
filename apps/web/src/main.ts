@@ -68,7 +68,7 @@ function toast(text: string): void {
   toastTimer = window.setTimeout(() => (t.hidden = true), 5000);
 }
 
-// ---------- painel lateral (abas) ----------
+// ---------- janelas: Camadas, Máquina, Fila e Registro numa coluna só ----------
 const SIDE_TABS = [
   ["st-layers", "sp-layers"],
   ["st-machine", "sp-machine"],
@@ -84,6 +84,52 @@ function showSide(tabId: SideTab): void {
   if (tabId === "st-log") logEl.scrollTop = logEl.scrollHeight;
 }
 for (const [t] of SIDE_TABS) $(t).addEventListener("click", () => showSide(t));
+
+/** Ampliada, a janela cobre a mesa (só no computador) e mostra tudo sem rolar. A mesa não muda de tamanho. */
+function setSideWide(wide: boolean): void {
+  $("side").classList.toggle("wide", wide);
+  $("side-wide").setAttribute("aria-pressed", String(wide));
+  $("side-wide").title = wide ? "Reduzir a janela (Esc)" : "Ampliar a janela sobre a mesa (Esc volta)";
+  markOverflow();
+}
+const sideIsWide = (): boolean => $("side").classList.contains("wide");
+$("side-wide").addEventListener("click", () => setSideWide(!sideIsWide()));
+// destaca o botão de ampliar quando a janela ativa não cabe inteira na coluna
+const sideBody = document.querySelector<HTMLElement>(".side-body")!;
+function markOverflow(): void {
+  $("side-wide").classList.toggle("more", !sideIsWide() && sideBody.scrollHeight > sideBody.clientHeight + 4);
+}
+new ResizeObserver(markOverflow).observe(sideBody);
+for (const [, panel] of SIDE_TABS) new ResizeObserver(markOverflow).observe($(panel));
+
+/** Abre uma janela pelo menu ou atalho: troca a aba e, no celular, rola até ela. */
+function openWindow(tabId: SideTab): void {
+  showSide(tabId);
+  if (!window.matchMedia("(min-width: 980px) and (min-height: 560px)").matches) {
+    $("side").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  $(tabId).focus();
+}
+$("win-menu").addEventListener("click", (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-win]");
+  if (!btn) return;
+  $<HTMLDetailsElement>("win-menu").open = false;
+  const v = btn.dataset.win;
+  if (v === "wide") setSideWide(!sideIsWide());
+  else openWindow(v as SideTab);
+});
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && sideIsWide() && !document.querySelector("dialog[open]")) {
+    setSideWide(false);
+    return;
+  }
+  if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  const n = "01234".indexOf(e.key);
+  if (n < 0) return;
+  e.preventDefault();
+  if (n === 0) setSideWide(!sideIsWide());
+  else openWindow(SIDE_TABS[n - 1][0]);
+});
 
 // ---------- mesa: Desenho ou Na máquina ----------
 type View = "design" | "machine";
@@ -169,6 +215,11 @@ function renderLinkState(state: LinkState): void {
   const [label, level] = LINK_LABELS[state];
   badge.textContent = label;
   badge.dataset.level = level;
+  // conectado, a seção Conexão se recolhe e deixa espaço para o resto da janela Máquina
+  $("conn-sum").textContent = label;
+  const conn = $<HTMLDetailsElement>("conn-box");
+  if (state === "connected") conn.open = false;
+  else if (state === "disconnected") conn.open = true;
 }
 
 function renderSerial(connected: boolean): void {
@@ -190,7 +241,7 @@ function renderJob(job: JobInfo | null): void {
     : "Nenhum trabalho em andamento.";
   $("dock-job").hidden = !job;
   // com trabalho rodando, o resumo e o enquadrar só ocupam espaço
-  document.querySelector(".side")?.classList.toggle("job-on", job !== null);
+  $("sendbar").classList.toggle("job-on", job !== null);
   const bar = $<HTMLProgressElement>("progress");
   bar.max = Math.max(1, job?.total ?? 1);
   bar.value = job?.sent ?? 0;
