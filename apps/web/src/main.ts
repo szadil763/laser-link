@@ -488,6 +488,7 @@ function onMessage(msg: ServerMessage): void {
       break;
     case "error":
       log(`ERRO: ${msg.message}`);
+      toast(msg.message);
       break;
   }
 }
@@ -543,7 +544,51 @@ document.querySelectorAll<HTMLButtonElement>(".jog button").forEach((btn) => {
 });
 
 $("home").addEventListener("click", () => conn.send({ type: "home" }));
-$("origin").addEventListener("click", () => conn.send({ type: "setOrigin" }));
+// ---------- origem do trabalho ----------
+const ANCHOR_NAMES: Record<string, string> = {
+  tl: "o canto de cima, à esquerda,",
+  tc: "o meio de cima",
+  tr: "o canto de cima, à direita,",
+  ml: "o meio da esquerda",
+  mc: "o centro",
+  mr: "o meio da direita",
+  bl: "o canto de baixo, à esquerda,",
+  bc: "o meio de baixo",
+  br: "o canto de baixo, à direita,",
+};
+let anchor = "bl";
+try {
+  anchor = localStorage.getItem("laserlink.anchor") ?? "bl";
+} catch {
+  /* armazenamento indisponível */
+}
+function showAnchor(): void {
+  for (const b of $("origin-anchor").querySelectorAll<HTMLButtonElement>("button[data-a]")) b.setAttribute("aria-pressed", String(b.dataset.a === anchor));
+}
+showAnchor();
+$("origin-anchor").addEventListener("click", (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-a]");
+  if (!btn?.dataset.a) return;
+  anchor = btn.dataset.a;
+  showAnchor();
+  try {
+    localStorage.setItem("laserlink.anchor", anchor);
+  } catch {
+    /* armazenamento indisponível */
+  }
+});
+$("origin").addEventListener("click", () => {
+  if (conn.send({ type: "setOrigin" })) toast("Origem definida: o carrinho agora é o canto 0,0 da mesa.");
+  else toast("Sem conexão com o agente. Conecte na seção Conexão e tente de novo.");
+});
+$("origin-design").addEventListener("click", () => {
+  const pt = workspace.anchorPoint(anchor);
+  if (!pt) return toast("Não há desenho na mesa. Desenhe ou importe algo e tente de novo.");
+  const [x, y] = pt.p;
+  if (conn.send({ type: "setOrigin", x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000 })) {
+    toast(`Origem definida: o carrinho agora é ${ANCHOR_NAMES[anchor]} ${pt.what} (X${x.toFixed(1)} Y${y.toFixed(1)}). Use Enquadrar para conferir antes de cortar.`);
+  } else toast("Sem conexão com o agente. Conecte na seção Conexão e tente de novo.");
+});
 $("unlock").addEventListener("click", () => conn.send({ type: "unlock" }));
 $("hold").addEventListener("click", () => conn.send({ type: "hold" }));
 $("resume").addEventListener("click", () => void resume());

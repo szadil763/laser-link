@@ -288,7 +288,6 @@
               <h2>Máquina e movimento</h2>
               <div class="row" style="margin-bottom:10px">
                 <button id="home">Home</button>
-                <button id="origin">Definir origem</button>
                 <button id="unlock">Destravar</button>
               </div>
               <div class="move-grid">
@@ -302,6 +301,27 @@
                   <span></span><button data-axis="Y" data-dir="-1">Y−</button><span></span>
                 </div>
               </div>
+            </section>
+            <section>
+              <h2>Origem do trabalho</h2>
+              <div class="origin-grid">
+                <div class="anchor" id="origin-anchor" role="group" aria-label="Ponto do desenho que fica no carrinho">
+                    <button data-a="tl" aria-pressed="false" title="Canto de cima, à esquerda"><span class="sr">Canto de cima, à esquerda</span></button>
+                    <button data-a="tc" aria-pressed="false" title="Meio de cima"><span class="sr">Meio de cima</span></button>
+                    <button data-a="tr" aria-pressed="false" title="Canto de cima, à direita"><span class="sr">Canto de cima, à direita</span></button>
+                    <button data-a="ml" aria-pressed="false" title="Meio da esquerda"><span class="sr">Meio da esquerda</span></button>
+                    <button data-a="mc" aria-pressed="false" title="Centro"><span class="sr">Centro</span></button>
+                    <button data-a="mr" aria-pressed="false" title="Meio da direita"><span class="sr">Meio da direita</span></button>
+                    <button data-a="bl" aria-pressed="true" title="Canto de baixo, à esquerda"><span class="sr">Canto de baixo, à esquerda</span></button>
+                    <button data-a="bc" aria-pressed="false" title="Meio de baixo"><span class="sr">Meio de baixo</span></button>
+                    <button data-a="br" aria-pressed="false" title="Canto de baixo, à direita"><span class="sr">Canto de baixo, à direita</span></button>
+                </div>
+                <div class="origin-actions">
+                  <button id="origin" title="O carrinho vira o canto 0,0 da mesa">Definir origem aqui</button>
+                  <button id="origin-design" class="primary" title="O carrinho vira o ponto marcado do desenho">Origem pelo desenho</button>
+                </div>
+              </div>
+              <p class="note" id="origin-hint">Leve o carrinho até o lugar certo no material. <b>Definir origem aqui</b>: o carrinho vira o canto 0,0 da mesa. <b>Origem pelo desenho</b>: o carrinho vira o ponto marcado ao lado (da seleção, ou do desenho todo) e o trabalho sai em volta dele.</p>
             </section>
             <section>
               <h2>Arquivo G-code</h2>

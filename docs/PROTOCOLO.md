@@ -1,7 +1,7 @@
 # Protocolo WebSocket
 
 Mensagens JSON. Tipos em `packages/shared/src/protocol.ts`; validação das mensagens do cliente em `packages/shared/src/validate.ts`.
-Versão atual: **0.4.0** (`PROTOCOL_VERSION`). O agente informa a versão no `hello`; a interface avisa se for diferente.
+Versão atual: **0.5.0** (`PROTOCOL_VERSION`). O agente informa a versão no `hello`; a interface avisa se for diferente.
 
 ## Endereço e autenticação
 
@@ -35,7 +35,7 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 | `ping` | `t` (número) | Heartbeat; resposta `pong` |
 | `jog` | `axis` (`X`/`Y`), `distance` (mm), `feed` (mm/min) | Movimento relativo (`$J=G91 G21 ...`) |
 | `home` | | `$H` |
-| `setOrigin` | | `G10 L20 P1 X0 Y0` |
+| `setOrigin` | `x`, `y` (opcionais, juntos) | `G10 L20 P1 X{x} Y{y}`: a posição atual do cabeçote vira esse ponto (sem `x`/`y`, vira X0 Y0). O ponto precisa estar na área útil; fora dela, ou com trabalho em andamento, o agente recusa com `error` |
 | `hold` | | `!` |
 | `resume` | `confirmLaserOn: true` | `~`. Quem retoma vira o dono do trabalho |
 | `stop` | | `!` + `0x18` + `M5` (cancela o trabalho) |

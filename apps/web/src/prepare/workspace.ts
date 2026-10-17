@@ -205,6 +205,19 @@ export class Workspace {
   }
 
   /** Posição real do cabeçote (status do GRBL), mostrada quando não há simulação. */
+  /**
+   * Ponto do desenho para "Origem pelo desenho": da seleção, se houver, ou do desenho todo.
+   * `a` = linha (t/m/b) + coluna (l/c/r), ex.: "mc" = centro.
+   */
+  anchorPoint(a: string): { p: Point; what: string } | null {
+    const sel = this.selected.size > 0;
+    const b = sel ? this.selBounds() : designBounds(this.layers, this.image);
+    if (!b) return null;
+    const x = a[1] === "l" ? b.minX : a[1] === "r" ? b.maxX : (b.minX + b.maxX) / 2;
+    const y = a[0] === "b" ? b.minY : a[0] === "t" ? b.maxY : (b.minY + b.maxY) / 2;
+    return { p: [x, y], what: sel ? "da seleção" : "do desenho" };
+  }
+
   setHead(p: Point): void {
     this.head = p;
     this.headLive = true;

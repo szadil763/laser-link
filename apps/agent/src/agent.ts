@@ -269,9 +269,24 @@ export class Agent {
       case "home":
         grbl.sendLine("$H");
         break;
-      case "setOrigin":
-        grbl.sendLine("G10 L20 P1 X0 Y0");
+      case "setOrigin": {
+        const x = msg.x ?? 0;
+        const y = msg.y ?? 0;
+        const area = this.config.workArea;
+        // o ponto precisa estar na área útil: senão o trabalho iria para fora da mesa
+        if (x < 0 || y < 0 || x > area.x || y > area.y) {
+          client.send({ type: "error", message: `Origem recusada: X${x.toFixed(1)} Y${y.toFixed(1)} fica fora da área útil (${area.x} × ${area.y} mm).` });
+          break;
+        }
+        if (grbl.sendLine(`G10 L20 P1 X${x.toFixed(3)} Y${y.toFixed(3)}`)) {
+          this.broadcast({
+            type: "log",
+            level: "info",
+            text: msg.x === undefined ? "Origem definida: o cabeçote agora é X0 Y0." : `Origem definida pelo desenho: o cabeçote agora é X${x.toFixed(1)} Y${y.toFixed(1)}.`,
+          });
+        } else client.send({ type: "error", message: "Não dá para mudar a origem com um trabalho em andamento." });
         break;
+      }
       case "hold":
         grbl.feedHold();
         if (this.job?.state === "running") this.setJobState("paused");

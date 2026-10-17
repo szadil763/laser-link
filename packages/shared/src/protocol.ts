@@ -8,7 +8,11 @@ export const HEARTBEAT_TIMEOUT_MS = 6000;
 export type ClientMessage =
   | { type: "jog"; axis: Axis; distance: number; feed: number }
   | { type: "home" }
-  | { type: "setOrigin" }
+  /**
+   * A posição atual do cabeçote vira a origem de trabalho. Sem `x`/`y`: vira X0 Y0.
+   * Com `x`/`y`: vira esse ponto (ex.: o centro do desenho), dentro da área útil.
+   */
+  | { type: "setOrigin"; x?: number; y?: number }
   | { type: "hold" }
   /** Retomar religa o laser: a UI precisa ter pedido confirmação. */
   | { type: "resume"; confirmLaserOn: true }
@@ -185,4 +189,4 @@ export type ServerMessage =
   | { type: "pong"; t: number }
   | { type: "error"; message: string };
 
-export const PROTOCOL_VERSION = "0.4.0";
+export const PROTOCOL_VERSION = "0.5.0";

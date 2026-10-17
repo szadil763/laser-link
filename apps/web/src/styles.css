@@ -218,6 +218,13 @@ details.conn > :not(summary) + :not(summary) { margin-top: 8px; }
   #dock-send { flex-wrap: wrap !important; }
   #dock-send .frame-row .label { display: none; }
 }
+.origin-grid { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.origin-actions { display: grid; gap: 6px; flex: 1 1 150px; }
+/* 9 pontos do desenho: o marcado fica no carrinho */
+.anchor { display: grid; grid-template-columns: repeat(3, 38px); gap: 3px; padding: 3px; border: 1px dashed var(--line); border-radius: 8px; }
+.anchor button { width: 38px; height: 38px; min-height: 0; padding: 0; display: grid; place-items: center; }
+.anchor button::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.anchor button[aria-pressed="true"]::before { width: 12px; height: 12px; background: var(--accent); }
 .move-grid { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .move-fields { display: grid; gap: 8px; flex: 1 1 100px; }
 .move-fields input { width: 100%; max-width: 130px; }

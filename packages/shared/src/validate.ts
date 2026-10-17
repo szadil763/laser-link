@@ -25,8 +25,12 @@ export function parseClientMessage(value: unknown): ClientMessage | null {
     case "jog":
       if (!isAxis(value.axis) || !isFiniteNumber(value.distance) || !isFiniteNumber(value.feed)) return null;
       return { type: "jog", axis: value.axis, distance: value.distance, feed: value.feed };
+    case "setOrigin": {
+      if (value.x === undefined && value.y === undefined) return { type: "setOrigin" };
+      if (!isFiniteNumber(value.x) || !isFiniteNumber(value.y)) return null;
+      return { type: "setOrigin", x: value.x, y: value.y };
+    }
     case "home":
-    case "setOrigin":
     case "hold":
     case "stop":
     case "unlock":

@@ -18,7 +18,9 @@ O que os testes automáticos (com o simulador) **não** conseguem provar e preci
 
 - [ ] Agente abre a porta COM; a interface mostra "Laser conectada" e o estado `Idle`.
 - [ ] Posição X/Y muda ao mover com o jog (passo de 1 mm e de 10 mm, nos quatro sentidos). O sentido bate com a máquina?
-- [ ] "Definir origem" zera X/Y na interface (coordenadas de trabalho).
+- [ ] "Definir origem aqui" zera X/Y na interface (coordenadas de trabalho).
+- [ ] "Origem pelo desenho" com o ponto **Centro**: leve o carrinho ao meio de um retalho, clique e confira que X/Y viram o centro do desenho. **Enquadrar** (laser desligado) deve percorrer o contorno em volta do carrinho.
+- [ ] Repita com um canto (ex.: canto de cima, à direita): o enquadramento deve começar a partir do carrinho para baixo e para a esquerda.
 - [ ] "Home" (se houver chaves de fim de curso) e "Destravar" após um alarme.
 - [ ] Desconectar o cabo USB: a interface mostra "Laser desconectada" em até 2 s. Reconectar: volta sozinha.
 
