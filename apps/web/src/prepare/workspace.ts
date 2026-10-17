@@ -153,7 +153,14 @@ export class Workspace {
         const hit = this.hitTest(px);
         this.dragSaved = false;
         if (hit && this.selected.has(hit.id) && !hit.locked) return true;
-        return this.areaMode || ev.shiftKey ? "marquee" : false;
+        if (this.areaMode || ev.shiftKey) return "marquee";
+        // apertar e arrastar uma peça que não estava selecionada: seleciona e já move
+        // (com Vários ou Ctrl o clique soma à seleção: aí quem decide é o toque, não o arraste)
+        if (hit && !hit.locked && !this.multi && !ev.ctrlKey && !ev.metaKey) {
+          this.select(hit.id, false);
+          return true;
+        }
+        return false;
       },
       onMarquee: (a, b, ev) => {
         if (this.drawTool) {
@@ -881,9 +888,9 @@ export class Workspace {
     const ids = this.groupIds(found.s);
     const already = ids.every((x) => this.selected.has(x));
     if (!add) {
-      const only = already && this.selected.size === ids.length;
+      // clique simples sempre deixa a peça selecionada (clicar de novo não tira a seleção)
       this.selected.clear();
-      if (!only) ids.forEach((x) => this.selected.add(x));
+      ids.forEach((x) => this.selected.add(x));
     } else if (already) ids.forEach((x) => this.selected.delete(x));
     else ids.forEach((x) => this.selected.add(x));
     this.refreshSelection();
