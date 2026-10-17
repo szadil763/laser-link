@@ -28,6 +28,13 @@
           <details class="menu" id="edit-menu">
             <summary>Editar</summary>
             <div class="menu-body file-menu edit-menu" role="menu">
+              <span class="label label-first">Desenhar com o mouse</span>
+              <div class="menu-grid">
+                <button data-draw="rect" role="menuitemcheckbox" aria-pressed="false" title="Retângulo (R). Shift faz quadrado."><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="1"/></svg> Retângulo <kbd>R</kbd></button>
+                <button data-draw="line" role="menuitemcheckbox" aria-pressed="false" title="Linha (L). Shift prende o ângulo."><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19L19 5"/><circle cx="5" cy="19" r="1.5"/><circle cx="19" cy="5" r="1.5"/></svg> Linha <kbd>L</kbd></button>
+                <button data-draw="circle" role="menuitemcheckbox" aria-pressed="false" title="Círculo (C). Shift faz círculo perfeito."><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg> Círculo <kbd>C</kbd></button>
+              </div>
+              <span class="label">Editar</span>
               <button data-edit="undo" role="menuitem">Desfazer <kbd>Ctrl+Z</kbd></button>
               <p class="label">Área de transferência</p>
               <button data-edit="copy" role="menuitem">Copiar <kbd>Ctrl+C</kbd></button>
@@ -175,6 +182,7 @@
             <span class="chip" id="p-hud-pos">X 0.0 Y 0.0</span>
             <span class="chip" id="p-hud-mode">Pré-visualização</span>
             <span class="chip" id="p-hud-zoom">100%</span>
+            <span class="chip draw" id="p-hud-draw" hidden></span>
           </div>
           <div class="zoombar" role="group" aria-label="Zoom">
             <button id="p-zoom-out" aria-label="Diminuir zoom">−</button>

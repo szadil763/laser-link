@@ -99,6 +99,12 @@ summary[aria-disabled] { opacity: .5; pointer-events: none; }
 .edit-menu .label { margin-top: 2px; padding-top: 4px; }
 .menu-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
 .menu-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.menu-grid [data-draw] { flex-direction: column; gap: 2px !important; min-height: 56px !important; }
+.menu-grid [data-draw] svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.menu-grid [data-draw][aria-pressed="true"] { background: #2b3a55; border-color: var(--accent) !important; }
+.edit-menu .label-first { margin-top: 0; padding-top: 0; border-top: 0; }
+.chip.draw { border-color: var(--accent); color: var(--fg); }
+.canvas-box:has(canvas.drawing) .empty { display: none; }
 .menu-grid button { justify-content: center !important; border-color: var(--line) !important; font-size: 13px; padding: 4px 6px; }
 .file-menu button:disabled { opacity: .4; }
 kbd { font: 11px var(--mono); color: var(--muted); }

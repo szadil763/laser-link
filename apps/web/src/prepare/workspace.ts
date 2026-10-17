@@ -46,6 +46,24 @@ import {
 } from "./model.js";
 import { sampleDesign } from "./sample.js";
 
+type DrawTool = "rect" | "line" | "circle";
+interface DrawResult {
+  points: Point[];
+  closed: boolean;
+  name: string;
+  /** Medida mostrada ao lado do cursor enquanto desenha. */
+  label: string;
+  /** Menor medida útil (para recusar formas que ficaram só um ponto). */
+  size: number;
+}
+const DRAW_INFO: Record<DrawTool, { label: string; hint: string }> = {
+  rect: { label: "Retângulo", hint: "Arraste na mesa para desenhar o retângulo. Shift faz um quadrado. Esc sai da ferramenta." },
+  line: { label: "Linha", hint: "Arraste na mesa do começo ao fim da linha. Shift prende o ângulo de 15 em 15°. Esc sai da ferramenta." },
+  circle: { label: "Círculo", hint: "Arraste na mesa a caixa do círculo. Sem Shift sai uma elipse; com Shift, círculo perfeito. Esc sai da ferramenta." },
+};
+const DRAW_KEYS: Record<string, DrawTool | undefined> = { r: "rect", l: "line", c: "circle" };
+const fmtMm = (v: number): string => v.toFixed(1).replace(/\.0$/, "");
+
 export interface PrepareHost {
   confirm(title: string, text: string, okLabel: string, danger?: boolean): Promise<boolean>;
   toast(message: string): void;
@@ -121,22 +139,35 @@ export class Workspace {
   private pasteCount = 0;
   /** Caixa de seleção sendo desenhada, em pixels do canvas. */
   private marquee: { a: Point; b: Point } | null = null;
+  /** Ferramenta de desenho ligada (Editar > Desenhar): arrastar na mesa cria a forma. */
+  private drawTool: DrawTool | null = null;
+  /** Forma sendo desenhada, em mm (prévia). */
+  private drawing: { a: Point; b: Point; shift: boolean; free: boolean } | null = null;
 
   constructor(private readonly host: PrepareHost) {
     this.view = new BedView($<HTMLCanvasElement>("p-canvas"), this.limits.workArea, () => this.requestDraw(), {
       onTap: (px, ev) => this.pick(px, ev),
       onDragStart: (px, ev) => {
         if (this.anim) return false;
+        if (this.drawTool) return "marquee";
         const hit = this.hitTest(px);
         this.dragSaved = false;
         if (hit && this.selected.has(hit.id) && !hit.locked) return true;
         return this.areaMode || ev.shiftKey ? "marquee" : false;
       },
-      onMarquee: (a, b) => {
-        this.marquee = b ? { a, b } : null;
+      onMarquee: (a, b, ev) => {
+        if (this.drawTool) {
+          this.drawing = b ? { a: this.view.toMm(a[0], a[1]), b: this.view.toMm(b[0], b[1]), shift: !!ev?.shiftKey, free: !!ev?.altKey } : null;
+          if (this.drawing) this.host.onCursor?.(this.drawing.b);
+        } else this.marquee = b ? { a, b } : null;
         this.requestDraw();
       },
       onMarqueeEnd: (a, b, ev) => {
+        if (this.drawTool) {
+          this.drawing = null;
+          this.finishDrawing(this.view.toMm(a[0], a[1]), this.view.toMm(b[0], b[1]), ev.shiftKey, ev.altKey);
+          return;
+        }
         this.marquee = null;
         this.selectArea(a, b, this.multi || ev.shiftKey || ev.ctrlKey || ev.metaKey);
       },
@@ -474,6 +505,111 @@ export class Workspace {
     const r = this.regenerateNow();
     if (!r) return this.host.toast("Nada para exportar.");
     this.download(`${this.fileBase()}.gcode`, r.gcode, "text/plain");
+  }
+
+  // ---------- desenhar com o mouse: retângulo, linha e círculo ----------
+
+  /** Liga ou desliga uma ferramenta de desenho. A mesma ferramenta de novo desliga. */
+  setDrawTool(tool: DrawTool | null): void {
+    this.drawTool = tool === this.drawTool ? null : tool;
+    this.drawing = null;
+    for (const b of document.querySelectorAll<HTMLButtonElement>("[data-draw]")) {
+      b.setAttribute("aria-pressed", String(b.dataset.draw === this.drawTool));
+    }
+    const chip = $("p-hud-draw");
+    chip.hidden = !this.drawTool;
+    if (this.drawTool) {
+      chip.textContent = `Desenhando: ${DRAW_INFO[this.drawTool].label} · Esc sai`;
+      this.host.toast(DRAW_INFO[this.drawTool].hint);
+    }
+    $("p-canvas").classList.toggle("drawing", !!this.drawTool);
+    this.requestDraw();
+  }
+
+  /** Pontos da forma entre o ponto inicial e o atual (mm). Encaixa em 0,5 mm, a não ser com Alt. */
+  private drawGeometry(a: Point, b: Point, shift: boolean, free: boolean): DrawResult | null {
+    const tool = this.drawTool;
+    if (!tool) return null;
+    const snap = (v: number): number => (free ? v : Math.round(v * 2) / 2);
+    const [ax, ay] = [snap(a[0]), snap(a[1])];
+    let dx = snap(b[0]) - ax;
+    let dy = snap(b[1]) - ay;
+    if (tool === "line") {
+      if (shift) {
+        // Shift: ângulo de 15 em 15 graus
+        const len = Math.hypot(dx, dy);
+        const ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 12)) * (Math.PI / 12);
+        dx = len * Math.cos(ang);
+        dy = len * Math.sin(ang);
+      }
+      const len = Math.hypot(dx, dy);
+      const deg = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
+      return {
+        points: [[ax, ay], [ax + dx, ay + dy]],
+        closed: false,
+        name: `Linha ${fmtMm(len)} mm`,
+        label: `${fmtMm(len)} mm · ${deg.toFixed(0)}°`,
+        size: len,
+      };
+    }
+    if (shift) {
+      // Shift: quadrado ou círculo perfeito
+      const side = Math.max(Math.abs(dx), Math.abs(dy));
+      dx = Math.sign(dx || 1) * side;
+      dy = Math.sign(dy || 1) * side;
+    }
+    const x0 = Math.min(ax, ax + dx);
+    const y0 = Math.min(ay, ay + dy);
+    const w = Math.abs(dx);
+    const h = Math.abs(dy);
+    const dims = `${fmtMm(w)} × ${fmtMm(h)} mm`;
+    if (tool === "rect") {
+      return {
+        points: [[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h], [x0, y0]],
+        closed: true,
+        name: `${w === h ? "Quadrado" : "Retângulo"} ${dims}`,
+        label: dims,
+        size: Math.min(w, h),
+      };
+    }
+    const [cx, cy, rx, ry] = [x0 + w / 2, y0 + h / 2, w / 2, h / 2];
+    // segmentos de no máximo ~0,5 mm, como os furos das peças prontas
+    const n = Math.max(24, Math.min(240, Math.ceil((Math.PI * (w + h)) / 2 / 0.5)));
+    const points: Point[] = [];
+    for (let i = 0; i < n; i++) points.push([cx + rx * Math.cos((i / n) * 2 * Math.PI), cy + ry * Math.sin((i / n) * 2 * Math.PI)]);
+    points.push(points[0]!);
+    const circ = Math.abs(w - h) < 0.01;
+    return {
+      points,
+      closed: true,
+      name: circ ? `Círculo Ø ${fmtMm(w)} mm` : `Elipse ${dims}`,
+      label: circ ? `Ø ${fmtMm(w)} mm` : dims,
+      size: Math.min(w, h),
+    };
+  }
+
+  private finishDrawing(a: Point, b: Point, shift: boolean, free: boolean): void {
+    const g = this.drawGeometry(a, b, shift, free);
+    this.requestDraw();
+    if (!g) return;
+    if (g.size < 0.5) {
+      this.host.toast("Ficou pequeno demais. Arraste mais para desenhar (mínimo 0,5 mm).");
+      return;
+    }
+    // tudo o que é desenhado à mão vai para a camada "Desenho", que corta por padrão
+    let layer = this.layers.find((l) => l.name === "Desenho");
+    if (!layer) {
+      layer = makeLayer("Desenho", MODE_INFO.cut.color, "cut", this.materials[0]);
+      this.layers.push(layer);
+    }
+    if (!layer.enabled) layer.enabled = true;
+    this.history.push(this.layers);
+    const shape = makeShape(g.points, g.name, g.closed);
+    layer.shapes.push(shape);
+    this.selected.clear();
+    this.selected.add(shape.id);
+    if (!this.designName) this.designName = "Desenho";
+    this.refresh();
   }
 
   private addText(): void {
@@ -1271,6 +1407,12 @@ export class Workspace {
     $("ed-fh").addEventListener("click", () => this.scaleSel(-1, 1));
     $("ed-fv").addEventListener("click", () => this.scaleSel(1, -1));
     $("edit-menu").addEventListener("click", (e) => {
+      const draw = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-draw]");
+      if (draw) {
+        $<HTMLDetailsElement>("edit-menu").open = false;
+        this.setDrawTool(draw.dataset.draw as DrawTool);
+        return;
+      }
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-edit], button[data-align]");
       if (!btn || btn.disabled) return;
       $<HTMLDetailsElement>("edit-menu").open = false;
@@ -1656,6 +1798,27 @@ export class Workspace {
       ctx.strokeRect(x, y, Math.abs(mq.b[0] - mq.a[0]), Math.abs(mq.b[1] - mq.a[1]));
       ctx.restore();
     }
+    const dr = this.drawing && this.drawGeometry(this.drawing.a, this.drawing.b, this.drawing.shift, this.drawing.free);
+    if (dr) {
+      ctx.save();
+      ctx.strokeStyle = bedColors().selection;
+      ctx.lineWidth = 1.6 * d;
+      ctx.setLineDash([6 * d, 4 * d]);
+      v.polyline(dr.points);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // medida perto do cursor
+      const end = this.drawing!.b;
+      const tx = v.X(end[0]) + 12 * d;
+      const ty = v.Y(end[1]) - 12 * d;
+      ctx.font = `${12 * d}px ui-monospace, monospace`;
+      const tw = ctx.measureText(dr.label).width;
+      ctx.fillStyle = "rgba(20, 22, 26, .88)";
+      ctx.fillRect(tx - 4 * d, ty - 13 * d, tw + 8 * d, 18 * d);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(dr.label, tx, ty);
+      ctx.restore();
+    }
     $("p-hud-pos").textContent = `X ${head[0].toFixed(1)} Y ${head[1].toFixed(1)}`;
     $("p-hud-zoom").textContent = `${v.zoomPercent}%`;
   }
@@ -1936,6 +2099,15 @@ export class Workspace {
       const tag = (e.target as HTMLElement).tagName.toLowerCase();
       if (tag === "input" || tag === "select" || tag === "textarea" || document.querySelector("dialog[open]")) return;
       const key = e.key.toLowerCase();
+      if (e.key === "Escape" && this.drawTool) {
+        this.setDrawTool(null);
+        return;
+      }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && DRAW_KEYS[key]) {
+        e.preventDefault();
+        this.setDrawTool(DRAW_KEYS[key]!);
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && key === "z") {
         e.preventDefault();
         this.undo();

@@ -15,7 +15,7 @@ export interface BedInteractions {
    */
   onDragStart?(px: Point, ev: PointerEvent): boolean | "marquee";
   /** Caixa de seleção sendo desenhada (pixels do canvas); `b` null = cancelada. */
-  onMarquee?(a: Point, b: Point | null): void;
+  onMarquee?(a: Point, b: Point | null, ev?: PointerEvent): void;
   /** Caixa de seleção solta. */
   onMarqueeEnd?(a: Point, b: Point, ev: PointerEvent): void;
   /** Arraste de objeto, deslocamento em mm desde o último evento. */
@@ -271,7 +271,7 @@ export class BedView {
       drag.moved = true;
       drag.p = p;
       if (drag.marquee) {
-        this.interactions.onMarquee?.(drag.start, p);
+        this.interactions.onMarquee?.(drag.start, p, e);
         return;
       }
       if (drag.object) {

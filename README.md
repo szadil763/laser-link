@@ -4,11 +4,12 @@ Controle remoto de cortadora/gravadora a laser **GRBL**. Dois pedaços de softwa
 
 - **Agente** (`apps/agent`): roda no PC ligado à laser por USB. Fala serial com o GRBL, faz o streaming do G-code e serve a interface e um WebSocket protegido por token.
 - **Interface web** (`apps/web`): abre em qualquer navegador (PC de projeto, celular). Uma tela só, no estilo de programa de desenho:
-  - **barra de cima**: menu **Arquivo** (abrir projeto, salvar, salvar como, importar SVG/DXF/imagem, exemplo, exportar SVG/DXF/G-code), menu **Editar** (desfazer, copiar, recortar, colar, duplicar, excluir, selecionar tudo, agrupar, desagrupar, alinhar, distribuir, travar e destravar), desfazer e o estado da conexão;
+  - **barra de cima**: menu **Arquivo** (abrir projeto, salvar, salvar como, importar SVG/DXF/imagem, exemplo, exportar SVG/DXF/G-code), menu **Editar** (desenhar retângulo, linha e círculo com o mouse, desfazer, copiar, recortar, colar, duplicar, excluir, selecionar tudo, agrupar, desagrupar, alinhar, distribuir, travar e destravar), desfazer e o estado da conexão;
   - **barra de medidas**: X, Y, largura, altura, girar, espelhar, contorno deslocado, agrupar, desagrupar, duplicar e excluir o que está selecionado;
   - **ferramentas** à esquerda: vários, área (caixa de seleção), texto, caixa, peças, teste de matriz, deslocamentos e mesa clara/escura;
   - **mesa** no centro, com **Desenho** (o projeto) ou **Na máquina** (o trabalho enviado e o cabeçote em tempo real), e o botão **Limpar mesa** para a vista que está à mostra;
   - **faixa de operações** embaixo da mesa: Cortar, Gravar linha, Preenchido, Detalhado;
+  - **desenhar com o mouse**: em Editar, escolha Retângulo (tecla R), Linha (L) ou Círculo (C) e arraste na mesa. A medida aparece ao lado do cursor. Shift faz quadrado, círculo perfeito ou prende a linha de 15 em 15°. As medidas encaixam de 0,5 em 0,5 mm (Alt solta). A forma vai para a camada **Desenho**, que corta por padrão. A ferramenta fica ligada para desenhar várias; Esc sai.
   - **janela à direita** com Camadas, Máquina (conexão, home, origem, mover, arquivo G-code), Fila e Registro. A janela ativa usa a coluna inteira. Para ver tudo de uma vez, use o botão **Ampliar** (⤢, ao lado das abas) ou o menu **Janelas**: a janela cobre a mesa e o Esc volta. Atalhos: Alt+1 a Alt+4 trocam de janela e Alt+0 amplia ou reduz.
   - **barra de envio** embaixo da mesa, sempre à vista: resumo, Enquadrar, Simular, Enviar e Guardar na fila. Com trabalho rodando aparecem Pausar, Retomar e PARAR.
   O G-code é gerado pelo próprio LaserLink (`packages/gcode`).
