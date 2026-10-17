@@ -47,6 +47,26 @@ describe("Agent", () => {
     agent.shutdown();
   });
 
+  it("definir origem: o cabeçote vira X0 Y0 ou o ponto do desenho pedido", async () => {
+    const { fake, grbl, agent } = await setup();
+    const c = new TestClient("a");
+    agent.connect(c);
+    fake.mpos = { x: 120, y: 80, z: 0 };
+    agent.receive(c, { type: "setOrigin" });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(grbl.lastStatus?.wpos).toMatchObject({ x: 0, y: 0 });
+    agent.receive(c, { type: "setOrigin", x: 50, y: 40 });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(grbl.lastStatus?.wpos).toMatchObject({ x: 50, y: 40 });
+    // fora da área útil: recusa e não mexe na origem
+    agent.receive(c, { type: "setOrigin", x: -5, y: 10 });
+    agent.receive(c, { type: "setOrigin", x: 10 });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(c.of("error")).toHaveLength(2);
+    expect(grbl.lastStatus?.wpos).toMatchObject({ x: 50, y: 40 });
+    agent.shutdown();
+  });
+
   it("responde ping com pong", async () => {
     const { agent } = await setup();
     const c = new TestClient("a");

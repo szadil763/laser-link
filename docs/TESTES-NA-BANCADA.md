@@ -18,7 +18,9 @@ O que os testes automáticos (com o simulador) **não** conseguem provar e preci
 
 - [ ] Agente abre a porta COM; a interface mostra "Laser conectada" e o estado `Idle`.
 - [ ] Posição X/Y muda ao mover com o jog (passo de 1 mm e de 10 mm, nos quatro sentidos). O sentido bate com a máquina?
-- [ ] "Definir origem" zera X/Y na interface (coordenadas de trabalho).
+- [ ] "Definir origem aqui" zera X/Y na interface (coordenadas de trabalho).
+- [ ] "Origem pelo desenho" com o ponto **Centro**: leve o carrinho ao meio de um retalho, clique e confira que X/Y viram o centro do desenho. **Enquadrar** (laser desligado) deve percorrer o contorno em volta do carrinho.
+- [ ] Repita com um canto (ex.: canto de cima, à direita): o enquadramento deve começar a partir do carrinho para baixo e para a esquerda.
 - [ ] "Home" (se houver chaves de fim de curso) e "Destravar" após um alarme.
 - [ ] Desconectar o cabo USB: a interface mostra "Laser desconectada" em até 2 s. Reconectar: volta sozinha.
 
@@ -78,6 +80,19 @@ Primeiro sempre com **Simular**, depois **Enquadrar com laser desligado**, depoi
 - [ ] **Imagem**: gravação nos dois sentidos sem "fantasma" (linhas de ida e volta alinhadas). Se desalinhar, aumente o overscan ou reduza a velocidade. O overscan não pode passar da borda da mesa.
 - [ ] **SVG do Inkscape** (mm) e de outro programa (px): o tamanho importado bate com o desenho original.
 - [ ] **Texto**: altura de 5 mm legível em linha; acentos viram letras sem acento.
+
+## 8. Fase 3: peças prontas e fila
+
+Antes de tudo, meça kerf, motores, servos e a placa ESP32 com paquímetro (`PECAS.md`).
+
+- [ ] **Caixa com encaixes** (100 × 80 × 60, MDF 3 mm, kerf medido): as peças encaixam firmes, sem martelo e sem folga. Ajuste o kerf em 0,02 mm se precisar.
+- [ ] **Caixa com medidas internas**: o espaço interno bate com o pedido (±0,3 mm).
+- [ ] **Carrinho**: os 4 suportes entram nos rasgos da base; o motor TT passa entre dois suportes e os furos dele batem com os do suporte; o eixo gira livre no furo grande.
+- [ ] **Carrinho**: os furos da roda boba e da ESP32 batem com as suas peças.
+- [ ] **Otto** (montagem de teste, papelão ou MDF): o SG90 entra justo nos recortes da base e da perna; os furos das orelhas batem; o chifre do servo encaixa no topo da perna e no suporte do pé; o HC-SR04 entra nos furos da frente.
+- [ ] **Fila**: guarde dois trabalhos curtos; inicie o primeiro. Ao terminar, o aviso aparece com som e **o segundo não começa sozinho** (espere 1 minuto).
+- [ ] **Fila com origem mudada**: guarde um trabalho, mude a origem para perto da borda e tente iniciar. O agente deve recusar se o trabalho passar da área.
+- [ ] **Som**: toca no PC e no celular (lembre de tocar na página uma vez antes).
 
 ## Resultados
 

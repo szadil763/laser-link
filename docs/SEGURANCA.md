@@ -34,6 +34,7 @@ A interface pede para manter a tela acesa (Wake Lock) nessa aba, mas no celular 
 
 - Use **Tailscale** ou rede local. Não faça port-forward do agente.
 - Troque o token padrão. Gere um longo e aleatório.
+- A interface lembra o token no navegador depois da primeira conexão aceita (opção "Lembrar o token neste computador", ligada por padrão). Em computador compartilhado, desmarque ou use "Esquecer token": aí ele fica só na aba e some quando o navegador fecha.
 - Considere TLS (wss) via proxy se sair da rede local.
 - O firewall do Windows (regra criada pelo `instalar-servico.ps1`) aceita a porta só do Tailscale e da rede local. Veja `WINDOWS.md`.
 
