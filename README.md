@@ -6,7 +6,7 @@ Controle remoto de cortadora/gravadora a laser **GRBL**. Dois pedaços de softwa
 - **Interface web** (`apps/web`): abre em qualquer navegador (PC de projeto, celular). Uma tela só, no estilo de programa de desenho:
   - **barra de cima**: menu **Arquivo** (abrir projeto, salvar, salvar como, importar SVG/DXF/imagem, exemplo, exportar SVG/DXF/G-code), menu **Editar** (desenhar retângulo, linha e círculo com o mouse, desfazer, copiar, recortar, colar, duplicar, excluir, selecionar tudo, agrupar, desagrupar, alinhar, distribuir, travar e destravar), desfazer e o estado da conexão;
   - **barra de medidas**: X, Y, largura, altura, girar, espelhar, contorno deslocado, agrupar, desagrupar, duplicar e excluir o que está selecionado;
-  - **ferramentas** à esquerda: vários, área (caixa de seleção), texto, caixa, peças, teste de matriz, deslocamentos e mesa clara/escura;
+  - **ferramentas** à esquerda: vários, área (caixa de seleção), texto, caixa, peças, painel escolar, teste de matriz, deslocamentos e mesa clara/escura;
   - **mesa** no centro, com **Desenho** (o projeto) ou **Na máquina** (o trabalho enviado e o cabeçote em tempo real), e o botão **Limpar mesa** para a vista que está à mostra;
   - **faixa de operações** embaixo da mesa: Cortar, Gravar linha, Preenchido, Detalhado;
   - **origem do trabalho** (janela Máquina): leve o carrinho até o lugar certo no material. **Definir origem aqui** faz o carrinho virar o canto 0,0 da mesa. **Origem pelo desenho** faz o carrinho virar um dos 9 pontos do desenho (cantos, meios ou centro; da seleção, ou do desenho todo): o trabalho sai em volta desse ponto. Confira com **Enquadrar** antes de cortar.
@@ -95,7 +95,7 @@ npm run dev:web     # interface em http://localhost:5173; informe ws://localhost
 
 ## Preparar um trabalho
 
-1. **Importe** (Arquivo > Importar) um SVG ou DXF (cada cor ou camada do DXF vira uma camada; vermelho vira Cortar) ou uma imagem PNG/JPG, ou arraste o arquivo para a mesa. Também dá para adicionar **Texto** (fonte de traço único) ou gerar um **Teste de matriz** potência × velocidade.
+1. **Importe** (Arquivo > Importar) um SVG ou DXF (cada cor ou camada do DXF vira uma camada; vermelho vira Cortar) ou uma imagem PNG/JPG, ou arraste o arquivo para a mesa. Também dá para adicionar **Texto** (traço único ou uma das 11 fontes de contorno; veja abaixo) ou gerar um **Teste de matriz** potência × velocidade.
 2. **Escolha a operação**: cada camada tem uma operação padrão, e cada elemento pode ter a sua (selecione na mesa e use a faixa de operações embaixo dela, ou a lista "Elementos" da camada):
    - **Cortar**: atravessa o material (com compensação de kerf).
    - **Gravar linha**: marca o contorno.
@@ -112,13 +112,20 @@ npm run dev:web     # interface em http://localhost:5173; informe ws://localhost
 
 **Menu Editar:** **Copiar/Recortar/Colar** (Ctrl+C/X/V; cada colagem fica 10 mm mais ao lado, na mesma camada), **Alinhar** (entre si, ou na mesa quando é uma peça só), **Distribuir** (três ou mais peças com espaços iguais, mantendo as das pontas) e **Travar peça** (Ctrl+L): a peça continua na mesa e no corte, mas não se move, não gira e não é excluída até **Destravar** (Ctrl+Shift+L). Na barra de medidas, a peça travada aparece com 🔒.
 
-**Textos editáveis:** dê **dois cliques** num texto da mesa (o da ferramenta Texto, os nomes gravados da caixa ou o texto do carrinho) para reescrever. O texto novo fica no mesmo lugar.
+**Fontes:** o texto pode usar a fonte de traço único (rápida para gravar em linha, só maiúsculas) ou uma fonte de contorno, que aceita minúsculas e acentos: Fredoka, Baloo 2, Luckiest Guy, Chewy, Pacifico, Lobster, Patrick Hand, Comic Neue, Bebas Neue, Roboto e Allerta Stencil (todas livres, vêm junto com o app). **Carregar fonte…** usa uma fonte TTF, OTF ou WOFF do seu computador; ela fica guardada no navegador. Letras de fonte cursiva que se encostam viram um contorno só, para cortar inteiro.
+
+**Textos editáveis:** dê **dois cliques** num texto da mesa (o da ferramenta Texto, os nomes gravados da caixa ou o texto do carrinho) para reescrever ou trocar a fonte. O texto novo fica no mesmo lugar.
 
 **DXF:** linhas, polilinhas (com arcos), círculos, arcos, elipses, splines e blocos. Textos, cotas e hachuras do DXF ficam de fora (converta em linhas no programa de desenho). A unidade vem do arquivo; sem ela, milímetros.
 
 ### Peças prontas
 
 - **Caixa**: caixa com encaixes de dentes, com ou sem tampa, medidas internas ou externas, kerf do material.
+- **Painel**: peças para mural escolar (detalhes em [docs/PECAS.md](docs/PECAS.md#painel-escolar)):
+  - **frase com contorno**: letras recortadas e uma base maior por trás (por letra, por palavra ou por linha), com o lugar das letras gravado na base;
+  - **bandeirolas**: uma por letra, em formato de lápis, triângulo, retângulo com bico ou retângulo, com furos para o barbante e a letra recortada, gravada ou vazada;
+  - **lápis decorativo**: uma peça com as divisas gravadas ou uma peça por cor (borracha, ponteira, corpo, madeira, grafite), com texto opcional no corpo.
+  O que não cabe na mesa vai para a chapa seguinte (gere a chapa 1, corte, depois a 2…).
 - **Peças**: chassi do carrinho (2 motores TT, roda boba, ESP32 DevKit) e robô bípede tipo Otto, todo em MDF.
 - **Baixar SVG** e **Baixar G-code** salvam o projeto no seu computador.
 

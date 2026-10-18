@@ -15,6 +15,8 @@ export interface TextTag {
   /** Altura das maiúsculas, mm. */
   height: number;
   align: "left" | "center" | "right";
+  /** Fonte (id da interface); sem valor = traço único. */
+  font?: string;
 }
 
 /**

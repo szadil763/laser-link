@@ -16,7 +16,13 @@ import {
   pointInPolygon,
   segmentSeconds,
   textToPaths,
+  buntingParts,
+  layoutSheets,
+  pencilParts,
+  phraseParts,
   type Bounds,
+  type PanelPart,
+  type Path,
   type GenerateResult,
   type Point,
   type Segment,
@@ -43,7 +49,9 @@ import {
   type ImageItem,
   type Layer,
   type Shape,
+  type ShapeText,
 } from "./model.js";
+import { addUserFont, allFonts, cssFamily, fontLabel, fontTextToPaths, loadFont, shapeLine, SINGLE_STROKE } from "./fonts.js";
 import { sampleDesign } from "./sample.js";
 
 type DrawTool = "rect" | "line" | "circle";
@@ -491,6 +499,133 @@ export class Workspace {
     dlg.showModal();
   }
 
+  // ---------- painel escolar ----------
+
+  private openPanel(): void {
+    const dlg = $<HTMLDialogElement>("dlg-panel");
+    const sel = $<HTMLSelectElement>("pn-font");
+    const kind = $<HTMLSelectElement>("pn-kind");
+    const start = this.lastFont();
+    this.fillFonts(sel, start === SINGLE_STROKE ? "fredoka" : start);
+    const sync = (): void => {
+      for (const k of ["phrase", "bunting", "pencil"]) $(`pn-${k}`).hidden = kind.value !== k;
+      const sample = $("pn-sample");
+      sample.textContent = (kind.value === "phrase" ? $<HTMLTextAreaElement>("ph-text").value.split("\n")[0] : kind.value === "bunting" ? $<HTMLInputElement>("bt-text").value : $<HTMLInputElement>("pc-label").value) || "Escola";
+      void cssFamily(sel.value)
+        .then((family) => {
+          sample.style.fontFamily = family ? `"${family}"` : "var(--mono)";
+          sample.classList.toggle("single", !family);
+        })
+        .catch(() => undefined);
+    };
+    kind.onchange = sync;
+    sel.onchange = () => {
+      if (sel.value !== SINGLE_STROKE) this.rememberFont(sel.value);
+      sync();
+    };
+    for (const id of ["ph-text", "bt-text", "pc-label"]) $<HTMLInputElement>(id).oninput = sync;
+    $("pn-font-load").onclick = () => this.pickFontFile(sel, sync);
+    sync();
+    $("pn-error").textContent = "";
+    const onClose = async (): Promise<void> => {
+      if (dlg.returnValue !== "ok") return;
+      const err = await this.loadPanel();
+      if (err) {
+        $("pn-error").textContent = err;
+        dlg.returnValue = "";
+        dlg.addEventListener("close", () => void onClose(), { once: true });
+        dlg.showModal();
+      }
+    };
+    dlg.addEventListener("close", () => void onClose(), { once: true });
+    dlg.returnValue = "";
+    dlg.showModal();
+  }
+
+  /** Gera as peças do painel e põe na mesa a chapa pedida. Devolve a mensagem de erro, se houver. */
+  private async loadPanel(): Promise<string | null> {
+    const num = (id: string): number => Number($<HTMLInputElement>(id).value);
+    const kind = $<HTMLSelectElement>("pn-kind").value;
+    const fontId = $<HTMLSelectElement>("pn-font").value;
+    let parts: PanelPart[];
+    try {
+      const needsOutline = kind !== "pencil" || $<HTMLInputElement>("pc-label").value.trim() !== "";
+      if (needsOutline && fontId === SINGLE_STROKE) throw new Error("Escolha uma fonte de contorno (traço único não forma letras para cortar).");
+      const font = needsOutline ? await loadFont(fontId) : null;
+      const shaper = (text: string, h: number): Path[] => (font ? shapeLine(font, text, h) : []);
+      if (kind === "phrase") {
+        parts = phraseParts(
+          {
+            lines: $<HTMLTextAreaElement>("ph-text").value.split("\n"),
+            height: num("ph-height"),
+            border: num("ph-border"),
+            baseBy: $<HTMLSelectElement>("ph-base").value as "letter" | "word" | "line",
+            guide: $<HTMLInputElement>("ph-guide").checked,
+          },
+          shaper,
+        );
+      } else if (kind === "bunting") {
+        parts = buntingParts(
+          {
+            text: $<HTMLInputElement>("bt-text").value,
+            shape: $<HTMLSelectElement>("bt-shape").value as "pencil" | "triangle" | "swallowtail" | "rect",
+            width: num("bt-w"),
+            height: num("bt-h"),
+            holeD: num("bt-hole"),
+            letter: $<HTMLSelectElement>("bt-letter").value as "cut" | "engrave" | "hollow",
+            letterScale: num("bt-scale") / 100,
+          },
+          shaper,
+        );
+      } else {
+        parts = pencilParts({ length: num("pc-l"), width: num("pc-w"), split: $<HTMLSelectElement>("pc-split").value === "1", label: $<HTMLInputElement>("pc-label").value }, shaper);
+      }
+    } catch (err) {
+      return (err as Error).message;
+    }
+    const area = this.limits.workArea;
+    const { sheets, tooBig } = layoutSheets(parts, area);
+    if (!sheets.length) return `Nenhuma peça cabe na mesa (${area.x} × ${area.y} mm): ${tooBig.slice(0, 3).join(", ")}. Diminua as medidas.`;
+    const sheetNo = Math.min(sheets.length, Math.max(1, Math.round(num("pn-sheet")) || 1));
+    $<HTMLInputElement>("pn-sheet").value = String(sheetNo);
+    $<HTMLInputElement>("pn-sheet").max = String(sheets.length);
+    $("pn-sheets").textContent = `de ${sheets.length}`;
+    const title = kind === "phrase" ? "Painel: frase" : kind === "bunting" ? "Painel: bandeirolas" : "Painel: lápis";
+    this.resetDesign(sheets.length > 1 ? `${title} (chapa ${sheetNo} de ${sheets.length})` : title);
+    const mat = this.materials[0];
+    const layers: Record<"cut" | "line" | "fill", Layer> = {
+      cut: makeLayer("Cortes", MODE_INFO.cut.color, "cut", mat),
+      line: makeLayer("Gravar linha", MODE_INFO.line.color, "line", mat),
+      fill: makeLayer("Gravar preenchido", MODE_INFO.fill.color, "fill", mat),
+    };
+    for (const { part, dx, dy } of sheets[sheetNo - 1]!) {
+      const group = newId("G");
+      const add = (layer: Layer, paths: Path[], suffix: string): void => {
+        paths.forEach((p, i) => {
+          const sh = makeShape(
+            p.points.map(([x, y]) => [x + dx, y + dy] as Point),
+            paths.length > 1 ? `${part.name}${suffix} ${i + 1}` : `${part.name}${suffix}`,
+            p.closed,
+          );
+          sh.group = group;
+          layer.shapes.push(sh);
+        });
+      };
+      add(layers.cut, part.cut, "");
+      add(layers.line, part.engrave, ": gravação");
+      add(layers.fill, part.fill, ": preenchido");
+    }
+    this.layers = [layers.fill, layers.line, layers.cut].filter((l) => l.shapes.length);
+    this.view.fitTo(null);
+    this.refresh();
+    const parts1 = sheets[sheetNo - 1]!.length;
+    const more =
+      sheets.length <= 1 ? "" : sheetNo < sheets.length ? ` Chapa ${sheetNo} de ${sheets.length}: depois de cortar, abra Painel de novo e gere a chapa ${sheetNo + 1}.` : ` Esta é a última chapa (${sheetNo} de ${sheets.length}).`;
+    const big = tooBig.length ? ` Ficaram de fora por serem maiores que a mesa: ${tooBig.slice(0, 3).join(", ")}${tooBig.length > 3 ? "…" : ""}.` : "";
+    this.host.toast(`${parts1} peça(s) na mesa.${more}${big}`);
+    return null;
+  }
+
   /** Baixa um arquivo gerado no navegador. */
   private download(name: string, content: string, type: string): void {
     const url = URL.createObjectURL(new Blob([content], { type }));
@@ -632,12 +767,22 @@ export class Workspace {
     this.refresh();
   }
 
-  private addText(): void {
-    const text = $<HTMLInputElement>("tx-text").value.trim();
-    if (!text) return;
+  private async addText(): Promise<void> {
+    const text = $<HTMLTextAreaElement>("tx-text").value.replace(/\s+$/, "");
+    if (!text.trim()) return;
     const height = Math.max(1, Number($<HTMLInputElement>("tx-height").value));
     const x = Number($<HTMLInputElement>("tx-x").value);
     const y = Number($<HTMLInputElement>("tx-y").value);
+    const font = $<HTMLSelectElement>("tx-font").value || SINGLE_STROKE;
+    const align = $<HTMLSelectElement>("tx-align").value as "left" | "center" | "right";
+    const mode = font === SINGLE_STROKE ? "line" : ($<HTMLSelectElement>("tx-mode").value as VectorMode);
+    let paths: Path[];
+    try {
+      paths = await fontTextToPaths(font, text, { height, x, y, align, tag: newId("T") });
+    } catch (err) {
+      return this.host.toast((err as Error).message);
+    }
+    if (!paths.length) return this.host.toast("Nenhuma letra desse texto existe na fonte escolhida.");
     let layer = this.layers.find((l) => l.name === "Texto");
     if (!layer) {
       layer = makeLayer("Texto", "#4da3ff", "line", this.materials[0]);
@@ -645,10 +790,12 @@ export class Workspace {
     }
     this.history.push(this.layers);
     const group = newId("G");
-    const label = text.length > 24 ? `${text.slice(0, 24)}…` : text;
+    const oneLine = text.replace(/\n/g, " ");
+    const label = oneLine.length > 24 ? `${oneLine.slice(0, 24)}…` : oneLine;
     this.selected.clear();
-    for (const p of textToPaths(text, { height, x, y, tag: newId("T") })) {
-      const s = makeShape(p.points, `Texto “${label}”`, p.closed);
+    for (const p of paths) {
+      // a camada Texto grava em linha; preencher ou cortar fica como operação do próprio elemento
+      const s = makeShape(p.points, `Texto “${label}”`, p.closed, mode === layer.mode ? null : mode);
       s.group = group;
       if (p.text) s.text = { ...p.text, h0: 0 };
       layer.shapes.push(s);
@@ -658,6 +805,75 @@ export class Workspace {
     if (!this.designName) this.designName = "Texto";
     this.refresh();
     this.host.toast("Texto adicionado e selecionado: arraste ou use os campos para posicionar.");
+  }
+
+  // ---------- fontes ----------
+
+  /** Preenche um seletor de fontes (as do app e as carregadas pela pessoa). */
+  private fillFonts(sel: HTMLSelectElement, current: string): void {
+    sel.innerHTML = allFonts()
+      .map((f) => `<option value="${esc(f.id)}"${f.id === current ? " selected" : ""}>${esc(f.label)}</option>`)
+      .join("");
+    if (!sel.value) sel.value = SINGLE_STROKE;
+  }
+
+  private lastFont(): string {
+    try {
+      return localStorage.getItem("laserlink.font") ?? "fredoka";
+    } catch {
+      return "fredoka";
+    }
+  }
+
+  private rememberFont(id: string): void {
+    try {
+      localStorage.setItem("laserlink.font", id);
+    } catch {
+      /* armazenamento indisponível */
+    }
+  }
+
+  /** Mostra a amostra da fonte e ajusta as operações possíveis (traço único só grava em linha). */
+  private async syncFontUi(sel: HTMLSelectElement, sample: HTMLElement | null, mode: HTMLSelectElement | null, note: HTMLElement | null): Promise<void> {
+    const single = sel.value === SINGLE_STROKE;
+    if (mode) {
+      for (const o of mode.options) o.disabled = single && o.value !== "line";
+      if (single) mode.value = "line";
+      else if (mode.value === "line" && mode.dataset.touched !== "1") mode.value = "fill";
+    }
+    if (note) {
+      note.textContent = single
+        ? "Traço único: risco simples, rápido para gravar em linha. Só maiúsculas; acentos saem sem acento (Ç vira C)."
+        : "Fonte de contorno: aceita minúsculas e acentos. Boa para gravar preenchido ou cortar letras de painel.";
+    }
+    if (!sample) return;
+    sample.textContent = ($<HTMLTextAreaElement>("tx-text").value.split("\n")[0] || "LaserLink").slice(0, 40);
+    try {
+      const family = await cssFamily(sel.value);
+      sample.style.fontFamily = family ? `"${family}"` : "var(--mono)";
+      sample.classList.toggle("single", !family);
+    } catch {
+      sample.style.fontFamily = "";
+    }
+  }
+
+  /** Abre o seletor de arquivo de fonte; ao carregar, escolhe a fonte nova em `sel`. */
+  private pickFontFile(sel: HTMLSelectElement, after: () => void): void {
+    const input = $<HTMLInputElement>("font-file");
+    input.value = "";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const info = await addUserFont(file);
+        this.fillFonts(sel, info.id);
+        this.host.toast(`Fonte ${info.label} carregada. Ela fica guardada neste navegador.`);
+        after();
+      } catch (err) {
+        this.host.toast((err as Error).message);
+      }
+    };
+    input.click();
   }
 
   private async handleFile(file: File | undefined): Promise<void> {
@@ -703,6 +919,7 @@ export class Workspace {
   private tagShape(sh: Shape, tag: TextTag | undefined): void {
     if (!tag) return;
     sh.text = { id: `${this.textPrefix}${tag.id}`, value: tag.value, height: tag.height, align: tag.align, h0: 0 };
+    if (tag.font) sh.text.font = tag.font;
   }
 
   private textPrefix = "";
@@ -756,16 +973,23 @@ export class Workspace {
     const tag = first.s.text;
     const old = boundsOf(found.flatMap(({ s }) => s.points))!;
     const stretch = tag.h0 > 0 ? (old.maxY - old.minY) / tag.h0 : 1;
-    $<HTMLInputElement>("te-text").value = tag.value;
+    $<HTMLTextAreaElement>("te-text").value = tag.value;
+    this.fillFonts($<HTMLSelectElement>("te-font"), tag.font ?? SINGLE_STROKE);
     $<HTMLInputElement>("te-height").value = String(Math.round(tag.height * stretch * 10) / 10);
     const dlg = $<HTMLDialogElement>("dlg-text-edit");
     dlg.addEventListener(
       "close",
-      () => {
+      async () => {
         if (dlg.returnValue !== "ok") return;
-        const value = $<HTMLInputElement>("te-text").value.trim();
+        const value = $<HTMLTextAreaElement>("te-text").value.replace(/\s+$/, "");
         const height = Math.max(1, Number($<HTMLInputElement>("te-height").value) || tag.height);
-        const paths = value ? textToPaths(value, { height, x: 0, y: 0, align: tag.align }) : [];
+        const font = $<HTMLSelectElement>("te-font").value || SINGLE_STROKE;
+        let paths: Path[] = [];
+        try {
+          paths = value.trim() ? await fontTextToPaths(font, value, { height, x: 0, y: 0, align: tag.align }) : [];
+        } catch (err) {
+          return this.host.toast((err as Error).message);
+        }
         const nb = boundsOf(paths.flatMap((p) => p.points));
         if (!nb) return this.host.toast("Escreva o texto. Para apagar o texto, selecione e use Excluir.");
         // o texto novo fica onde o antigo estava (mesmo centro; mesma ponta quando alinhado à esquerda/direita)
@@ -777,7 +1001,9 @@ export class Workspace {
         for (const l of this.layers) l.shapes = l.shapes.filter((s) => s.text?.id !== id);
         const label = value.length > 24 ? `${value.slice(0, 24)}…` : value;
         const name = first.s.name.startsWith("Texto “") ? `Texto “${label}”` : first.s.name;
-        const text = { ...tag, value, height, h0: nb.maxY - nb.minY };
+        const text: ShapeText = { ...tag, value, height, h0: nb.maxY - nb.minY };
+        if (font === SINGLE_STROKE) delete text.font;
+        else text.font = font;
         const fresh = paths.map((p) => {
           const sh = makeShape(p.points.map(([x, y]) => [x + dx, y + dy] as Point), name, p.closed, first.s.mode);
           if (first.s.group) sh.group = first.s.group;
@@ -2067,7 +2293,19 @@ export class Workspace {
     });
     $("p-text").addEventListener("click", () => {
       const dlg = $<HTMLDialogElement>("dlg-text");
-      dlg.addEventListener("close", () => dlg.returnValue === "ok" && this.addText(), { once: true });
+      const sel = $<HTMLSelectElement>("tx-font");
+      const mode = $<HTMLSelectElement>("tx-mode");
+      const sync = (): void => void this.syncFontUi(sel, $("tx-sample"), mode, $("tx-font-note"));
+      this.fillFonts(sel, this.lastFont());
+      sel.onchange = () => {
+        this.rememberFont(sel.value);
+        sync();
+      };
+      mode.onchange = () => (mode.dataset.touched = "1");
+      $<HTMLTextAreaElement>("tx-text").oninput = sync;
+      $("tx-font-load").onclick = () => this.pickFontFile(sel, () => sel.onchange?.(new Event("change")));
+      sync();
+      dlg.addEventListener("close", () => dlg.returnValue === "ok" && void this.addText(), { once: true });
       dlg.returnValue = "";
       dlg.showModal();
     });
@@ -2080,6 +2318,7 @@ export class Workspace {
     $("p-materials").addEventListener("click", () => this.openMaterials());
     $("p-box-gen").addEventListener("click", () => this.openBox());
     $("p-parts").addEventListener("click", () => this.openParts());
+    $("p-panel").addEventListener("click", () => this.openPanel());
     $("p-area").addEventListener("click", (e) => {
       this.areaMode = !this.areaMode;
       (e.currentTarget as HTMLElement).setAttribute("aria-pressed", String(this.areaMode));

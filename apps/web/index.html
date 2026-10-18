@@ -153,6 +153,7 @@
         <button id="p-text" title="Adicionar texto"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg><span>Texto</span></button>
         <button id="p-box-gen" title="Gerar caixa com encaixes"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg><span>Caixa</span></button>
         <button id="p-parts" title="Peças do carrinho e do robô bípede"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="7.5" cy="16.5" r="3"/><circle cx="16.5" cy="16.5" r="3"/><path d="M5 13V8h9l3 5M10 8V5h3"/></svg><span>Peças</span></button>
+        <button id="p-panel" title="Painel escolar: letras com contorno, bandeirolas e lápis"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 4h18"/><path d="M5 4v5l2 2 2-2V4M10 4v5l2 2 2-2V4M15 4v5l2 2 2-2V4"/><rect x="4" y="14" width="16" height="6" rx="2"/><path d="M8 17h8"/></svg><span>Painel</span></button>
         <button id="p-matrix" title="Teste de matriz potência × velocidade"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="3.5" width="5" height="5"/><rect x="10" y="3.5" width="5" height="5"/><rect x="16.5" y="3.5" width="4" height="5"/><rect x="3.5" y="10" width="5" height="5"/><rect x="10" y="10" width="5" height="5"/><rect x="3.5" y="16.5" width="5" height="4"/></svg><span>Matriz</span></button>
         <span class="rail-sep"></span>
         <button id="p-travel" aria-pressed="true" title="Mostrar deslocamentos sem laser"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 18c3-8 6 2 9-6s5-4 7-6" stroke-dasharray="2.5 2.5"/><circle cx="4" cy="18" r="1.5"/><circle cx="20" cy="6" r="1.5"/></svg><span>Desloc.</span></button>
@@ -389,9 +390,10 @@
     <dialog id="dlg-text-edit" aria-labelledby="te-title">
       <form method="dialog">
         <h2 id="te-title">Editar texto</h2>
-        <p class="note">O texto novo fica no mesmo lugar do antigo. Fonte de traço único: maiúsculas, números e sinais comuns; acentos são removidos.</p>
+        <p class="note">O texto novo fica no mesmo lugar do antigo.</p>
         <div class="fields" style="margin-top:10px">
-          <label class="field" style="grid-column: 1 / -1">Texto <input type="text" id="te-text" maxlength="200" /></label>
+          <label class="field" style="grid-column: 1 / -1">Texto <textarea id="te-text" rows="2" maxlength="400"></textarea></label>
+          <label class="field" style="grid-column: 1 / -1">Fonte <select id="te-font" class="plain font-select"></select></label>
           <label class="field">Altura <span class="val"><input type="number" id="te-height" min="1" max="200" step="0.5" /><span class="unit">mm</span></span></label>
         </div>
         <div class="row end">
@@ -416,9 +418,13 @@
     <dialog id="dlg-text" aria-labelledby="tx-title">
       <form method="dialog">
         <h2 id="tx-title">Adicionar texto</h2>
-        <p class="note">Fonte de traço único, boa para gravar em linha. Só maiúsculas, números e sinais comuns; acentos são removidos (Ç vira C).</p>
         <div class="fields" style="margin-top:10px">
-          <label class="field" style="grid-column: 1 / -1">Texto <input type="text" id="tx-text" maxlength="200" value="LASERLINK" /></label>
+          <label class="field" style="grid-column: 1 / -1">Texto <textarea id="tx-text" rows="2" maxlength="400">LaserLink</textarea></label>
+          <label class="field" style="grid-column: 1 / -1">Fonte <span class="val"><select id="tx-font" class="plain font-select"></select><button type="button" id="tx-font-load" title="TTF, OTF ou WOFF">Carregar fonte…</button></span></label>
+          <div class="font-sample" id="tx-sample" style="grid-column: 1 / -1" aria-hidden="true">LaserLink</div>
+          <p class="note" id="tx-font-note" style="grid-column: 1 / -1"></p>
+          <label class="field">Operação <select id="tx-mode"><option value="fill">Gravar preenchido</option><option value="line">Gravar contorno</option><option value="cut">Cortar as letras</option></select></label>
+          <label class="field">Alinhar <select id="tx-align"><option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option></select></label>
           <label class="field">Altura <span class="val"><input type="number" id="tx-height" value="8" min="1" max="200" step="0.5" /><span class="unit">mm</span></span></label>
           <label class="field">X <span class="val"><input type="number" id="tx-x" value="20" step="1" /><span class="unit">mm</span></span></label>
           <label class="field">Y <span class="val"><input type="number" id="tx-y" value="20" step="1" /><span class="unit">mm</span></span></label>
@@ -426,6 +432,62 @@
         <div class="row end">
           <button value="cancel">Voltar</button>
           <button value="ok" class="primary">Adicionar texto</button>
+        </div>
+      </form>
+    </dialog>
+
+    <input type="file" id="font-file" accept=".ttf,.otf,.woff,font/ttf,font/otf,font/woff" hidden />
+
+    <dialog id="dlg-panel" aria-labelledby="pn-title">
+      <form method="dialog">
+        <h2 id="pn-title">Painel escolar</h2>
+        <p class="note">Peças para murais e painéis, geradas a partir das medidas. O que não cabe na mesa vai para a chapa seguinte: gere a chapa 1, corte, depois a 2…</p>
+        <div class="fields" style="margin-top:10px">
+          <label class="field" style="grid-column: 1 / -1">O que fazer <select id="pn-kind">
+            <option value="phrase">Frase com contorno (letras + base)</option>
+            <option value="bunting">Bandeirolas com letras</option>
+            <option value="pencil">Lápis decorativo</option>
+          </select></label>
+          <label class="field" style="grid-column: 1 / -1">Fonte <span class="val"><select id="pn-font" class="plain font-select"></select><button type="button" id="pn-font-load" title="TTF, OTF ou WOFF">Carregar fonte…</button></span></label>
+          <div class="font-sample" id="pn-sample" style="grid-column: 1 / -1" aria-hidden="true">Escola</div>
+        </div>
+        <fieldset id="pn-phrase" class="pn-group">
+          <div class="fields">
+            <label class="field" style="grid-column: 1 / -1">Frase (uma linha por linha do painel) <textarea id="ph-text" rows="3" maxlength="400">Escola, um lugar de
+descobertas</textarea></label>
+            <label class="field">Altura das letras <span class="val"><input type="number" id="ph-height" value="50" min="10" max="280" step="1" /><span class="unit">mm</span></span></label>
+            <label class="field">Contorno da base <span class="val"><input type="number" id="ph-border" value="6" min="0" max="40" step="0.5" /><span class="unit">mm</span></span></label>
+            <label class="field">Base <select id="ph-base"><option value="word">Uma por palavra</option><option value="letter">Uma por letra</option><option value="line">Uma por linha</option></select></label>
+          </div>
+          <label class="check"><input type="checkbox" id="ph-guide" checked /> Gravar na base onde colar as letras</label>
+          <p class="note">Contorno 0 = só as letras, sem base. Fontes de contorno (não use traço único).</p>
+        </fieldset>
+        <fieldset id="pn-bunting" class="pn-group" hidden>
+          <div class="fields">
+            <label class="field" style="grid-column: 1 / -1">Texto (uma bandeirola por letra; espaço = bandeirola lisa) <input type="text" id="bt-text" value="BEM-VINDOS" maxlength="60" /></label>
+            <label class="field">Formato <select id="bt-shape"><option value="pencil">Lápis</option><option value="triangle">Triângulo</option><option value="swallowtail">Retângulo com bico</option><option value="rect">Retângulo</option></select></label>
+            <label class="field">Largura <span class="val"><input type="number" id="bt-w" value="80" min="20" max="280" /><span class="unit">mm</span></span></label>
+            <label class="field">Altura <span class="val"><input type="number" id="bt-h" value="140" min="30" max="280" /><span class="unit">mm</span></span></label>
+            <label class="field">Furo do barbante <span class="val"><input type="number" id="bt-hole" value="5" min="0" max="20" step="0.5" /><span class="unit">mm</span></span></label>
+            <label class="field">Letra <select id="bt-letter"><option value="cut">Recortada (para colar)</option><option value="engrave">Gravada</option><option value="hollow">Vazada</option></select></label>
+            <label class="field">Tamanho da letra <span class="val"><input type="number" id="bt-scale" value="80" min="30" max="100" step="5" /><span class="unit">%</span></span></label>
+          </div>
+        </fieldset>
+        <fieldset id="pn-pencil" class="pn-group" hidden>
+          <div class="fields">
+            <label class="field">Comprimento <span class="val"><input type="number" id="pc-l" value="380" min="60" max="1000" /><span class="unit">mm</span></span></label>
+            <label class="field">Largura <span class="val"><input type="number" id="pc-w" value="60" min="15" max="280" /><span class="unit">mm</span></span></label>
+            <label class="field">Peças <select id="pc-split"><option value="0">Uma peça, divisas gravadas</option><option value="1">Uma peça por cor</option></select></label>
+            <label class="field" style="grid-column: 1 / -1">Texto no corpo (opcional) <input type="text" id="pc-label" value="" maxlength="30" placeholder="ex.: 5º ano B" /></label>
+          </div>
+        </fieldset>
+        <div class="fields" style="margin-top:8px">
+          <label class="field">Chapa <span class="val"><input type="number" id="pn-sheet" value="1" min="1" step="1" /><span class="unit" id="pn-sheets"></span></span></label>
+        </div>
+        <p class="note error-text" id="pn-error" role="alert"></p>
+        <div class="row end">
+          <button value="cancel">Voltar</button>
+          <button value="ok" class="primary">Gerar na mesa</button>
         </div>
       </form>
     </dialog>

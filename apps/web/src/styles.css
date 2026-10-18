@@ -273,6 +273,12 @@ progress { width: 100%; accent-color: var(--accent); }
 .setrow { display: grid; gap: 6px; background: var(--bg); border-radius: 8px; padding: 8px; border-left: 3px solid var(--c); }
 .setrow-title { font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
 .setrow-title small { color: var(--muted); font-weight: 400; }
+.font-select { flex: 1 1 auto; min-width: 0; }
+.font-sample { min-height: 54px; display: flex; align-items: center; padding: 6px 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); font-size: 30px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.font-sample.single { font: 600 20px var(--mono); text-transform: uppercase; letter-spacing: .08em; }
+.field textarea { width: 100%; min-height: 54px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; resize: vertical; }
+.error-text { color: #f28b82; }
+.pn-group { border: 0; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 6px 8px; }
 .field { display: grid; gap: 3px; font-size: 12px; color: var(--muted); min-width: 0; }
 .field .val { display: flex; align-items: center; gap: 4px; min-width: 0; }

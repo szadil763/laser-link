@@ -32,6 +32,8 @@ export interface ShapeText {
   value: string;
   height: number;
   align: "left" | "center" | "right";
+  /** Fonte do texto; sem valor = traço único. */
+  font?: string;
   /** Altura do texto na mesa quando foi escrito (para saber se ele foi esticado depois). */
   h0: number;
 }

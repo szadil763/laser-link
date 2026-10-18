@@ -13,3 +13,4 @@ export * from "./box.js";
 export * from "./svg.js";
 export * from "./dxf.js";
 export * from "./parts/index.js";
+export * from "./panels.js";

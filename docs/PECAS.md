@@ -1,4 +1,4 @@
-# Peças prontas: caixa, carrinho e robô bípede
+# Peças prontas: caixa, carrinho, robô bípede e painel escolar
 
 Os geradores ficam na barra de ferramentas à esquerda da mesa: botão **Caixa** e botão **Peças**.
 Todos são projetos próprios do LaserLink, gerados do zero a partir das medidas.
@@ -87,3 +87,34 @@ Esta é a versão 1 do desenho. Corte um conjunto em papelão ou MDF fino primei
 - Se uma medida não couber (motor maior que o suporte, servo que não cabe na base), o gerador mostra o erro e não gera nada.
 - Todas as peças saem dentro da área da mesa. Se a fileira ficar larga demais, as peças passam para uma nova fileira.
 - Cada peça vira um **grupo**: clique em um furo e a peça inteira fica selecionada para mover.
+
+## Painel escolar
+
+Botão **Painel** na barra de ferramentas. Escolha o que fazer, a fonte e as medidas, e clique em **Gerar na mesa**.
+Use uma fonte de contorno (a de traço único não forma letras para cortar).
+
+### Frase com contorno
+
+- Uma linha do campo **Frase** vira uma linha do painel.
+- **Altura das letras** é a altura das maiúsculas.
+- **Contorno da base**: quanto a base passa das letras. Com 0, saem só as letras.
+- **Base**: uma por letra, uma por palavra (o mais comum em mural) ou uma por linha.
+- Com **Gravar na base onde colar as letras**, o desenho das letras fica gravado na base: é só colar por cima.
+
+Ideia de cores: letras em MDF pintado (ou acrílico colorido) e base em MDF branco.
+
+### Bandeirolas
+
+- Cada caractere vira uma bandeirola. Espaço vira bandeirola lisa (bom para separar palavras).
+- Formatos: **lápis** (ponta para baixo, com borracha, ponteira e grafite gravados), **triângulo**, **retângulo com bico** e **retângulo**.
+- **Furo do barbante**: dois furos no alto. 0 = sem furos.
+- **Letra**: recortada (peça separada para colar; o lugar fica gravado na bandeirola), gravada (preenchida) ou vazada (vira furo).
+
+### Lápis decorativo
+
+- **Uma peça, divisas gravadas**: para pintar. As faces do lápis sextavado só aparecem sem texto no corpo.
+- **Uma peça por cor**: borracha, ponteira, corpo, madeira e grafite saem separados, para cortar cada um no material da cor certa.
+
+### Chapas
+
+Tudo é distribuído em chapas do tamanho da mesa. Se a mensagem disser "Chapa 1 de 3", corte essa, abra **Painel** de novo, mude **Chapa** para 2 e gere. Peça maior que a mesa fica de fora e aparece no aviso: diminua as medidas ou divida a frase em mais linhas.
