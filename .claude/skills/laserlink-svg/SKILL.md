@@ -15,8 +15,8 @@ O LaserLink importa SVG e decide a operação pela cor. Esta skill garante que o
 
 ## A máquina
 
-- Área útil: a do `workArea` do `laserlink.config.json` (no app: janela Máquina, abra Conexão: "Limites do agente").
-  Se não souber, pergunte. O padrão do LaserLink é **400 × 400 mm**. Nada pode passar da área.
+- Área útil: **300 mm em X (largura) × 400 mm em Y (profundidade)**. Nada pode passar disso.
+  Se a pessoa disser que mudou, confira no app: janela Máquina, abra Conexão, "Limites do agente".
 - Origem (0,0) no canto de **baixo à esquerda** da mesa.
 - Material mais comum: MDF 3 mm. Kerf (largura do corte) ~0,15 mm: o app compensa sozinho; desenhe na medida final.
 
@@ -27,7 +27,7 @@ O LaserLink importa SVG e decide a operação pela cor. Esta skill garante que o
 2. **Posição**:
    - Padrão: o app coloca o desenho a 20 mm da origem (a posição no arquivo não importa).
    - Para valer a posição exata na mesa, faça o SVG do tamanho da mesa e marque `data-laserlink="mesa"`:
-     `<svg … width="400mm" height="400mm" viewBox="0 0 400 400" data-laserlink="mesa">`
+     `<svg … width="300mm" height="400mm" viewBox="0 0 300 400" data-laserlink="mesa">`
      Lembre: no SVG o y cresce **para baixo**; na mesa, para cima (y_mesa = altura − y_svg).
 3. **Operação pela cor** (use exatamente estas):
 
@@ -73,7 +73,7 @@ Fora do repositório (sem os scripts): se houver Python com `fontTools`, convert
 No repositório:
 
 ```bash
-node scripts/conferir-svg.mjs peca.svg --area 400x400
+node scripts/conferir-svg.mjs peca.svg --area 300x400
 ```
 
 Mostra o tamanho, quantos elementos vão para cada operação e os erros (ex.: `<text>` esquecido, tamanho maior que a mesa). Só entregue quando disser "Pronto para o LaserLink".

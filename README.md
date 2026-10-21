@@ -138,7 +138,7 @@ Medidas, montagem e o que conferir com paquímetro: `docs/PECAS.md`.
 Para publicar (de qualquer clone do repositório):
 
 ```bash
-node scripts/conferir-svg.mjs peca.svg --area 400x400       # confere tamanho, cores e elementos
+node scripts/conferir-svg.mjs peca.svg --area 300x400       # confere tamanho, cores e elementos
 node scripts/publicar-projeto.mjs peca.svg --descricao "Placa da sala 3, MDF 3 mm"
 node scripts/publicar-projeto.mjs --listar
 node scripts/publicar-projeto.mjs --remover peca.svg
