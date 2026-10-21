@@ -46,6 +46,10 @@ npm run dev:web
 - Não copiar código, interface, ícones ou formato de arquivo do LightBurn.
 - G-code gerado precisa passar em `checkGcode` do agente (há teste em `apps/agent/test/gcode-integration.test.ts`).
 
+## Projetos para a laser (SVG)
+
+Para gerar peças/desenhos para a máquina, use a skill `.claude/skills/laserlink-svg` (formato do SVG, cores das operações, texto em caminhos) e publique com `node scripts/publicar-projeto.mjs` (ramo `projetos`, aparece em Arquivo > Projetos recebidos). Nunca inicie trabalho nem ligue o laser: só entregue o desenho.
+
 ## Próximos passos
 
 Veja `docs/ROADMAP.md`. Fases 1, 2 e 3 prontas no simulador; falta validar na bancada (`docs/TESTES-NA-BANCADA.md`). Depois: câmera, nesting e editor vetorial (seção "Depois" do roadmap).

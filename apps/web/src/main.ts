@@ -1,5 +1,5 @@
 import "./styles.css";
-import { PROTOCOL_VERSION, type JobInfo, type JobResult, type QueueItem, type ServerMessage } from "@laserlink/shared";
+import { PROTOCOL_VERSION, type JobInfo, type JobResult, type ProjectEntry, type QueueItem, type ServerMessage } from "@laserlink/shared";
 import { chime } from "./chime.js";
 import { confirmDialog } from "./confirm-dialog.js";
 import { Connection, type LinkState } from "./connection.js";
@@ -486,6 +486,12 @@ function onMessage(msg: ServerMessage): void {
       break;
     case "pong":
       break;
+    case "projects":
+      renderInbox(msg.items, msg.error);
+      break;
+    case "projectFile":
+      void openInboxFile(msg.entry, msg.content);
+      break;
     case "error":
       log(`ERRO: ${msg.message}`);
       toast(msg.message);
@@ -544,6 +550,57 @@ document.querySelectorAll<HTMLButtonElement>(".jog button").forEach((btn) => {
 });
 
 $("home").addEventListener("click", () => conn.send({ type: "home" }));
+// ---------- projetos recebidos (ramo projetos do GitHub) ----------
+function inboxStatus(text: string): void {
+  $("ib-status").textContent = text;
+}
+function fetchInbox(): void {
+  if (conn.send({ type: "projectsList" })) inboxStatus("Buscando no GitHub…");
+  else inboxStatus("Sem conexão com o agente. Conecte na janela Máquina e tente de novo.");
+}
+function renderInbox(items: ProjectEntry[], error?: string): void {
+  const list = $("ib-list");
+  list.replaceChildren();
+  for (const it of items) {
+    const li = document.createElement("li");
+    const info = document.createElement("div");
+    info.className = "ib-info";
+    const name = document.createElement("b");
+    name.textContent = it.name;
+    const desc = document.createElement("span");
+    desc.className = "note";
+    const when = it.date ? new Date(it.date).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
+    desc.textContent = [it.description, when].filter(Boolean).join(" · ");
+    const kind = document.createElement("span");
+    kind.className = "ib-kind";
+    kind.textContent = it.kind === "laserlink" ? "projeto" : it.kind;
+    info.append(name, desc);
+    const open = button("Abrir", () => {
+      if (conn.send({ type: "projectGet", path: it.path })) inboxStatus(`Abrindo ${it.name}…`);
+    }, { label: `Abrir ${it.name}` });
+    li.append(info, kind, open);
+    list.append(li);
+  }
+  const n = items.length;
+  inboxStatus(error ? (n ? `${error} Mostrando a última lista baixada.` : error) : n ? `${n} projeto(s). O mais novo fica em cima.` : "Nenhum projeto publicado ainda.");
+}
+async function openInboxFile(entry: ProjectEntry, content: string): Promise<void> {
+  if (workspace.hasDesign()) {
+    const ok = await confirmDialog("Trocar o desenho da mesa?", `"${entry.name}" vai substituir o que está na mesa. Salve antes se quiser guardar o desenho atual.`, "Abrir projeto");
+    if (!ok) return inboxStatus("");
+  }
+  $<HTMLDialogElement>("dlg-inbox").close();
+  showView("design");
+  await workspace.openReceived(entry.name, content);
+}
+$("file-menu").addEventListener("click", (e) => {
+  if (!(e.target as HTMLElement).closest('button[data-file="inbox"]')) return;
+  const dlg = $<HTMLDialogElement>("dlg-inbox");
+  if (!dlg.open) dlg.showModal();
+  fetchInbox();
+});
+$("ib-refresh").addEventListener("click", fetchInbox);
+
 // ---------- origem do trabalho ----------
 const ANCHOR_NAMES: Record<string, string> = {
   tl: "o canto de cima, à esquerda,",

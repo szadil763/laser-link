@@ -233,6 +233,17 @@ export class Workspace {
     return { p: [x, y], what: sel ? "da seleção" : "do desenho" };
   }
 
+  /** Tem algo na mesa (para perguntar antes de trocar o desenho). */
+  hasDesign(): boolean {
+    return this.layers.some((l) => l.shapes.length > 0) || this.image !== null;
+  }
+
+  /** Abre um projeto recebido (.laserlink, .svg ou .dxf) como se fosse um arquivo do computador. */
+  async openReceived(name: string, content: string): Promise<void> {
+    const type = /\.svg$/i.test(name) ? "image/svg+xml" : "text/plain";
+    await this.handleFile(new File([content], name, { type }));
+  }
+
   setHead(p: Point): void {
     this.head = p;
     this.headLive = true;

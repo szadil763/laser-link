@@ -18,6 +18,7 @@
               <button data-file="saveas" role="menuitem">Salvar como… <kbd>Ctrl+Shift+S</kbd></button>
               <p class="label">Importar</p>
               <button data-file="import" role="menuitem">Importar SVG, DXF ou imagem…</button>
+              <button data-file="inbox" role="menuitem">Projetos recebidos…</button>
               <button data-file="sample" role="menuitem">Abrir exemplo</button>
               <p class="label">Exportar</p>
               <button data-file="export-svg" role="menuitem">Exportar SVG</button>
@@ -437,6 +438,21 @@
     </dialog>
 
     <input type="file" id="font-file" accept=".ttf,.otf,.woff,font/ttf,font/otf,font/woff" hidden />
+
+    <dialog id="dlg-inbox" aria-labelledby="ib-title">
+      <form method="dialog">
+        <h2 id="ib-title">Projetos recebidos</h2>
+        <p class="note">Arquivos publicados no GitHub (ramo <b>projetos</b>), por exemplo pelo Claude. Abrir só põe o desenho na mesa: nada vai para a máquina sem você mandar.</p>
+        <div class="row" style="margin-top:8px">
+          <button type="button" id="ib-refresh">Buscar novos</button>
+          <span class="note" id="ib-status" aria-live="polite"></span>
+        </div>
+        <ul class="inbox" id="ib-list"></ul>
+        <div class="row end">
+          <button value="cancel">Fechar</button>
+        </div>
+      </form>
+    </dialog>
 
     <dialog id="dlg-panel" aria-labelledby="pn-title">
       <form method="dialog">

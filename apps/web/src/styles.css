@@ -277,6 +277,11 @@ progress { width: 100%; accent-color: var(--accent); }
 .font-sample { min-height: 54px; display: flex; align-items: center; padding: 6px 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); font-size: 30px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .font-sample.single { font: 600 20px var(--mono); text-transform: uppercase; letter-spacing: .08em; }
 .field textarea { width: 100%; min-height: 54px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; resize: vertical; }
+.inbox { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; max-height: min(55vh, 460px); overflow-y: auto; }
+.inbox li { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border-radius: 8px; padding: 8px 10px; }
+.inbox .ib-info { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+.inbox .ib-info b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox .ib-kind { font: 11px var(--mono); color: var(--muted); text-transform: uppercase; }
 .error-text { color: #f28b82; }
 .pn-group { border: 0; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 6px 8px; }

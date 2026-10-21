@@ -121,6 +121,20 @@ Dicas:
 - Para aceitar conexões **só** pelo Tailscale, coloque o IP `100.x.y.z` em `host` no `laserlink.config.json` e reinicie o serviço.
 - **Não** faça port-forward da porta 8787 no roteador e não use serviços de túnel público.
 
+## Projetos recebidos com repositório privado
+
+O agente busca os projetos com o Git do próprio PC da laser. Com o repositório **público**, não precisa configurar nada. Com o repositório **privado**, o serviço (que roda como outro usuário do Windows) precisa de um token só de leitura:
+
+1. No GitHub: foto do perfil > **Settings** > **Developer settings** > **Personal access tokens** > **Fine-grained tokens** > **Generate new token**.
+2. **Repository access**: *Only select repositories* > `laser-link`. **Permissions** > **Contents**: *Read-only*. Nada mais.
+3. Copie o token e coloque no `C:\LaserLink\laserlink.config.json`:
+   ```json
+   "projects": { "token": "github_pat_..." }
+   ```
+4. Clique duas vezes em **Reiniciar LaserLink**.
+
+O token fica só nesse arquivo (que não vai para o GitHub). Ele não dá para mudar nada no repositório.
+
 ## 7. Problemas comuns
 
 | Sintoma | O que fazer |

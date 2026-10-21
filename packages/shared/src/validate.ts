@@ -60,6 +60,11 @@ export function parseClientMessage(value: unknown): ClientMessage | null {
       if (typeof value.name !== "string" || typeof value.gcode !== "string") return null;
       if (value.name.trim().length === 0 || value.name.length > QUEUE_MAX_NAME) return null;
       return { type: "queueAdd", name: value.name.trim(), gcode: value.gcode };
+    case "projectsList":
+      return { type: "projectsList" };
+    case "projectGet":
+      if (typeof value.path !== "string" || value.path.length > 300) return null;
+      return { type: "projectGet", path: value.path };
     case "queueRemove":
       if (!isId(value.id)) return null;
       return { type: "queueRemove", id: value.id };

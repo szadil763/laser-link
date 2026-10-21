@@ -16,6 +16,7 @@ import { checkGcode, stripComment, type CheckContext } from "./gcode-check.js";
 import type { Grbl, JobEnd, JobProgress } from "./grbl.js";
 import type { JobLog } from "./job-log.js";
 import type { MaterialStore } from "./materials.js";
+import type { ProjectInbox } from "./projects.js";
 import { frameGcode, parseGcode, segmentSeconds } from "@laserlink/gcode";
 
 /** Um cliente já autenticado. O transporte (WebSocket) fica fora desta classe. */
@@ -31,6 +32,8 @@ export interface AgentOptions {
   portLabel: string;
   jobLog?: JobLog;
   materials?: MaterialStore;
+  /** Projetos publicados no GitHub (ramo projetos). Sem isso, a lista responde com um aviso. */
+  projects?: ProjectInbox;
   /** Intervalo entre tentativas de reabrir a serial. Padrão: 2 s. */
   serialRetryMs?: number;
 }
@@ -85,6 +88,7 @@ export class Agent {
   private readonly portLabel: string;
   private readonly jobLog: JobLog | null;
   private readonly materials: MaterialStore | null;
+  private readonly projects: ProjectInbox | null;
   private readonly ticker: NodeJS.Timeout;
   private readonly serialRetryMs: number;
   private serialTimer: NodeJS.Timeout | null = null;
@@ -103,6 +107,7 @@ export class Agent {
     this.portLabel = options.portLabel;
     this.jobLog = options.jobLog ?? null;
     this.materials = options.materials ?? null;
+    this.projects = options.projects ?? null;
     this.serialRetryMs = options.serialRetryMs ?? 2000;
     this.recoverUnfinishedJobs();
 
@@ -268,6 +273,20 @@ export class Agent {
       }
       case "home":
         grbl.sendLine("$H");
+        break;
+      case "projectsList":
+        if (!this.projects) {
+          client.send({ type: "projects", items: [], error: "Projetos recebidos não estão ligados neste agente." });
+          break;
+        }
+        void this.projects.refresh().then((r) => client.send({ type: "projects", ...r }));
+        break;
+      case "projectGet":
+        if (!this.projects) break;
+        void this.projects
+          .read(msg.path)
+          .then(({ entry, content }) => client.send({ type: "projectFile", entry, content }))
+          .catch((err: Error) => client.send({ type: "error", message: err.message }));
         break;
       case "setOrigin": {
         const x = msg.x ?? 0;

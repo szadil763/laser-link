@@ -1,7 +1,7 @@
 # Protocolo WebSocket
 
 Mensagens JSON. Tipos em `packages/shared/src/protocol.ts`; validação das mensagens do cliente em `packages/shared/src/validate.ts`.
-Versão atual: **0.5.0** (`PROTOCOL_VERSION`). O agente informa a versão no `hello`; a interface avisa se for diferente.
+Versão atual: **0.6.0** (`PROTOCOL_VERSION`). O agente informa a versão no `hello`; a interface avisa se for diferente.
 
 ## Endereço e autenticação
 
@@ -47,6 +47,8 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 | `queueRemove` | `id` | Tira da fila |
 | `queueMove` | `id`, `index` (inteiro; 0 = próximo) | Muda a posição na fila |
 | `queueStart` | `id`, `confirmLaserOn: true` | Confere de novo (a origem pode ter mudado) e inicia como um `job`. Só sai da fila se iniciar |
+| `projectsList` | | Busca no GitHub o ramo `projetos` (`git fetch` para `refs/laserlink/projetos`, sem mexer na pasta de trabalho) e responde `projects` |
+| `projectGet` | `path` (da última lista) | Responde `projectFile` com o conteúdo. Caminho fora da lista é recusado com `error` |
 
 `confirmLaserOn: true` é obrigatório em `resume`, `job`, `queueStart` e `frame` com `laser: "min"`: sem ele a mensagem é recusada. A interface só envia esse campo depois que a pessoa confirma.
 
@@ -64,6 +66,8 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 | `serial` | `connected`: a porta serial abriu ou fechou |
 | `materials` | `materials` (`Material[]`): enviado logo após o `hello` e sempre que alguém salva |
 | `queue` | `items` (`QueueItem[]`): enviado logo após o `hello` e a cada mudança na fila |
+| `projects` | `items` (`ProjectEntry[]`: `path`, `name`, `kind` `laserlink`/`svg`/`dxf`, `size`, `date`, `description` = mensagem do commit), `error?` (a busca falhou; a lista é a última baixada) |
+| `projectFile` | `entry`, `content` (texto do arquivo, até 8 MB) |
 | `pong` | `t` |
 | `error` | `message` |
 
@@ -136,3 +140,9 @@ A biblioteca fica no agente (`apps/agent/data/materials.json`, fora do git), par
 | `presets` | lista de `MaterialPreset` |
 
 `MaterialPreset`: `mode` (`cut`, `line`, `fill`, `detail`, `raster`), `speed` (mm/min), `power` (0–100 %), `passes` (1–50), `kerf` (mm, opcional, corte), `interval` (mm, opcional, preenchido e detalhado).
+
+## Projetos recebidos
+
+Arquivos publicados na pasta `projetos/` do ramo `projetos` do repositório (por exemplo pelo Claude, com `scripts/publicar-projeto.mjs`). O agente só busca e lê: não muda o código nem a pasta de trabalho, e nenhuma porta é aberta. Abrir um projeto só põe o desenho na mesa da interface; mandar para a máquina continua exigindo a confirmação de sempre.
+
+Configuração (opcional) em `laserlink.config.json`: `"projects": { "remote": "origin", "branch": "projetos", "token": "…" }`. `"projects": false` desliga. O `token` (GitHub, só leitura) só é preciso se o repositório for privado.

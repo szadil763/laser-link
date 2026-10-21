@@ -29,7 +29,15 @@ export interface AgentConfig {
   framePower: number;
   /** mm/min do enquadramento. */
   frameFeed: number;
+  /**
+   * Projetos recebidos (ramo do GitHub com arquivos para abrir na interface).
+   * null = desligado. Padrão: remoto origin, ramo projetos, na pasta do próprio LaserLink.
+   */
+  projects: { repoDir: string; remote: string; branch: string; token?: string } | null;
 }
+
+/** Raiz do repositório do LaserLink (apps/agent/src ou dist → três pastas acima). */
+const DEFAULT_REPO_DIR = fileURLToPath(new URL("../../../", import.meta.url));
 
 /** apps/agent/logs, tanto rodando de src/ (tsx) quanto de dist/ (node). */
 const DEFAULT_LOG_DIR = fileURLToPath(new URL("../logs/", import.meta.url));
@@ -50,7 +58,9 @@ export function loadConfig(): AgentConfig {
       "laserlink.config.json não encontrado. Copie apps/agent/laserlink.config.example.json para a raiz do projeto e edite.",
     );
   }
-  const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<AgentConfig>;
+  const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<Omit<AgentConfig, "projects">> & {
+    projects?: false | { repoDir?: string; remote?: string; branch?: string; token?: string };
+  };
   const config: AgentConfig = {
     serialPort: raw.serialPort ?? "",
     baudRate: raw.baudRate ?? 115200,
@@ -66,7 +76,17 @@ export function loadConfig(): AgentConfig {
     dataDir: raw.dataDir ? resolve(path, "..", raw.dataDir) : DEFAULT_DATA_DIR,
     framePower: 0,
     frameFeed: raw.frameFeed ?? 3000,
+    projects: null,
   };
+  if (raw.projects !== false) {
+    const p = raw.projects ?? {};
+    config.projects = {
+      repoDir: p.repoDir ? resolve(path, "..", p.repoDir) : DEFAULT_REPO_DIR,
+      remote: p.remote ?? "origin",
+      branch: p.branch ?? "projetos",
+    };
+    if (p.token) config.projects.token = p.token;
+  }
   config.framePower = raw.framePower ?? Math.max(1, Math.round(config.maxSpindle * 0.01));
   if (raw.machineLimits) config.machineLimits = raw.machineLimits;
   if (!(config.maxSpindle > 0)) throw new Error("maxSpindle precisa ser maior que zero (use o valor do $30 do GRBL).");

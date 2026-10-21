@@ -34,7 +34,28 @@ export type ClientMessage =
   /** Muda a posição de um trabalho na fila (0 = próximo). */
   | { type: "queueMove"; id: string; index: number }
   /** Inicia um trabalho da fila. Liga o laser: a UI precisa ter pedido confirmação. */
-  | { type: "queueStart"; id: string; confirmLaserOn: true };
+  | { type: "queueStart"; id: string; confirmLaserOn: true }
+  /** Busca no GitHub os projetos publicados (ramo projetos) e devolve a lista. Não liga nada. */
+  | { type: "projectsList" }
+  /** Pede o conteúdo de um projeto da lista, para abrir na mesa. */
+  | { type: "projectGet"; path: string };
+
+export type ProjectKind = "laserlink" | "svg" | "dxf";
+
+/** Projeto publicado na pasta projetos/ do ramo projetos. */
+export interface ProjectEntry {
+  /** Caminho no repositório, ex.: projetos/placa-da-porta.svg */
+  path: string;
+  /** Nome do arquivo, sem a pasta. */
+  name: string;
+  kind: ProjectKind;
+  /** Bytes. */
+  size: number;
+  /** Data do último commit do arquivo (ISO 8601) ou "" se não houver. */
+  date: string;
+  /** Mensagem desse commit: o que o projeto é. */
+  description: string;
+}
 
 /** Limites da fila do agente. */
 export const QUEUE_MAX_ITEMS = 20;
@@ -186,7 +207,10 @@ export type ServerMessage =
   | { type: "materials"; materials: Material[] }
   /** Fila inteira: enviada ao conectar e a cada mudança. */
   | { type: "queue"; items: QueueItem[] }
+  /** Lista de projetos publicados. `error`: a busca no GitHub falhou (a lista é a última baixada). */
+  | { type: "projects"; items: ProjectEntry[]; error?: string }
+  | { type: "projectFile"; entry: ProjectEntry; content: string }
   | { type: "pong"; t: number }
   | { type: "error"; message: string };
 
-export const PROTOCOL_VERSION = "0.5.0";
+export const PROTOCOL_VERSION = "0.6.0";

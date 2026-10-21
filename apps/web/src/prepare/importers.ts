@@ -58,7 +58,10 @@ export function importSvg(text: string, materials: readonly Material[]): SvgImpo
     for (const el of host.querySelectorAll<SVGGeometryElement>("path,line,polyline,polygon,rect,circle,ellipse")) {
       const cs = getComputedStyle(el);
       if (cs.display === "none") continue;
-      const color = cs.stroke && cs.stroke !== "none" ? cs.stroke : cs.fill && cs.fill !== "none" ? cs.fill : "rgb(0, 0, 0)";
+      const stroked = !!cs.stroke && cs.stroke !== "none";
+      const color = stroked ? cs.stroke : cs.fill && cs.fill !== "none" ? cs.fill : "rgb(0, 0, 0)";
+      // só preenchimento, sem contorno: a intenção é gravar a área (preenchido)
+      const key = stroked || !(cs.fill && cs.fill !== "none") ? color : `${color}|fill`;
       let total = 0;
       try {
         total = el.getTotalLength();
@@ -80,9 +83,9 @@ export function importSvg(text: string, materials: readonly Material[]): SvgImpo
       if (points.length < 2) continue;
       const tag = el.tagName.toLowerCase();
       const closed = ["rect", "circle", "ellipse", "polygon"].includes(tag) || (tag === "path" && /z\s*$/i.test(el.getAttribute("d") ?? ""));
-      const list = groups.get(color) ?? [];
+      const list = groups.get(key) ?? [];
       list.push({ points, closed, name: el.id || tag });
-      groups.set(color, list);
+      groups.set(key, list);
       count++;
     }
   } finally {
@@ -93,11 +96,18 @@ export function importSvg(text: string, materials: readonly Material[]): SvgImpo
   const layers: Layer[] = [];
   let n = 0;
   const mdf = materials[0];
-  for (const [color, shapes] of groups) {
+  // data-laserlink="mesa": o SVG é a mesa inteira (0,0 no canto de baixo à esquerda) e as posições valem como estão
+  const onBed = svg.getAttribute("data-laserlink") === "mesa";
+  const bedH = hmm ?? (hasVb ? vb[3]! * sy : b.maxY);
+  for (const [key, shapes] of groups) {
+    const [color, kind] = key.split("|") as [string, string | undefined];
     const red = /^rgb\((2\d\d), (\d{1,2}), (\d{1,2})\)$/.test(color);
-    const layer = makeLayer(NAMED[color] ?? `Cor ${++n}`, color, red ? "cut" : "line", mdf);
+    const mode = kind === "fill" ? "fill" : red ? "cut" : "line";
+    const base = NAMED[color] ?? `Cor ${++n}`;
+    const layer = makeLayer(kind === "fill" ? `${base} (preenchido)` : base, color, mode, mdf);
     shapes.forEach((sh, k) => {
-      const pts = sh.points.map(([x, y]) => [x - b.minX + 20, b.maxY - y + 20] as Point); // SVG tem Y para baixo
+      // SVG tem Y para baixo
+      const pts = sh.points.map(([x, y]) => (onBed ? [x, bedH - y] : [x - b.minX + 20, b.maxY - y + 20]) as Point);
       layer.shapes.push(makeShape(pts, `${sh.name} ${k + 1}`, sh.closed));
     });
     layers.push(layer);

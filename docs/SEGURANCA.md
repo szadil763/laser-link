@@ -38,6 +38,13 @@ A interface pede para manter a tela acesa (Wake Lock) nessa aba, mas no celular 
 - Considere TLS (wss) via proxy se sair da rede local.
 - O firewall do Windows (regra criada pelo `instalar-servico.ps1`) aceita a porta só do Tailscale e da rede local. Veja `WINDOWS.md`.
 
+## Projetos recebidos
+
+- O agente só **busca** o ramo `projetos` no GitHub (conexão de saída, comandos git fixos) e lê os arquivos dessa referência. Nenhuma porta nova, nada é executado dos arquivos.
+- Só caminhos da lista (`projetos/*.svg|dxf|laserlink`) podem ser lidos; outros são recusados.
+- Abrir um projeto só põe o desenho na mesa. Enviar, enquadrar e iniciar continuam pedindo confirmação.
+- Token do GitHub (repositório privado): só leitura, só este repositório, guardado no `laserlink.config.json` (fora do Git).
+
 ## Regra de ouro
 
 Só inicie um corte se você estiver vendo a máquina ou houver alguém presente.

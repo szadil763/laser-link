@@ -131,6 +131,24 @@ npm run dev:web     # interface em http://localhost:5173; informe ws://localhost
 
 Medidas, montagem e o que conferir com paquímetro: `docs/PECAS.md`.
 
+## Projetos recebidos (do Claude ou de outra pessoa)
+
+**Arquivo > Projetos recebidos** lista os arquivos (.svg, .dxf, .laserlink) publicados no ramo `projetos` do GitHub, com a descrição e a data. **Buscar novos** atualiza; **Abrir** põe o desenho na mesa (pergunta antes de trocar o que já está lá). Nada vai para a máquina sozinho.
+
+Para publicar (de qualquer clone do repositório):
+
+```bash
+node scripts/conferir-svg.mjs peca.svg --area 400x400       # confere tamanho, cores e elementos
+node scripts/publicar-projeto.mjs peca.svg --descricao "Placa da sala 3, MDF 3 mm"
+node scripts/publicar-projeto.mjs --listar
+node scripts/publicar-projeto.mjs --remover peca.svg
+node scripts/texto-svg.mjs "Sala 3" --fonte fredoka --altura 25 --modo cortar --svg > nome.svg   # texto em caminhos
+```
+
+O Claude Code usa a skill `.claude/skills/laserlink-svg` para gerar SVG no formato certo e publicar. Regras do SVG: medidas em mm, vermelho (`stroke="#ff0000"`) corta, azul (`stroke="#0000ff"`) grava linha, preenchimento preto sem contorno grava preenchido; texto precisa virar caminho. Com `data-laserlink="mesa"` no `<svg>` (do tamanho da mesa), as posições valem como na mesa; sem isso, o desenho entra a 20 mm da origem.
+
+Repositório privado: o serviço do agente precisa de um token só de leitura em `"projects": { "token": "…" }` (veja [docs/WINDOWS.md](docs/WINDOWS.md#projetos-recebidos-com-repositório-privado)).
+
 ## Fila de trabalhos
 
 - **Guardar na fila** (na barra de envio embaixo da mesa, ou na janela Máquina com um arquivo G-code escolhido): o agente confere o arquivo e guarda. Nada liga o laser. A fila fica na aba **Fila**.
