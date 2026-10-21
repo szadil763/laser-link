@@ -52,12 +52,22 @@ O LaserLink importa SVG e decide a operação pela cor. Esta skill garante que o
 - Encaixes: folga = espessura do material + 0,1 mm (o kerf o app compensa).
 - Painéis escolares prontos (frase com contorno, bandeirolas, lápis) já existem no app: botão **Painel**. Sugira quando servir.
 
+## Preparar o repositório (Claude Code)
+
+Repositório: `szadil763/laser-link`. Os scripts (`scripts/publicar-projeto.mjs`, `conferir-svg.mjs`, `texto-svg.mjs`) estão no ramo **`fase-3`**. O `main` pode ainda não ter. Se `scripts/publicar-projeto.mjs` não existir na pasta aberta, use uma cópia do `fase-3` ao lado, sem mexer no ramo atual:
+
+```bash
+test -f scripts/publicar-projeto.mjs || { git fetch origin fase-3 && git worktree add ../laserlink-fase3 origin/fase-3 && cd ../laserlink-fase3; }
+npm ci && npm run build -w packages/gcode   # uma vez por sessão (texto-svg precisa)
+```
+
+**Atenção: a pasta `projetos/` NÃO existe nos ramos de trabalho (main, fase-3) e não deve ser criada neles.** Ela vive só no ramo `projetos` do GitHub, e o `publicar-projeto.mjs` cria ou atualiza esse ramo sozinho, mesmo que ele ainda não exista. Não procure a pasta; só rode o script.
+
 ## Texto em caminhos
 
 Dentro do repositório do LaserLink (Claude Code), com as mesmas fontes do app:
 
 ```bash
-npm ci && npm run build -w packages/gcode   # uma vez por sessão
 node scripts/texto-svg.mjs "Sala 3" --fonte fredoka --altura 25 --x 10 --y 60 --modo cortar
 #   imprime um <path …> para colar no SVG (--y é a linha de base; --altura = altura das maiúsculas)
 node scripts/texto-svg.mjs "Sala 3" --fonte pacifico --altura 25 --modo cortar --svg > nome.svg
@@ -82,7 +92,7 @@ Sem os scripts, confira à mão: width/height em mm, viewBox igual, cores da tab
 
 ## Entregar
 
-**No repositório do LaserLink (Claude Code):** publique no ramo `projetos`. Não mexe no ramo atual:
+**No repositório do LaserLink (Claude Code):** publique no ramo `projetos` (veja "Preparar o repositório"). Não mexe no ramo atual nem precisa da pasta `projetos/`:
 
 ```bash
 node scripts/publicar-projeto.mjs peca.svg --descricao "Placa da porta da sala 3, MDF 3 mm" [--nome placa-sala-3.svg]
@@ -93,7 +103,9 @@ node scripts/publicar-projeto.mjs --remover placa-sala-3.svg
 A descrição aparece no app. Escreva o que é e o material sugerido. Depois diga à pessoa:
 "No LaserLink: **Arquivo > Projetos recebidos > Buscar novos** e clique em **Abrir**."
 
-**Em outro lugar (chat, celular):** entregue o arquivo `.svg` para baixar e diga: "No LaserLink: **Arquivo > Importar SVG, DXF ou imagem…**".
+Se o `git push` for recusado (sem permissão de escrita no repositório), não insista: entregue o arquivo como abaixo.
+
+**Em outro lugar (chat do claude.ai, celular) ou sem acesso de escrita ao GitHub:** entregue o arquivo `.svg` para baixar e diga: "No LaserLink: **Arquivo > Importar SVG, DXF ou imagem…**". Não diga que falta a pasta de projetos: nesse caso a entrega é só o arquivo.
 
 Sempre termine dizendo o tamanho final, as operações (o que corta, o que grava) e que é preciso conferir com **Simular** e **Enquadrar** antes de cortar.
 
