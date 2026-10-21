@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400mm" height="300mm" viewBox="0 0 400 300" data-laserlink="mesa">
+  <rect x="20" y="180" width="160" height="100" rx="8" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="35" cy="195" r="2.5" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <rect x="40" y="250" width="120" height="10" fill="#000000"/>
+</svg>
