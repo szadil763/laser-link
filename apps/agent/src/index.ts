@@ -65,7 +65,7 @@ server.on("error", (err) => {
 });
 
 server.listen(config.wsPort, config.host, () => {
-  console.log(`LaserLink agente em http://${config.host}:${config.wsPort} (interface e WebSocket)`);
+  console.log(`Sapienza LaserLink: agente em http://${config.host}:${config.wsPort} (interface e WebSocket)`);
   if (simulated) console.log("Modo simulador: GRBL falso, nenhuma máquina conectada.");
   void agent.start();
 });

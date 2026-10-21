@@ -1,9 +1,9 @@
 ---
 name: laserlink-svg
-description: Gera arquivos SVG prontos para a laser GRBL do Adilson (LaserLink) e, quando possível, publica o arquivo para aparecer no app em Arquivo > Projetos recebidos. Use sempre que pedirem para desenhar, criar, gerar ou mandar uma peça, placa, painel, letreiro, chaveiro, caixa, plaquinha, bandeirola, molde ou qualquer desenho "para a laser", "para cortar", "para gravar" ou "para o LaserLink", mesmo que a pessoa não diga "SVG".
+description: Gera arquivos SVG prontos para a laser GRBL da Sapienza (app Sapienza LaserLink) e, quando possível, publica o arquivo para aparecer no app em Arquivo > Projetos recebidos. Use sempre que pedirem para desenhar, criar, gerar ou mandar uma peça, placa, painel, letreiro, chaveiro, caixa, plaquinha, bandeirola, molde ou qualquer desenho "para a laser", "para cortar", "para gravar" ou "para o LaserLink" ou "para o Sapienza LaserLink", mesmo que a pessoa não diga "SVG".
 ---
 
-# SVG para a laser do LaserLink
+# SVG para a laser do Sapienza LaserLink
 
 O LaserLink importa SVG e decide a operação pela cor. Esta skill garante que o arquivo abra com o tamanho certo, a operação certa e no lugar certo, e explica como entregá-lo.
 

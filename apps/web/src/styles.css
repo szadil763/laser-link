@@ -61,7 +61,8 @@ button[aria-pressed="true"] { background: #2b3a55; border-color: var(--accent); 
   grid-template-areas: "top" "alerts" "props" "rail" "stage" "ops" "send" "side" "status";
 }
 .app-top { grid-area: top; display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; background: var(--panel); border-radius: 10px; padding: 6px 10px; }
-.app-top h1 { font-size: 18px; }
+.app-top h1 { font-size: 18px; white-space: nowrap; }
+.brand span { color: var(--accent); font-weight: 800; letter-spacing: .01em; }
 .filebar { display: flex; gap: 6px; flex-wrap: wrap; flex: 1 1 auto; }
 .filebar button, .filebar .btn, .filebar summary { min-height: 38px; padding: 6px 12px; font-size: 14px; }
 .filebar .file-menu button { font-size: 14px; }

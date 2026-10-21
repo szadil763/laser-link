@@ -1,4 +1,7 @@
-# LaserLink
+# Sapienza LaserLink
+
+App da **Sapienza** (marca do Adilson). No texto, "LaserLink" é o nome curto; serviço do Windows, pasta `C:\LaserLink` e os arquivos de clique duplo continuam com esse nome.
+
 
 Controle remoto de cortadora/gravadora a laser **GRBL**. Dois pedaços de software:
 

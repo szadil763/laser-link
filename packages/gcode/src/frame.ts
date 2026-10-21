@@ -23,7 +23,7 @@ export function frameGcode(b: Bounds, o: FrameOptions): string {
   const s = Math.max(0, Math.round(o.s));
   const corner = `X${fmt(b.minX)} Y${fmt(b.minY)}`;
   const lines = [
-    "; LaserLink: enquadrar",
+    "; Sapienza LaserLink: enquadrar",
     "G21 G90",
     s > 0 ? "M4 S0" : "M5",
     `G0 ${corner}`,

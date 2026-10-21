@@ -364,7 +364,7 @@ export function designToDxf(design: JobDesign): string {
   const w = (code: number, value: string | number): void => {
     out.push(String(code), typeof value === "number" ? f(value) : value);
   };
-  w(999, `${design.name.replace(/[\r\n]/g, " ")} - gerado pelo LaserLink`);
+  w(999, `${design.name.replace(/[\r\n]/g, " ")} - gerado pelo Sapienza LaserLink`);
   w(0, "SECTION");
   w(2, "HEADER");
   w(9, "$ACADVER");

@@ -32,7 +32,7 @@ export function designToSvg(design: JobDesign, margin = 0): string {
   });
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
-    `<!-- ${design.name.replace(/--/g, "-")} · gerado pelo LaserLink -->`,
+    `<!-- ${design.name.replace(/--/g, "-")} · gerado pelo Sapienza LaserLink -->`,
     `<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(w)}mm" height="${fmt(h)}mm" viewBox="0 0 ${fmt(w)} ${fmt(h)}">`,
     ...groups,
     `</svg>`,

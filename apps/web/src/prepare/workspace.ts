@@ -858,7 +858,7 @@ export class Workspace {
         : "Fonte de contorno: aceita minúsculas e acentos. Boa para gravar preenchido ou cortar letras de painel.";
     }
     if (!sample) return;
-    sample.textContent = ($<HTMLTextAreaElement>("tx-text").value.split("\n")[0] || "LaserLink").slice(0, 40);
+    sample.textContent = ($<HTMLTextAreaElement>("tx-text").value.split("\n")[0] || "Sapienza").slice(0, 40);
     try {
       const family = await cssFamily(sel.value);
       sample.style.fontFamily = family ? `"${family}"` : "var(--mono)";
@@ -1057,7 +1057,7 @@ export class Workspace {
         if (asNew || !this.fileHandle) {
           this.fileHandle = await picker({
             suggestedName: `${this.fileBase()}${PROJECT_EXT}`,
-            types: [{ description: "Projeto do LaserLink", accept: { "application/json": [PROJECT_EXT] } }],
+            types: [{ description: "Projeto do Sapienza LaserLink", accept: { "application/json": [PROJECT_EXT] } }],
           });
           this.designName = this.fileHandle.name.replace(/\.laserlink$/i, "");
         }

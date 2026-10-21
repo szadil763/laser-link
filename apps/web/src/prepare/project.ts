@@ -48,10 +48,10 @@ export async function parseProject(text: string, materials: readonly Material[])
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error("Esse arquivo não é um projeto do LaserLink.");
+    throw new Error("Esse arquivo não é um projeto do Sapienza LaserLink.");
   }
-  if (!isObj(data) || data.format !== PROJECT_FORMAT || !Array.isArray(data.layers)) throw new Error("Esse arquivo não é um projeto do LaserLink.");
-  if (data.version !== 1) throw new Error("Projeto salvo por uma versão mais nova do LaserLink. Atualize o LaserLink.");
+  if (!isObj(data) || data.format !== PROJECT_FORMAT || !Array.isArray(data.layers)) throw new Error("Esse arquivo não é um projeto do Sapienza LaserLink.");
+  if (data.version !== 1) throw new Error("Projeto salvo por uma versão mais nova do Sapienza LaserLink. Atualize o app.");
   const groups = new Map<string, string>();
   const texts = new Map<string, string>();
   const remap = (map: Map<string, string>, key: string, prefix: string): string => {

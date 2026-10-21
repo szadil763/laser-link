@@ -26,7 +26,7 @@ export function createStaticHandler(webDir: string): (req: IncomingMessage, res:
     }
     if (!existsSync(join(root, "index.html"))) {
       res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8" });
-      res.end("Interface não compilada. Rode `npm run build` na pasta do LaserLink e reinicie o agente.");
+      res.end("Interface não compilada. Rode `npm run build` na pasta do Sapienza LaserLink e reinicie o agente.");
       return;
     }
     let pathname: string;

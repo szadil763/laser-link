@@ -1,10 +1,10 @@
-# CLAUDE.md — LaserLink
+# CLAUDE.md — Sapienza LaserLink
 
 Guia para o Claude Code trabalhar neste repositório.
 
 ## Contexto
 
-Projeto do Adilson (Guarulhos/SP): controlar remotamente uma laser GRBL ligada a um PC antigo (Windows) a partir de outro PC. Idioma: **português do Brasil** em docs, mensagens de UI e commits. Código e identificadores em inglês.
+Projeto do Adilson (Guarulhos/SP), marca **Sapienza**: o app se chama **Sapienza LaserLink** (nome curto LaserLink). Nomes internos (serviço do Windows, pasta `C:\LaserLink`, `.bat`, pacotes `@laserlink/*`, extensão `.laserlink`) não mudam. Objetivo: controlar remotamente uma laser GRBL ligada a um PC antigo (Windows) a partir de outro PC. Idioma: **português do Brasil** em docs, mensagens de UI e commits. Código e identificadores em inglês.
 
 ## Arquitetura
 

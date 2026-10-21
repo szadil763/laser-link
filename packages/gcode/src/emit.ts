@@ -202,7 +202,7 @@ function emitVector(w: Writer, g: VectorGroup, machine: MachineProfile): void {
 export function generateGcode(design: JobDesign, machine: MachineProfile, options: GenerateOptions = {}): GenerateResult {
   if (!(machine.maxSpindle > 0)) throw new Error("maxSpindle precisa ser maior que zero.");
   const w = new Writer(options.travelFeed ?? 6000);
-  w.comment(`LaserLink: ${design.name}`);
+  w.comment(`Sapienza LaserLink: ${design.name}`);
   w.comment(`Gerado em ${(options.date ?? new Date()).toISOString()}`);
   w.raw("G21 G90");
   w.raw("M4 S0");

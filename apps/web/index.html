@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LaserLink</title>
+    <title>Sapienza LaserLink</title>
   </head>
   <body>
     <div class="app">
       <header class="app-top">
-        <h1>LaserLink</h1>
+        <h1 class="brand"><span>Sapienza</span> LaserLink</h1>
         <div class="filebar" role="toolbar" aria-label="Arquivo e edição">
           <details class="menu" id="file-menu">
             <summary>Arquivo</summary>
@@ -420,9 +420,9 @@
       <form method="dialog">
         <h2 id="tx-title">Adicionar texto</h2>
         <div class="fields" style="margin-top:10px">
-          <label class="field" style="grid-column: 1 / -1">Texto <textarea id="tx-text" rows="2" maxlength="400">LaserLink</textarea></label>
+          <label class="field" style="grid-column: 1 / -1">Texto <textarea id="tx-text" rows="2" maxlength="400">Sapienza</textarea></label>
           <label class="field" style="grid-column: 1 / -1">Fonte <span class="val"><select id="tx-font" class="plain font-select"></select><button type="button" id="tx-font-load" title="TTF, OTF ou WOFF">Carregar fonte…</button></span></label>
-          <div class="font-sample" id="tx-sample" style="grid-column: 1 / -1" aria-hidden="true">LaserLink</div>
+          <div class="font-sample" id="tx-sample" style="grid-column: 1 / -1" aria-hidden="true">Sapienza</div>
           <p class="note" id="tx-font-note" style="grid-column: 1 / -1"></p>
           <label class="field">Operação <select id="tx-mode"><option value="fill">Gravar preenchido</option><option value="line">Gravar contorno</option><option value="cut">Cortar as letras</option></select></label>
           <label class="field">Alinhar <select id="tx-align"><option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option></select></label>
@@ -537,7 +537,7 @@ descobertas</textarea></label>
     <dialog id="dlg-parts" aria-labelledby="pt-title">
       <form method="dialog">
         <h2 id="pt-title">Peças dos projetos</h2>
-        <p class="note">Projetos próprios do LaserLink, com medidas ajustáveis. As medidas de motores, servos e placas mudam entre fabricantes: confira com paquímetro antes de cortar. Montagem em <b>docs/PECAS.md</b>.</p>
+        <p class="note">Projetos próprios do Sapienza LaserLink, com medidas ajustáveis. As medidas de motores, servos e placas mudam entre fabricantes: confira com paquímetro antes de cortar. Montagem em <b>docs/PECAS.md</b>.</p>
         <div class="fields" style="margin-top:10px">
           <label class="field" style="grid-column: 1 / -1">Projeto <select id="pt-kind"><option value="car">Carrinho RC (2 motores TT, roda boba, ESP32)</option><option value="otto">Robô bípede tipo Otto (4 servos SG90, HC-SR04)</option></select></label>
           <label class="field">Material <select id="pt-material"></select></label>
