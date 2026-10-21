@@ -37,6 +37,13 @@ function fetchBranch() {
     git(["fetch", "--no-tags", REMOTE, `+refs/heads/${BRANCH}:${LOCAL}`]);
   } catch (err) {
     if (!/couldn't find remote ref|could not find remote ref/i.test(String(err.stderr ?? err.message))) throw err;
+    // o ramo não existe no remoto: começa do zero (nunca de uma cópia antiga que ficou na máquina)
+    try {
+      git(["update-ref", "-d", LOCAL]);
+    } catch {
+      /* não havia cópia local */
+    }
+    return null;
   }
   try {
     return git(["rev-parse", "--verify", "-q", LOCAL]);
@@ -107,7 +114,11 @@ if (process.argv.includes("--listar")) {
 const remove = arg("--remover");
 if (remove) {
   if (!parent) fail("não há projetos publicados.");
-  const path = `projetos/${safeName(remove)}`;
+  // remover usa o nome exato da lista (--listar), sem "limpar"
+  if (/[\\/]|\.\./.test(remove)) fail("diga só o nome do arquivo, como aparece em --listar.");
+  const path = `projetos/${remove}`;
+  const listed = git(["ls-tree", "-r", "--name-only", LOCAL, "--", "projetos/"]).split("\n");
+  if (!listed.includes(path)) fail(`${remove} não está publicado. Veja os nomes com --listar.`);
   const commit = commitWith(parent, `Remove ${basename(path)}`, (env) => git(["update-index", "--force-remove", path], env));
   push(commit);
   console.log(`Removido: ${path}`);
