@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="35mm" height="38.84mm" viewBox="0 0 35 38.84">
+<svg xmlns="http://www.w3.org/2000/svg" width="35mm" height="38.84mm" viewBox="0 0 35 38.84" data-laserlink-corte="velocidade:1800 potencia:85 passadas:22">
   <!-- CORTE (vermelho): contorno externo e furo -->
   <path d="M13.26,4.24 A4.24,4.24 0 1 1 21.74,4.24 A17.5,17.5 0 1 1 13.26,4.24 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
   <circle cx="17.5" cy="3.18" r="1.64" fill="none" stroke="#ff0000" stroke-width="0.2"/>
