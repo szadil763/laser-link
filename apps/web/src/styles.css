@@ -286,6 +286,9 @@ progress { width: 100%; accent-color: var(--accent); }
 .inbox .ib-info { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
 .inbox .ib-info b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inbox .ib-kind { font: 11px var(--mono); color: var(--muted); text-transform: uppercase; }
+.pass-order { display: grid; gap: 6px; background: var(--panel-2); border-radius: 8px; padding: 8px 10px; }
+.pass-order .seg button { min-height: 34px; padding: 4px 10px; font-size: 13px; }
+.pass-order .warnbox { margin: 0; }
 .error-text { color: #f28b82; }
 .pn-group { border: 0; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 6px 8px; }

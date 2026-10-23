@@ -19,9 +19,11 @@ describe("G-code gerado pelo LaserLink passa no verificador do agente", () => {
     expect(checkGcode(r.gcode, limits).problems).toEqual([]);
   });
 
-  it("caixa com encaixes, chassi do carrinho e robô bípede", () => {
+  it("caixa com encaixes, chassi do carrinho e robô bípede (passe por passe e peça por peça)", () => {
     for (const d of [boxDesign(DEFAULT_BOX), carDesign(DEFAULT_CAR), ottoDesign(DEFAULT_OTTO)]) {
-      expect(checkGcode(generateGcode(d, { maxSpindle: 1000 }).gcode, limits).problems, d.name).toEqual([]);
+      for (const passOrder of ["pass", "piece"] as const) {
+        expect(checkGcode(generateGcode(d, { maxSpindle: 1000 }, { passOrder }).gcode, limits).problems, `${d.name} ${passOrder}`).toEqual([]);
+      }
     }
   });
 

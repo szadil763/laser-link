@@ -106,10 +106,14 @@ npm run dev:web     # interface em http://localhost:5173; informe ws://localhost
    - **Detalhado**: preenchimento fino (0,08 mm), para textos e detalhes pequenos.
 3. **Material**: escolha na camada (MDF 3 mm e 6 mm de exemplo) ou ajuste velocidade, potência e passes à mão. O botão **Materiais** edita a biblioteca, que fica salva no agente.
 4. **Edite** se precisar: arraste o elemento selecionado ou use a barra de medidas (posição, tamanho, girar, espelhar, alinhar, contorno deslocado, duplicar, excluir). Desfazer fica na barra de cima (Ctrl+Z). Roda do mouse dá zoom; arrastar o fundo move a vista. O botão **Mesa clara** troca o fundo da mesa entre claro e escuro.
-5. **Simular** mostra o percurso exato do G-code que será enviado. **Enquadrar** percorre o contorno na máquina com o laser desligado (ou em potência mínima, com confirmação).
-6. **Enviar para a laser** pede confirmação, manda o arquivo inteiro ao agente e troca a mesa para **Na máquina**, para acompanhar.
-7. **Guardar na fila** manda o arquivo ao agente sem ligar o laser (veja abaixo).
-8. **Salvar** (Ctrl+S) guarda o projeto num arquivo `.laserlink` (formato próprio, com camadas, operações e a imagem). **Arquivo > Abrir projeto** (Ctrl+O) reabre. No Chrome/Edge abertos em `localhost`, o navegador pergunta onde salvar; pelo endereço do Tailscale o arquivo vai para a pasta de downloads.
+5. **Ordem dos passes** (janela Camadas), para linhas e cortes com vários passes:
+   - **Passe por passe** (padrão): passe 1 em todas as peças, depois o passe 2 em todas… Cada peça esfria entre um passe e outro.
+   - **Peça por peça**: todos os passes de uma peça (furos antes do contorno, para a peça não soltar antes da hora), depois a próxima. Anda menos sem laser e, se o trabalho parar no meio, as peças terminadas já saem prontas; mas esquenta mais o contorno (o app avisa a partir de 5 passes).
+   - O app mostra o tempo estimado dos dois modos lado a lado (sem aceleração: serve para comparar). **Simular** anima no modo escolhido.
+6. **Simular** mostra o percurso exato do G-code que será enviado. **Enquadrar** percorre o contorno na máquina com o laser desligado (ou em potência mínima, com confirmação).
+7. **Enviar para a laser** pede confirmação, manda o arquivo inteiro ao agente e troca a mesa para **Na máquina**, para acompanhar.
+8. **Guardar na fila** manda o arquivo ao agente sem ligar o laser (veja abaixo).
+9. **Salvar** (Ctrl+S) guarda o projeto num arquivo `.laserlink` (formato próprio, com camadas, operações e a imagem). **Arquivo > Abrir projeto** (Ctrl+O) reabre. No Chrome/Edge abertos em `localhost`, o navegador pergunta onde salvar; pelo endereço do Tailscale o arquivo vai para a pasta de downloads.
 
 **Selecionar e agrupar:** com a ferramenta **Área** ligada (ou segurando Shift), arraste no espaço vazio da mesa para desenhar uma caixa de seleção. Arrastando para a **direita**, entra o que fica inteiro dentro da caixa; para a **esquerda**, entra também o que a caixa só encosta. **Agrupar** (Ctrl+G) faz os selecionados andarem juntos; **Desagrupar** (Ctrl+Shift+G) separa, por exemplo, os furos de uma peça para mexer em um só. Ctrl+A seleciona tudo.
 

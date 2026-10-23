@@ -22,6 +22,7 @@ import {
   phraseParts,
   type Bounds,
   type PanelPart,
+  type PassOrder,
   type Path,
   type GenerateResult,
   type Point,
@@ -90,6 +91,13 @@ const $ = <T extends HTMLElement>(id: string): T => {
   if (!el) throw new Error(`Elemento #${id} não encontrado`);
   return el as T;
 };
+function loadPassOrder(): PassOrder {
+  try {
+    return localStorage.getItem("laserlink.passOrder") === "piece" ? "piece" : "pass";
+  } catch {
+    return "pass";
+  }
+}
 const EXEC_ORDER: readonly VectorMode[] = ["detail", "fill", "line", "cut"];
 const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const fmtTime = (sec: number): string => {
@@ -126,6 +134,12 @@ export class Workspace {
   private multi = false;
   private showTravel = true;
   private frameMode: "off" | "min" = "off";
+  /** Ordem dos passes de linhas e cortes (fica lembrada neste navegador). */
+  private passOrder: PassOrder = loadPassOrder();
+  /** Tempo estimado na outra ordem de passes, para comparar (null = não se aplica). */
+  private altSeconds: number | null = null;
+  /** Maior número de passes entre linhas e cortes (para o aviso de calor). */
+  private maxPasses = 0;
   private lockRatio = true;
   private limits: AgentLimits = { maxSpindle: 1000, workArea: { x: 400, y: 400 }, framePower: 10, frameFeed: 3000 };
   private haveLimits = false;
@@ -1484,8 +1498,13 @@ export class Workspace {
         this.result = null;
         this.segments = [];
       } else {
-        this.result = generateGcode(design, { maxSpindle: this.limits.maxSpindle });
+        const machine = { maxSpindle: this.limits.maxSpindle };
+        this.result = generateGcode(design, machine, { passOrder: this.passOrder });
         this.segments = parseGcode(this.result.gcode).segments;
+        // a outra ordem só muda linhas e cortes: calcula o tempo dela para comparar
+        const paths = design.vectors.filter((g) => g.mode === "cut" || g.mode === "line");
+        this.maxPasses = Math.max(0, ...paths.map((g) => g.settings.passes));
+        this.altSeconds = paths.length ? generateGcode(design, machine, { passOrder: this.passOrder === "piece" ? "pass" : "piece" }).estimatedSeconds : null;
       }
       this.resultError = null;
     } catch (err) {
@@ -1717,7 +1736,7 @@ export class Workspace {
       <div class="fields">
         <label class="field">Velocidade <span class="val"><input type="number" min="10" step="10" value="${s.speed}" data-k="speed"><span class="unit">mm/min</span></span></label>
         <label class="field">Potência <span class="val"><input type="number" min="0" max="100" value="${s.power}" data-k="power"><span class="unit">%</span></span></label>
-        <label class="field">Passes <span class="val"><input type="number" min="1" max="20" value="${s.passes}" data-k="passes"></span></label>
+        <label class="field">Passes <span class="val"><input type="number" min="1" max="99" value="${s.passes}" data-k="passes"></span></label>
         ${extra}
       </div>
     </div>`;
@@ -1894,6 +1913,7 @@ export class Workspace {
     const b = designBounds(this.layers, this.image);
     $("p-sum-size").textContent = b ? `${(b.maxX - b.minX).toFixed(0)} × ${(b.maxY - b.minY).toFixed(0)}` : "—";
     $("p-sum-time").textContent = r ? fmtTime(r.estimatedSeconds) : "—";
+    this.renderPassOrder();
     $("p-sum-lines").textContent = r ? r.lines.toLocaleString("pt-BR") : "—";
     const out = !!b && (b.minX < -1e-6 || b.minY < -1e-6 || b.maxX > area.x + 1e-6 || b.maxY > area.y + 1e-6);
     const limitsEl = $("p-limits");
@@ -1910,6 +1930,25 @@ export class Workspace {
     $<HTMLButtonElement>("p-enqueue").disabled = empty || out;
     $<HTMLButtonElement>("p-sim").disabled = empty;
     $<HTMLButtonElement>("p-frame").disabled = empty || out;
+  }
+
+  /** Opção "Ordem dos passes": botões, comparação de tempo e aviso de calor. */
+  private renderPassOrder(): void {
+    for (const b of $("p-pass-order").querySelectorAll<HTMLButtonElement>("button[data-v]")) b.setAttribute("aria-pressed", String(b.dataset.v === this.passOrder));
+    const r = this.result;
+    const cmp = $("p-pass-cmp");
+    if (!r || this.altSeconds === null) {
+      cmp.textContent = "Vale para linhas e cortes. Desenhe ou importe algo para comparar os tempos.";
+    } else {
+      const piece = this.passOrder === "piece" ? r.estimatedSeconds : this.altSeconds;
+      const pass = this.passOrder === "pass" ? r.estimatedSeconds : this.altSeconds;
+      const diff = pass - piece;
+      const same = Math.abs(diff) < Math.max(5, pass * 0.02);
+      const verdict = same ? "praticamente o mesmo tempo" : diff > 0 ? `peça por peça é ${fmtTime(diff)} mais rápido` : `passe por passe é ${fmtTime(-diff)} mais rápido`;
+      cmp.textContent = `Passe por passe: ${fmtTime(pass)} · Peça por peça: ${fmtTime(piece)} (${verdict}). Estimativa sem aceleração: boa para comparar.`;
+    }
+    $("p-pass-warn").hidden = !(this.passOrder === "piece" && this.maxPasses >= 5);
+    $("p-pass-warn").textContent = `Peça por peça faz ${this.maxPasses} passes seguidos no mesmo contorno, sem esfriar: a borda queima mais e o MDF pode pegar chama. Fique olhando a máquina; se escurecer demais, volte para Passe por passe.`;
   }
 
   // ---------- mesa ----------
@@ -2191,7 +2230,7 @@ export class Workspace {
               return `<tr data-mode="${mode}"><td>${MODE_INFO[mode].label}</td>
                 <td><input type="number" min="10" data-k="speed" value="${p.speed}" aria-label="Velocidade"></td>
                 <td><input type="number" min="0" max="100" data-k="power" value="${p.power}" aria-label="Potência"></td>
-                <td><input type="number" min="1" max="50" data-k="passes" value="${p.passes}" aria-label="Passes"></td>
+                <td><input type="number" min="1" max="99" data-k="passes" value="${p.passes}" aria-label="Passes"></td>
                 <td>${extraKey ? `<input type="number" step="0.01" data-k="${extraKey}" value="${extraVal}" aria-label="${extraKey === "kerf" ? "Kerf" : "Intervalo"}">` : "—"}</td></tr>`;
             })
             .join("")
@@ -2353,6 +2392,18 @@ export class Workspace {
     $("p-zoom-out").addEventListener("click", () => this.view.zoomCenter(1 / 1.4));
     $("p-zoom-fit").addEventListener("click", () => this.view.fitTo(null));
     $("p-zoom-piece").addEventListener("click", () => this.fitPiece());
+    $("p-pass-order").addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-v]");
+      if (!btn) return;
+      this.passOrder = btn.dataset.v === "piece" ? "piece" : "pass";
+      try {
+        localStorage.setItem("laserlink.passOrder", this.passOrder);
+      } catch {
+        /* armazenamento indisponível */
+      }
+      this.stopAnim();
+      this.regenerateNow();
+    });
     $("p-frame-mode").addEventListener("click", (e) => {
       const btn = (e.target as HTMLElement).closest("button");
       if (!btn) return;

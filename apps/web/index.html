@@ -269,6 +269,17 @@
               <h2 style="margin:0">Camadas</h2>
               <button id="p-materials">Materiais</button>
             </div>
+            <div class="pass-order">
+              <div class="row" style="justify-content: space-between">
+                <span class="label">Ordem dos passes</span>
+                <div class="seg" id="p-pass-order" role="group" aria-label="Ordem dos passes">
+                  <button data-v="pass" aria-pressed="true" title="Passe 1 em todas as peças, depois o passe 2 em todas…">Passe por passe</button>
+                  <button data-v="piece" aria-pressed="false" title="Todos os passes de uma peça (furos antes do contorno), depois a próxima">Peça por peça</button>
+                </div>
+              </div>
+              <p class="note" id="p-pass-cmp" aria-live="polite"></p>
+              <p class="warnbox" id="p-pass-warn" hidden></p>
+            </div>
             <div class="layers" id="p-layers"><p class="note">Nenhum desenho ainda.</p></div>
           </div>
 
