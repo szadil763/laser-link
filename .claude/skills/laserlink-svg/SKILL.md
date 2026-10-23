@@ -29,6 +29,7 @@ O LaserLink importa SVG e decide a operação pela cor. Esta skill garante que o
    - Para valer a posição exata na mesa, faça o SVG do tamanho da mesa e marque `data-laserlink="mesa"`:
      `<svg … width="300mm" height="400mm" viewBox="0 0 300 400" data-laserlink="mesa">`
      Lembre: no SVG o y cresce **para baixo**; na mesa, para cima (y_mesa = altura − y_svg).
+   - Ajuste de corte no próprio arquivo (opcional): `data-laserlink-corte="velocidade:1800 potencia:85 passadas:22"` no `<svg>` (velocidade em mm/min, potência em %, passadas de 1 a 50). Só vale para as camadas de corte; o que faltar vem do material.
 3. **Operação pela cor** (use exatamente estas):
 
    | Quero | No SVG |

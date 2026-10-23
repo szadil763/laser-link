@@ -145,7 +145,7 @@ node scripts/publicar-projeto.mjs --remover peca.svg
 node scripts/texto-svg.mjs "Sala 3" --fonte fredoka --altura 25 --modo cortar --svg > nome.svg   # texto em caminhos
 ```
 
-O Claude Code usa a skill `.claude/skills/laserlink-svg` para gerar SVG no formato certo e publicar. Regras do SVG: medidas em mm, vermelho (`stroke="#ff0000"`) corta, azul (`stroke="#0000ff"`) grava linha, preenchimento preto sem contorno grava preenchido; texto precisa virar caminho. Com `data-laserlink="mesa"` no `<svg>` (do tamanho da mesa), as posições valem como na mesa; sem isso, o desenho entra a 20 mm da origem.
+O Claude Code usa a skill `.claude/skills/laserlink-svg` para gerar SVG no formato certo e publicar. Regras do SVG: medidas em mm, vermelho (`stroke="#ff0000"`) corta, azul (`stroke="#0000ff"`) grava linha, preenchimento preto sem contorno grava preenchido; texto precisa virar caminho. Com `data-laserlink="mesa"` no `<svg>` (do tamanho da mesa), as posições valem como na mesa; sem isso, o desenho entra a 20 mm da origem. Com `data-laserlink-corte="velocidade:1800 potencia:85 passadas:22"` no `<svg>`, as camadas de corte já abrem com essa velocidade (mm/min), potência (%) e número de passadas (o que faltar vem do material).
 
 Repositório privado: o serviço do agente precisa de um token só de leitura em `"projects": { "token": "…" }` (veja [docs/WINDOWS.md](docs/WINDOWS.md#projetos-recebidos-com-repositório-privado)).
 

@@ -23,6 +23,26 @@ function lengthToMm(v: string | null): number | null {
   return factor[m[2] ?? "px"]! * Number(m[1]);
 }
 
+/**
+ * Ajuste de corte escrito no próprio SVG: data-laserlink-corte="velocidade:1800 potencia:85 passadas:22".
+ * Só vale o que estiver dentro dos limites; o resto continua vindo do material.
+ */
+export function parseCorteAttr(text: string | null): { speed?: number; power?: number; passes?: number } {
+  const out: { speed?: number; power?: number; passes?: number } = {};
+  if (!text) return out;
+  const num = (re: RegExp): number | undefined => {
+    const m = re.exec(text);
+    return m ? Number(m[1]!.replace(",", ".")) : undefined;
+  };
+  const speed = num(/velocidade\s*[:=]\s*([\d.,]+)/i);
+  const power = num(/pot[eê]ncia\s*[:=]\s*([\d.,]+)/i);
+  const passes = num(/passadas\s*[:=]\s*(\d+)/i);
+  if (speed !== undefined && speed > 0 && speed <= 20000) out.speed = speed;
+  if (power !== undefined && power >= 0 && power <= 100) out.power = power;
+  if (passes !== undefined && Number.isInteger(passes) && passes >= 1 && passes <= 50) out.passes = passes;
+  return out;
+}
+
 export interface SvgImport {
   layers: Layer[];
   count: number;
@@ -99,12 +119,14 @@ export function importSvg(text: string, materials: readonly Material[]): SvgImpo
   // data-laserlink="mesa": o SVG é a mesa inteira (0,0 no canto de baixo à esquerda) e as posições valem como estão
   const onBed = svg.getAttribute("data-laserlink") === "mesa";
   const bedH = hmm ?? (hasVb ? vb[3]! * sy : b.maxY);
+  const corte = parseCorteAttr(svg.getAttribute("data-laserlink-corte"));
   for (const [key, shapes] of groups) {
     const [color, kind] = key.split("|") as [string, string | undefined];
     const red = /^rgb\((2\d\d), (\d{1,2}), (\d{1,2})\)$/.test(color);
     const mode = kind === "fill" ? "fill" : red ? "cut" : "line";
     const base = NAMED[color] ?? `Cor ${++n}`;
     const layer = makeLayer(kind === "fill" ? `${base} (preenchido)` : base, color, mode, mdf);
+    if (mode === "cut") layer.settings.cut = { ...layer.settings.cut, ...corte };
     shapes.forEach((sh, k) => {
       // SVG tem Y para baixo
       const pts = sh.points.map(([x, y]) => (onBed ? [x, bedH - y] : [x - b.minX + 20, b.maxY - y + 20]) as Point);
