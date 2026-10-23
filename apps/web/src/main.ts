@@ -14,6 +14,9 @@ const $ = <T extends HTMLElement>(id: string): T => {
   return el as T;
 };
 
+declare const __APP_VERSION__: string;
+$("sb-version").textContent = `Versão ${__APP_VERSION__}`;
+
 const urlInput = $<HTMLInputElement>("url");
 const tokenInput = $<HTMLInputElement>("token");
 const logEl = $("log");

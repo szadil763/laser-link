@@ -158,6 +158,7 @@ details.conn > :not(summary) + :not(summary) { margin-top: 8px; }
 .statusbar > span { flex: 0 0 auto; }
 .statusbar > span:last-child { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 #sb-cursor { min-width: 22ch; }
+.statusbar > .version { flex: 0 0 auto !important; margin-left: auto; color: var(--muted); }
 .statusbar b { color: var(--fg); }
 
 @media (min-width: 980px) and (min-height: 560px) {

@@ -20,7 +20,11 @@ try {
   & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "instalar-servico.ps1")
   if ($LASTEXITCODE -ne 0) { throw "A reinstalação do serviço falhou. Veja as mensagens acima." }
   Write-Host ""
-  Write-Host "LaserLink atualizado. No outro computador, recarregue a página com Ctrl+F5." -ForegroundColor Green
+  Write-Host "LaserLink atualizado. No outro computador, recarregue a página com Ctrl+Shift+R." -ForegroundColor Green
+  Push-Location $Root
+  $versao = (git -c safe.directory=* log -1 "--format=%h · %cd" "--date=format:%d/%m %H:%M")
+  Pop-Location
+  Write-Host "Versão instalada: $versao  (aparece no canto de baixo, à direita, da página)" -ForegroundColor Green
 } catch {
   Write-Host ""
   Write-Host "ERRO: $($_.Exception.Message)" -ForegroundColor Red
