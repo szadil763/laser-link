@@ -76,7 +76,10 @@ export class Grbl extends EventEmitter<GrblEvents> {
   private readonly pollMs: number;
 
   // Uma fila só para tudo que é linha (jog, $H, trabalho): a contagem de bytes nunca se perde.
+  // `queueHead` aponta a próxima linha: tirar do começo de uma lista com um milhão de itens
+  // (Array.shift) custa caro e deixava o GRBL sem linhas em trabalhos grandes.
   private queue: Queued[] = [];
+  private queueHead = 0;
   private inFlight: InFlight[] = [];
   private inFlightBytes = 0;
 
@@ -249,7 +252,7 @@ export class Grbl extends EventEmitter<GrblEvents> {
     this.total = lines.length;
     this.acked = 0;
     this.running = true;
-    lines.forEach((text, i) => this.queue.push({ text, jobLine: i + 1 }));
+    for (let i = 0; i < lines.length; i++) this.queue.push({ text: lines[i]!, jobLine: i + 1 });
     this.emitProgress();
     this.pump();
     return true;
@@ -261,7 +264,7 @@ export class Grbl extends EventEmitter<GrblEvents> {
     this.aborting = true;
     this.feedHold();
     this.running = false;
-    this.queue = [];
+    this.clearQueue();
     if (hadJob) {
       this.emitProgress();
       this.emit("jobEnd", { outcome: "aborted", reason });
@@ -310,16 +313,30 @@ export class Grbl extends EventEmitter<GrblEvents> {
     this.pump();
   }
 
+  private clearQueue(): void {
+    this.queue = [];
+    this.queueHead = 0;
+  }
+
   private pump(): void {
-    while (this.queue.length > 0 && this.isReady) {
-      const next = this.queue[0]!;
+    if (!this.isReady) return;
+    // junta as linhas que cabem no buffer do GRBL numa escrita só
+    let out = "";
+    while (this.queueHead < this.queue.length) {
+      const next = this.queue[this.queueHead]!;
       const size = Buffer.byteLength(next.text) + 1;
       if (this.inFlightBytes + size > RX_BUFFER_SIZE) break;
-      this.queue.shift();
+      this.queueHead += 1;
       this.inFlight.push({ text: next.text, size, jobLine: next.jobLine });
       this.inFlightBytes += size;
-      this.writeRaw(Buffer.from(next.text + "\n"));
+      out += next.text + "\n";
     }
+    if (this.queueHead >= this.queue.length) this.clearQueue();
+    else if (this.queueHead >= 65536) {
+      this.queue = this.queue.slice(this.queueHead);
+      this.queueHead = 0;
+    }
+    if (out) this.writeRaw(Buffer.from(out));
   }
 
   private onLine(line: string): void {
@@ -355,7 +372,7 @@ export class Grbl extends EventEmitter<GrblEvents> {
       this.resetLineState();
       if (unexpected && this.running) {
         this.running = false;
-        this.queue = [];
+        this.clearQueue();
         this.emitProgress();
         this.emit("jobEnd", { outcome: "error", reason: "O GRBL reiniciou durante o trabalho." });
       }
@@ -401,7 +418,7 @@ export class Grbl extends EventEmitter<GrblEvents> {
     this.readyTimer = undefined;
     const hadJob = this.running;
     this.running = false;
-    this.queue = [];
+    this.clearQueue();
     this.resetLineState();
     if (hadJob) {
       this.emitProgress();
