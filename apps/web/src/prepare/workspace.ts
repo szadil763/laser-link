@@ -9,12 +9,9 @@ import {
   DEFAULT_MATRIX,
   designToDxf,
   designToSvg,
-  generateGcode,
   matrixTest,
   offsetPath,
-  parseGcode,
   pointInPolygon,
-  segmentSeconds,
   textToPaths,
   buntingParts,
   layoutSheets,
@@ -25,8 +22,8 @@ import {
   type PassOrder,
   type Path,
   type GenerateResult,
+  type JobDesign,
   type Point,
-  type Segment,
   type TextTag,
   type VectorMode,
 } from "@laserlink/gcode";
@@ -52,6 +49,9 @@ import {
   type Shape,
   type ShapeText,
 } from "./model.js";
+import GenWorker from "./gen-worker.ts?worker&inline";
+import { LayerCache, strokeSegments } from "../segment-cache.js";
+import type { GenRequest, GenResponse } from "./gen-worker.js";
 import { addUserFont, allFonts, cssFamily, fontLabel, fontTextToPaths, loadFont, shapeLine, SINGLE_STROKE } from "./fonts.js";
 import { sampleDesign } from "./sample.js";
 
@@ -116,8 +116,10 @@ interface FileHandle {
 type SavePicker = (options: { suggestedName: string; types: Array<{ description: string; accept: Record<string, string[]> }> }) => Promise<FileHandle>;
 
 interface Anim {
-  segments: Segment[];
-  cumulative: number[];
+  /** x0, y0, x1, y1, laser (0/1) por segmento. */
+  data: Float32Array;
+  count: number;
+  cumulative: Float64Array;
   total: number;
   t: number;
   speedup: number;
@@ -146,8 +148,26 @@ export class Workspace {
   private materials: Material[] = structuredClone(DEFAULT_MATERIALS);
   private result: GenerateResult | null = null;
   private resultError: string | null = null;
-  private segments: Segment[] = [];
+  /** Deslocamentos sem laser do resultado atual (x0, y0, x1, y1…), para desenhar na mesa. */
+  private travel: Float32Array = new Float32Array(0);
+  /** Área queimada do resultado atual (para enquadrar). */
+  private burnBounds: Bounds | null = null;
+  /** Camadas guardadas: deslocamentos e o que a simulação já gravou. */
+  private readonly travelCache = new LayerCache();
+  private travelVersion = 0;
+  private readonly simDone = new LayerCache();
+  private simDrawn = 0;
+  private animVersion = 0;
   private genTimer: number | undefined;
+  /** Geração do G-code fora da tela (Web Worker). */
+  private readonly genWorker: Worker = new GenWorker();
+  private genSeq = 0;
+  private segSeq = 0;
+  /** O desenho mudou desde a última geração. */
+  private genDirty = true;
+  private generating = false;
+  private genWaiting: Array<(r: GenerateResult | null) => void> = [];
+  private segWaiting = new Map<number, (m: Extract<GenResponse, { kind: "segments" }>) => void>();
   private anim: Anim | null = null;
   private head: Point = [0, 0];
   private headLive = false;
@@ -213,6 +233,14 @@ export class Workspace {
       onDoubleClick: (px) => this.doubleClick(px),
       onHover: (mm) => this.host.onCursor?.(mm),
     });
+    this.genWorker.onmessage = (e: MessageEvent<GenResponse>) => this.onGenMessage(e.data);
+    this.genWorker.onerror = () => {
+      const waiting = this.genWaiting.splice(0);
+      this.generating = false;
+      this.resultError = "Não deu para gerar o G-code (erro no processo em segundo plano). Recarregue a página.";
+      this.renderSummary();
+      for (const w of waiting) w(null);
+    };
     this.bind();
     this.bindProps();
     this.refresh();
@@ -681,8 +709,8 @@ export class Workspace {
     this.host.toast("DXF baixado em mm, uma camada por operação (CORTAR, GRAVAR_LINHA…).");
   }
 
-  private exportGcode(): void {
-    const r = this.regenerateNow();
+  private async exportGcode(): Promise<void> {
+    const r = await this.regenerateNow();
     if (!r) return this.host.toast("Nada para exportar.");
     this.download(`${this.fileBase()}.gcode`, r.gcode, "text/plain");
   }
@@ -1490,36 +1518,90 @@ export class Workspace {
 
   // ---------- geração (com atraso para não travar enquanto edita) ----------
 
-  private regenerateNow(): GenerateResult | null {
+  /** Gera agora (fora da tela) e devolve o resultado; reaproveita se nada mudou desde a última geração. */
+  private regenerateNow(): Promise<GenerateResult | null> {
     window.clearTimeout(this.genTimer);
+    if (!this.genDirty && !this.genWaiting.length) return Promise.resolve(this.result);
+    const promise = new Promise<GenerateResult | null>((resolve) => this.genWaiting.push(resolve));
+    if (this.genDirty && !this.generating) this.startGenerate();
+    return promise;
+  }
+
+  private startGenerate(): void {
+    this.genDirty = false;
+    const id = ++this.genSeq;
+    let design: JobDesign;
     try {
-      const design = toJobDesign(this.designName || "Trabalho", this.layers, this.image);
-      if (!design.vectors.length && !design.rasters.length) {
-        this.result = null;
-        this.segments = [];
-      } else {
-        const machine = { maxSpindle: this.limits.maxSpindle };
-        this.result = generateGcode(design, machine, { passOrder: this.passOrder });
-        this.segments = parseGcode(this.result.gcode).segments;
-        // a outra ordem só muda linhas e cortes: calcula o tempo dela para comparar
-        const paths = design.vectors.filter((g) => g.mode === "cut" || g.mode === "line");
-        this.maxPasses = Math.max(0, ...paths.map((g) => g.settings.passes));
-        this.altSeconds = paths.length ? generateGcode(design, machine, { passOrder: this.passOrder === "piece" ? "pass" : "piece" }).estimatedSeconds : null;
-      }
-      this.resultError = null;
+      design = toJobDesign(this.designName || "Trabalho", this.layers, this.image);
     } catch (err) {
-      this.result = null;
-      this.segments = [];
-      this.resultError = (err as Error).message;
+      this.finishGenerate(id, null, (err as Error).message);
+      return;
+    }
+    if (!design.vectors.length && !design.rasters.length) {
+      this.finishGenerate(id, null, null);
+      return;
+    }
+    this.generating = true;
+    this.renderSummary();
+    const req: GenRequest = { kind: "gen", id, design, machine: { maxSpindle: this.limits.maxSpindle }, passOrder: this.passOrder };
+    this.genWorker.postMessage(req);
+  }
+
+  private onGenMessage(msg: GenResponse): void {
+    if (msg.kind === "segments") {
+      this.segWaiting.get(msg.id)?.(msg);
+      this.segWaiting.delete(msg.id);
+      return;
+    }
+    if (msg.kind !== "gen" || msg.id !== this.genSeq) return; // resposta de uma geração antiga
+    if (msg.ok) {
+      this.travel = msg.travel;
+      this.travelVersion += 1;
+      this.burnBounds = msg.burnBounds;
+      this.altSeconds = msg.altSeconds;
+      this.maxPasses = msg.maxPasses;
+      this.finishGenerate(msg.id, msg.result, null);
+    } else this.finishGenerate(msg.id, null, msg.error);
+  }
+
+  private finishGenerate(id: number, result: GenerateResult | null, error: string | null): void {
+    if (id !== this.genSeq) return;
+    this.generating = false;
+    this.result = result;
+    this.resultError = error;
+    if (!result) {
+      this.travel = new Float32Array(0);
+      this.travelVersion += 1;
+      this.burnBounds = null;
+      this.altSeconds = null;
     }
     this.renderSummary();
     this.requestDraw();
-    return this.result;
+    // quem pediu antes desta geração terminar fica esperando a próxima, se o desenho mudou de novo
+    if (this.genDirty) {
+      this.startGenerate();
+      return;
+    }
+    const waiting = this.genWaiting.splice(0);
+    for (const w of waiting) w(result);
   }
 
   private scheduleGenerate(): void {
+    this.genDirty = true;
     window.clearTimeout(this.genTimer);
-    this.genTimer = window.setTimeout(() => this.regenerateNow(), 250);
+    this.genTimer = window.setTimeout(() => {
+      if (this.generating) return; // a geração em andamento emenda a próxima ao terminar
+      this.startGenerate();
+    }, 250);
+  }
+
+  /** Segmentos completos do resultado atual (para a simulação), calculados fora da tela. */
+  private requestSegments(): Promise<{ data: Float32Array; cumulative: Float64Array }> {
+    const id = ++this.segSeq;
+    return new Promise((resolve) => {
+      this.segWaiting.set(id, (m) => resolve({ data: m.data, cumulative: m.cumulative }));
+      this.genWorker.postMessage({ kind: "segments", id } satisfies GenRequest);
+    });
   }
 
   // ---------- painéis ----------
@@ -1981,7 +2063,7 @@ export class Workspace {
     if (anim) {
       // busca binária no tempo acumulado
       let lo = 0;
-      let hi = anim.segments.length - 1;
+      let hi = anim.count - 1;
       while (lo <= hi) {
         const mid = (lo + hi) >> 1;
         if (anim.cumulative[mid]! <= anim.t) {
@@ -1989,8 +2071,7 @@ export class Workspace {
           lo = mid + 1;
         } else hi = mid - 1;
       }
-      const next = anim.segments[doneIdx + 1];
-      if (next) {
+      if (doneIdx + 1 < anim.count) {
         const start = doneIdx >= 0 ? anim.cumulative[doneIdx]! : 0;
         frac = (anim.t - start) / Math.max(1e-9, anim.cumulative[doneIdx + 1]! - start);
       }
@@ -2020,34 +2101,33 @@ export class Workspace {
         }
       }
     }
-    const segs = anim ? anim.segments : this.segments;
     if (this.showTravel || anim) {
-      ctx.lineWidth = 1 * d;
-      ctx.setLineDash([4 * d, 4 * d]);
-      ctx.strokeStyle = bedColors().travel;
-      ctx.beginPath();
-      for (const sg of segs) {
-        if (sg.burn) continue;
-        ctx.moveTo(v.X(sg.from[0]), v.Y(sg.from[1]));
-        ctx.lineTo(v.X(sg.to[0]), v.Y(sg.to[1]));
+      // deslocamentos: desenhados uma vez por vista e guardados (podem ser centenas de milhares)
+      if (this.travelCache.ensure(v, `t${this.travelVersion}`)) {
+        const c = this.travelCache.ctx;
+        c.lineWidth = 1 * d;
+        c.setLineDash([4 * d, 4 * d]);
+        c.strokeStyle = bedColors().travel;
+        strokeSegments(c, v, this.travel, 4, 0, this.travel.length / 4, () => true);
       }
-      ctx.stroke();
-      ctx.setLineDash([]);
+      ctx.drawImage(this.travelCache.canvas, 0, 0);
     }
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     if (anim) {
-      // tudo que já foi gravado, na cor de madeira queimada
-      ctx.strokeStyle = bedColors().burned;
-      ctx.lineWidth = Math.max(1, 0.2 * v.s);
-      ctx.beginPath();
-      for (let i = 0; i <= doneIdx; i++) {
-        const sg = anim.segments[i]!;
-        if (!sg.burn) continue;
-        ctx.moveTo(v.X(sg.from[0]), v.Y(sg.from[1]));
-        ctx.lineTo(v.X(sg.to[0]), v.Y(sg.to[1]));
+      // tudo que já foi gravado, na cor de madeira queimada: só os segmentos novos a cada quadro
+      if (this.simDone.ensure(v, `s${this.animVersion}`)) this.simDrawn = 0;
+      const target = doneIdx + 1;
+      if (target > this.simDrawn) {
+        const c = this.simDone.ctx;
+        c.lineJoin = "round";
+        c.lineCap = "round";
+        c.strokeStyle = bedColors().burned;
+        c.lineWidth = Math.max(1, 0.2 * v.s);
+        strokeSegments(c, v, anim.data, 5, this.simDrawn, target, (burn) => burn);
+        this.simDrawn = target;
       }
-      ctx.stroke();
+      ctx.drawImage(this.simDone.canvas, 0, 0);
     }
     for (const l of this.layers) {
       if (!l.enabled) continue;
@@ -2078,18 +2158,22 @@ export class Workspace {
     let head = this.head;
     let lit = false;
     if (anim) {
-      const next = anim.segments[doneIdx + 1];
-      const last = anim.segments[doneIdx];
-      if (next) {
-        head = [next.from[0] + (next.to[0] - next.from[0]) * frac, next.from[1] + (next.to[1] - next.from[1]) * frac];
-        lit = next.burn;
-        if (next.burn) {
+      const a = anim.data;
+      if (doneIdx + 1 < anim.count) {
+        const k = (doneIdx + 1) * 5;
+        const from: Point = [a[k]!, a[k + 1]!];
+        head = [from[0] + (a[k + 2]! - from[0]) * frac, from[1] + (a[k + 3]! - from[1]) * frac];
+        lit = a[k + 4] === 1;
+        if (lit) {
           ctx.strokeStyle = bedColors().burning;
           ctx.lineWidth = 2.2 * d;
-          v.polyline([next.from, head]);
+          v.polyline([from, head]);
           ctx.stroke();
         }
-      } else if (last) head = last.to;
+      } else if (doneIdx >= 0) {
+        const k = doneIdx * 5;
+        head = [a[k + 2]!, a[k + 3]!];
+      }
     }
     if (anim || this.headLive) v.drawHead(head, lit);
     const mq = this.marquee;
@@ -2133,19 +2217,17 @@ export class Workspace {
 
   // ---------- simular, enquadrar, enviar ----------
 
-  private startSim(): void {
-    const r = this.regenerateNow();
+  private async startSim(): Promise<void> {
+    const r = await this.regenerateNow();
     if (!r) return;
-    const segments = this.segments.slice();
-    const cumulative: number[] = [];
-    let acc = 0;
-    for (const sg of segments) {
-      acc += segmentSeconds(sg);
-      cumulative.push(acc);
-    }
+    $("p-hud-mode").textContent = "Preparando a simulação…";
+    const { data, cumulative } = await this.requestSegments();
+    const count = cumulative.length;
+    const acc = count ? cumulative[count - 1]! : 0;
     this.stopAnim();
     const speedup = Math.max(10, Math.round(acc / 25));
-    this.anim = { segments, cumulative, total: acc, t: 0, speedup, last: performance.now(), label: "Simulação" };
+    this.animVersion += 1;
+    this.anim = { data, count, cumulative, total: acc, t: 0, speedup, last: performance.now(), label: "Simulação" };
     $("p-sim-bar").hidden = false;
     $("p-hud-mode").textContent = "Simulação";
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -2177,8 +2259,8 @@ export class Workspace {
 
   private async frame(): Promise<void> {
     if (!this.host.isConnected()) return this.host.toast("Conecte ao agente para enquadrar na laser.");
-    const r = this.regenerateNow();
-    const b = r ? parseGcode(r.gcode).burnBounds : null;
+    const r = await this.regenerateNow();
+    const b = r ? this.burnBounds : null;
     if (!b) return this.host.toast("Nada para enquadrar.");
     if (this.frameMode === "min") {
       const pct = ((this.limits.framePower / this.limits.maxSpindle) * 100).toFixed(1);
@@ -2197,7 +2279,7 @@ export class Workspace {
 
   private async sendJob(): Promise<void> {
     if (!this.host.isConnected()) return this.host.toast("Conecte ao agente (aba Máquina, à direita) para enviar o trabalho.");
-    const r = this.regenerateNow();
+    const r = await this.regenerateNow();
     if (!r) return;
     const name = `${this.designName || "Trabalho"}.gcode`;
     const ok = await this.host.confirm(
@@ -2210,9 +2292,9 @@ export class Workspace {
   }
 
   /** Guarda na fila do agente. Não liga o laser: iniciar pede confirmação depois. */
-  private enqueueJob(): void {
+  private async enqueueJob(): Promise<void> {
     if (!this.host.isConnected()) return this.host.toast("Conecte ao agente (aba Máquina, à direita) para guardar na fila.");
-    const r = this.regenerateNow();
+    const r = await this.regenerateNow();
     if (!r) return;
     const name = `${this.designName || "Trabalho"}.gcode`;
     if (this.host.send({ type: "queueAdd", name, gcode: r.gcode })) {
@@ -2425,7 +2507,8 @@ export class Workspace {
         /* armazenamento indisponível */
       }
       this.stopAnim();
-      this.regenerateNow();
+      this.genDirty = true;
+      void this.regenerateNow();
     });
     $("p-frame-mode").addEventListener("click", (e) => {
       const btn = (e.target as HTMLElement).closest("button");
