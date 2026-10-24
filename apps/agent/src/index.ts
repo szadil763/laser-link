@@ -1,22 +1,28 @@
-import { timingSafeEqual } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
+import { createServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
-import { PROTOCOL_VERSION, type ClientMessage, type ServerMessage } from "@laserlink/shared";
+import type { ServerMessage } from "@laserlink/shared";
+import { Agent, type ClientConn } from "./agent.js";
 import { loadConfig } from "./config.js";
-import { Grbl, type GrblStatus } from "./grbl.js";
+import { Grbl } from "./grbl.js";
+import { JobLog } from "./job-log.js";
+import { MaterialStore } from "./materials.js";
+import { ProjectInbox } from "./projects.js";
+import { NodeSerialLink, type SerialLink } from "./serial-link.js";
+import { FakeGrbl } from "./sim/fake-grbl.js";
+import { createStaticHandler } from "./static.js";
 
 const config = loadConfig();
-const grbl = new Grbl(config.serialPort, config.baudRate);
-
-const clients = new Set<WebSocket>();
-let lastStatus: GrblStatus | null = null;
-
-function send(ws: WebSocket, msg: ServerMessage): void {
-  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
-}
-
-function broadcast(msg: ServerMessage): void {
-  for (const ws of clients) send(ws, msg);
-}
+const simulated = config.serialPort === "sim";
+// LASERLINK_SIM_LASER_MODE=0 simula uma placa com o modo laser desligado (só para testes)
+const link: SerialLink = simulated
+  ? new FakeGrbl({ msPerLine: 30, laserMode: process.env.LASERLINK_SIM_LASER_MODE !== "0" })
+  : new NodeSerialLink(config.serialPort, config.baudRate);
+const grbl = new Grbl(link);
+const jobLog = new JobLog(config.logDir);
+const materials = new MaterialStore(config.dataDir);
+const projects = config.projects ? new ProjectInbox(config.projects) : undefined;
+const agent = new Agent({ config, grbl, jobLog, materials, projects, portLabel: simulated ? "simulador" : config.serialPort });
 
 function tokenOk(given: string | null): boolean {
   if (!given) return false;
@@ -25,59 +31,9 @@ function tokenOk(given: string | null): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-grbl.on("status", (s) => {
-  lastStatus = s;
-  broadcast({ type: "status", ...s });
-});
-grbl.on("log", (level, text) => broadcast({ type: "log", level, text }));
-grbl.on("progress", (p) => broadcast({ type: "progress", ...p }));
-grbl.on("closed", () => broadcast({ type: "error", message: "Porta serial fechada." }));
-
-function handle(ws: WebSocket, msg: ClientMessage): void {
-  switch (msg.type) {
-    case "jog": {
-      const feed = Math.min(Math.max(1, msg.feed), config.maxFeed);
-      const dist = Math.max(-1000, Math.min(1000, msg.distance));
-      grbl.sendLine(`$J=G91 G21 ${msg.axis}${dist.toFixed(3)} F${feed.toFixed(0)}`);
-      break;
-    }
-    case "home":
-      grbl.sendLine("$H");
-      break;
-    case "setOrigin":
-      grbl.sendLine("G10 L20 P1 X0 Y0");
-      break;
-    case "hold":
-      grbl.feedHold();
-      break;
-    case "resume":
-      grbl.cycleResume();
-      break;
-    case "stop":
-      grbl.abortJob();
-      break;
-    case "unlock":
-      grbl.sendLine("$X");
-      break;
-    case "job":
-      if (!grbl.startJob(msg.gcode)) {
-        send(ws, { type: "error", message: "Não foi possível iniciar (trabalho em andamento ou arquivo vazio)." });
-      } else {
-        broadcast({ type: "log", level: "info", text: `Iniciando: ${msg.name}` });
-      }
-      break;
-  }
-}
-
-/** Segurança: sem nenhum cliente conectado e com trabalho rodando, pausa e desliga o laser. */
-function safetyStopIfOrphaned(): void {
-  if (clients.size === 0 && grbl.isRunning) {
-    console.warn("[segurança] cliente desconectou durante o trabalho: hold + M5");
-    grbl.abortJob();
-  }
-}
-
-const wss = new WebSocketServer({ port: config.wsPort });
+// A mesma porta serve a interface (arquivos estáticos, sem segredos) e o WebSocket (com token).
+const server = createServer(createStaticHandler(config.webDir));
+const wss = new WebSocketServer({ server });
 
 wss.on("connection", (ws, req) => {
   const url = new URL(req.url ?? "/", "http://localhost");
@@ -85,38 +41,49 @@ wss.on("connection", (ws, req) => {
     ws.close(4401, "token inválido");
     return;
   }
-  clients.add(ws);
-  send(ws, { type: "hello", version: PROTOCOL_VERSION, port: config.serialPort, connected: grbl.isOpen });
-  if (lastStatus) send(ws, { type: "status", ...lastStatus });
+  const client: ClientConn = {
+    id: randomUUID(),
+    send(msg: ServerMessage) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+    },
+  };
+  agent.connect(client);
 
   ws.on("message", (data) => {
+    let parsed: unknown;
     try {
-      handle(ws, JSON.parse(data.toString()) as ClientMessage);
+      parsed = JSON.parse(data.toString());
     } catch {
-      send(ws, { type: "error", message: "Mensagem inválida." });
+      parsed = null;
     }
+    agent.receive(client, parsed);
   });
-  ws.on("close", () => {
-    clients.delete(ws);
-    safetyStopIfOrphaned();
-  });
+  ws.on("close", (code) => agent.disconnect(client, closeDetail(code)));
   ws.on("error", () => ws.close());
 });
 
-async function main(): Promise<void> {
-  try {
-    await grbl.open();
-    console.log(`GRBL conectado em ${config.serialPort} @ ${config.baudRate}`);
-  } catch (err) {
-    console.error(`Falha ao abrir ${config.serialPort}:`, (err as Error).message);
-    process.exit(1);
-  }
-  console.log(`LaserLink agente ouvindo em ws://0.0.0.0:${config.wsPort}`);
-}
-
-process.on("SIGINT", () => {
-  if (grbl.isRunning) grbl.abortJob();
-  setTimeout(() => process.exit(0), 500);
+server.on("error", (err) => {
+  console.error(`Não foi possível escutar em ${config.host}:${config.wsPort}: ${err.message}`);
+  process.exit(1);
 });
 
-void main();
+server.listen(config.wsPort, config.host, () => {
+  console.log(`Sapienza LaserLink: agente em http://${config.host}:${config.wsPort} (interface e WebSocket)`);
+  if (simulated) console.log("Modo simulador: GRBL falso, nenhuma máquina conectada.");
+  void agent.start();
+});
+
+/** Código de fechamento do WebSocket em palavras, para o motivo da pausa no registro. */
+function closeDetail(code: number): string {
+  if (code === 1000) return "a página fechou a conexão";
+  if (code === 1001) return "a página foi fechada, recarregada ou congelada pelo navegador";
+  if (code === 1006) return "a conexão caiu sem aviso: rede, suspensão do PC ou navegador travado";
+  return `código ${code}`;
+}
+
+function shutdown(): void {
+  agent.shutdown();
+  setTimeout(() => process.exit(0), 500);
+}
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
