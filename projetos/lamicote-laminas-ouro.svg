@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="111mm" height="111mm" viewBox="0 0 111 111" data-laserlink-corte="velocidade:3000 potencia:25 passadas:1">
+  <!-- CORTE (vermelho): 4 lâminas de lamicote ouro = círculo de 53,5 mm com a estrela vazada -->
+  <circle cx="26.75" cy="26.75" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M26.634,3.123 L32.184,17.776 L48.836,18.173 L35.615,27.627 L40.355,42.526 L26.634,33.715 L12.912,42.526 L17.653,27.627 L4.432,18.173 L21.083,17.776 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="84.25" cy="26.75" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M84.134,3.123 L89.684,17.776 L106.336,18.173 L93.115,27.627 L97.855,42.526 L84.134,33.715 L70.412,42.526 L75.153,27.627 L61.932,18.173 L78.583,17.776 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="26.75" cy="84.25" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M26.634,60.623 L32.184,75.276 L48.836,75.673 L35.615,85.127 L40.355,100.026 L26.634,91.215 L12.912,100.026 L17.653,85.127 L4.432,75.673 L21.083,75.276 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="84.25" cy="84.25" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M84.134,60.623 L89.684,75.276 L106.336,75.673 L93.115,85.127 L97.855,100.026 L84.134,91.215 L70.412,100.026 L75.153,85.127 L61.932,75.673 L78.583,75.276 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+</svg>
