@@ -404,8 +404,30 @@ async function updateWakeLock(): Promise<void> {
   } catch {
     /* sem suporte ou negado: segue sem */
   }
+  updateJobLock();
 }
 document.addEventListener("visibilitychange", () => void updateWakeLock());
+
+/**
+ * Enquanto esta aba protege um trabalho (rodando ou pausado), segura uma Web Lock:
+ * o Chrome não congela nem descarta abas que seguram uma, mesmo minimizadas
+ * ou com a economia de memória ligada. Sem isso, a aba congelada para de mandar
+ * sinal e o agente pausa o trabalho.
+ */
+let releaseJobLock: (() => void) | null = null;
+function updateJobLock(): void {
+  const want = currentJob?.ownedByYou === true;
+  if (want && !releaseJobLock && "locks" in navigator) {
+    void navigator.locks
+      .request("laserlink-trabalho", () => new Promise<void>((resolve) => (releaseJobLock = resolve)))
+      .catch(() => (releaseJobLock = null));
+  } else if (!want && releaseJobLock) {
+    releaseJobLock();
+    releaseJobLock = null;
+  }
+}
+// avisa quando o navegador congelou a aba (para a pessoa entender uma pausa)
+document.addEventListener("resume", () => log("Aviso: o navegador tinha congelado esta aba. Se havia um trabalho, ele pode ter pausado por falta de sinal."));
 
 function onMessage(msg: ServerMessage): void {
   switch (msg.type) {

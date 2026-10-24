@@ -58,7 +58,7 @@ wss.on("connection", (ws, req) => {
     }
     agent.receive(client, parsed);
   });
-  ws.on("close", () => agent.disconnect(client));
+  ws.on("close", (code) => agent.disconnect(client, closeDetail(code)));
   ws.on("error", () => ws.close());
 });
 
@@ -72,6 +72,14 @@ server.listen(config.wsPort, config.host, () => {
   if (simulated) console.log("Modo simulador: GRBL falso, nenhuma máquina conectada.");
   void agent.start();
 });
+
+/** Código de fechamento do WebSocket em palavras, para o motivo da pausa no registro. */
+function closeDetail(code: number): string {
+  if (code === 1000) return "a página fechou a conexão";
+  if (code === 1001) return "a página foi fechada, recarregada ou congelada pelo navegador";
+  if (code === 1006) return "a conexão caiu sem aviso: rede, suspensão do PC ou navegador travado";
+  return `código ${code}`;
+}
 
 function shutdown(): void {
   agent.shutdown();

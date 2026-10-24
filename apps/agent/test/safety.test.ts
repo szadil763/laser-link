@@ -71,6 +71,37 @@ describe("pausa de segurança: laser apagado e conferido", () => {
   });
 });
 
+describe("agente parado não confunde com cliente sumido", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("relógio pula 10 s sem o agente rodar (PC ocupado/suspensão): lê os sinais antes de pausar", async () => {
+    const { agent, owner } = await setup();
+    const phone = new TestClient("celular");
+    agent.connect(phone);
+    // o agente "trava": o tempo passa sem nenhuma volta do ticker
+    vi.setSystemTime(Date.now() + 10_000);
+    await vi.advanceTimersByTimeAsync(500); // primeira volta depois da trava: só avisa
+    expect(agent.jobInfo?.state).toBe("running");
+    expect(phone.of("log").some((m) => m.text.includes("sem rodar"))).toBe(true);
+    // o ping do dono, que estava na fila, chega
+    agent.receive(owner, { type: "ping", t: 1 });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(agent.jobInfo?.state).toBe("running");
+    agent.shutdown();
+  });
+
+  it("dono realmente mudo: pausa e o motivo diz há quanto tempo", async () => {
+    const { agent } = await setup();
+    const phone = new TestClient("celular");
+    agent.connect(phone);
+    await vi.advanceTimersByTimeAsync(7000);
+    expect(agent.jobInfo?.state).toBe("connectionLost");
+    expect(phone.of("log").some((m) => /Sem sinal .* há \d/.test(m.text))).toBe(true);
+    agent.shutdown();
+  });
+});
+
 describe("modo laser do GRBL ($32)", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());

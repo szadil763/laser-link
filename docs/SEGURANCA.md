@@ -19,6 +19,8 @@ Laser sem supervisão é risco real de incêndio e de ferimento. Este documento 
 - [x] **Laser conferido apagado na pausa:** depois do `0x9E`, o agente espera o GRBL confirmar (potência 0 no relatório ou campo de acessórios sem laser). Sem confirmação em 2 s (placa que ignora o `0x9E`, por exemplo) ou sem entrar em Hold em 3 s, cancela na hora com reset, que sempre corta o laser. O trabalho se perde, mas nada fica queimando.
 - [x] **Pausar** (botão) usa a mesma pausa segura: o laser apaga e é conferido; **Retomar** religa, com confirmação.
 - [x] **Modo laser do GRBL ($32):** o agente lê ao conectar. Com `$32=0`, o laser fica aceso nas pausas e nos `G0`; trabalhos são recusados e a interface mostra **Ligar modo laser** (grava `$32=1`).
+- [x] Pausa por engano evitada sem afrouxar a regra: se o **próprio agente** ficou parado (PC ocupado ou acordando da suspensão), ele lê os sinais que chegaram antes de concluir que o cliente sumiu. O motivo da pausa no registro diz o que aconteceu (página fechada/congelada, conexão caída, quantos segundos sem sinal).
+- [x] A aba dona de um trabalho segura uma Web Lock (o Chrome não a congela) e o instalador desliga a suspensão do Windows na tomada.
 - [x] Deslocamentos `G0` sempre com `S0`: o laser não fica aceso andando, mesmo com o modo laser desligado.
 - [x] Heartbeat: cliente mudo por 6 s = mesma parada acima.
 - [x] Parada em `error:` e `ALARM:`.

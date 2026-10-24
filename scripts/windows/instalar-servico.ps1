@@ -103,6 +103,12 @@ if (-not $SemFirewall) {
   Write-Host "Firewall: porta $Port liberada só para Tailscale (100.64.0.0/10) e rede local." -ForegroundColor Cyan
 }
 
+# O PC da laser não pode dormir no meio de um trabalho: na tomada, sem suspensão nem hibernação.
+# (A tela pode continuar apagando; isso não atrapalha.)
+& powercfg.exe /change standby-timeout-ac 0 | Out-Null
+& powercfg.exe /change hibernate-timeout-ac 0 | Out-Null
+Write-Host "Energia: suspensão e hibernação desligadas na tomada (o PC da laser não dorme no meio de um trabalho)." -ForegroundColor Cyan
+
 & $NssmExe start $ServiceName | Out-Null
 Start-Sleep -Seconds 2
 $Status = (Get-Service -Name $ServiceName).Status

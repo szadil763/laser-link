@@ -60,6 +60,12 @@ interface QueuedJob extends QueueItem {
 }
 
 const TICK_MS = 500;
+/**
+ * Se o próprio agente ficou parado mais que isto entre duas voltas (PC lento, antivírus,
+ * Windows acordando da suspensão), os sinais dos clientes podem estar esperando na fila:
+ * a conferência de silêncio pula uma volta para lê-los antes de concluir que o cliente sumiu.
+ */
+const AGENT_STALL_MS = 1000;
 /** Soma do tamanho dos G-codes guardados na fila (fica na memória do agente). */
 const QUEUE_MAX_BYTES = 64 * 1024 * 1024;
 const PROGRESS_INTERVAL_MS = 100;
@@ -184,10 +190,11 @@ export class Agent {
     return this.queue.length;
   }
 
-  disconnect(client: ClientConn): void {
+  /** `detail`: por que a conexão fechou (ex.: código do WebSocket), para o registro. */
+  disconnect(client: ClientConn, detail?: string): void {
     if (!this.clients.delete(client.id)) return;
     if (this.job && this.job.ownerId === client.id) {
-      this.connectionLost("O computador que iniciou o trabalho desconectou.");
+      this.connectionLost(`O computador que iniciou o trabalho desconectou${detail ? ` (${detail})` : ""}.`);
     }
   }
 
@@ -464,6 +471,10 @@ export class Agent {
       client.send({ type: "error", message: "Já existe um trabalho em andamento." });
       return false;
     }
+    if (this.grbl.lastStatus?.state === "Alarm") {
+      client.send({ type: "error", message: "A máquina está em alarme (depois de uma parada ou de um limite). Clique em Destravar ou Home na janela Máquina e envie de novo." });
+      return false;
+    }
     if (this.grbl.laserMode === false) {
       client.send({
         type: "error",
@@ -527,16 +538,28 @@ export class Agent {
     this.broadcast({ type: "log", level: "warn", text: `Trabalho pausado e laser desligado: ${reason}` });
   }
 
+  private lastTick = Date.now();
+
   private tick(): void {
+    const now = Date.now();
+    const stall = now - this.lastTick - TICK_MS;
+    this.lastTick = now;
     const job = this.job;
     if (!job) return;
-    const now = Date.now();
     if (job.state !== "connectionLost") {
       const owner = job.ownerId ? this.clients.get(job.ownerId) : undefined;
       if (!owner) {
         this.connectionLost("O computador que iniciou o trabalho desconectou.");
-      } else if (now - owner.lastSeen > HEARTBEAT_TIMEOUT_MS) {
-        this.connectionLost(`Sem sinal do computador que iniciou o trabalho por ${HEARTBEAT_TIMEOUT_MS / 1000} s.`);
+        return;
+      }
+      const silent = now - owner.lastSeen;
+      if (silent > HEARTBEAT_TIMEOUT_MS && stall > AGENT_STALL_MS) {
+        // quem parou foi o agente, não o cliente: lê o que chegou e confere na próxima volta
+        this.broadcast({ type: "log", level: "warn", text: `O agente ficou ${(stall / 1000).toFixed(1)} s sem rodar (PC ocupado ou acordando da suspensão). Conferindo a conexão de novo.` });
+        return;
+      }
+      if (silent > HEARTBEAT_TIMEOUT_MS) {
+        this.connectionLost(`Sem sinal do computador que iniciou o trabalho há ${(silent / 1000).toFixed(1)} s (limite ${HEARTBEAT_TIMEOUT_MS / 1000} s).`);
       }
       return;
     }
