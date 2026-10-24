@@ -1,4 +1,4 @@
-import type { Path, Point } from "./types.js";
+import type { Path, Point, TextTag } from "./types.js";
 
 /**
  * Fonte própria de traço único (ideal para gravar em linha): grade 4 × 6,
@@ -99,6 +99,8 @@ export interface TextOptions {
   x: number;
   y: number;
   align?: "left" | "center" | "right";
+  /** Marca as letras com o texto (Path.text), para ele poder ser editado depois. */
+  tag?: string;
 }
 
 /** Largura do texto em mm (linha mais longa). */
@@ -129,5 +131,9 @@ export function textToPaths(text: string, options: TextOptions): Path[] {
         }
       });
     });
+  if (options.tag) {
+    const tag: TextTag = { id: options.tag, value: text, height: options.height, align: options.align ?? "left" };
+    for (const p of out) p.text = tag;
+  }
   return out;
 }

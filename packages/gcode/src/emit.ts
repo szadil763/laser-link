@@ -1,7 +1,7 @@
-import { boundsOf, distance, pathLength } from "./geometry.js";
+import { boundsOf, distance, nestingDepth, pathLength, pointInPolygon } from "./geometry.js";
 import { hatch } from "./hatch.js";
 import { compensateKerf } from "./offset.js";
-import { orderPaths } from "./order.js";
+import { orderPathIndices, orderPaths } from "./order.js";
 import { runsOfRow } from "./raster.js";
 import type { Bounds, JobDesign, MachineProfile, OpSettings, Path, Point, RasterGroup, VectorGroup, VectorMode } from "./types.js";
 
@@ -10,7 +10,16 @@ export const MODE_ORDER: readonly VectorMode[] = ["detail", "fill", "line", "cut
 
 export const DEFAULT_INTERVAL: Record<"fill" | "detail", number> = { fill: 0.2, detail: 0.08 };
 
+/**
+ * Ordem dos passes de linhas e cortes:
+ * - "pass": passe 1 em todas as peças, depois passe 2 em todas… (cada peça esfria entre um passe e outro);
+ * - "piece": todos os passes de uma peça (furos primeiro, contorno por último), depois a próxima peça.
+ */
+export type PassOrder = "pass" | "piece";
+
 export interface GenerateOptions {
+  /** Padrão: "pass". */
+  passOrder?: PassOrder;
   /** Velocidade estimada dos deslocamentos sem laser (só para a estimativa de tempo), mm/min. */
   travelFeed?: number;
   /** Volta para a origem de trabalho no fim. Padrão: sim. */
@@ -71,7 +80,8 @@ class Writer {
     const d = distance(this.pos, p);
     this.travelMm += d;
     this.seconds += (d / this.travelFeed) * 60;
-    this.move(0, p, null, null);
+    // S0 no deslocamento: com o modo laser do GRBL desligado ($32=0), o G0 não apaga o laser sozinho
+    this.move(0, p, null, this.s !== null && this.s > 0 ? 0 : null);
   }
 
   burn(p: Point, feed: number, s: number): void {
@@ -194,6 +204,77 @@ function emitVector(w: Writer, g: VectorGroup, machine: MachineProfile): void {
   }
 }
 
+interface PieceItem {
+  path: Path;
+  settings: OpSettings;
+  s: number;
+}
+
+/**
+ * Peça por peça: junta cada contorno externo com tudo que está dentro dele (furos, ilhas,
+ * gravações) e faz todos os passes de cada caminho antes do próximo. Nos cortes, o que
+ * está dentro sai antes do contorno, então a peça só se solta quando está pronta.
+ */
+function emitByPiece(w: Writer, groups: readonly VectorGroup[], machine: MachineProfile): void {
+  const mode = groups[0]!.mode;
+  const items: PieceItem[] = [];
+  for (const g of groups) {
+    validateSettings(g.settings, g.name);
+    const s = powerToS(g.settings.power, machine);
+    let paths: Path[] = g.paths.filter((p) => p.points.length >= 2);
+    const kerf = mode === "cut" ? (g.settings.kerf ?? 0) : 0;
+    if (kerf > 0) paths = compensateKerf(paths, kerf);
+    w.comment(describe(g, MODE_LABEL[g.mode], g.settings, `${kerf > 0 ? `, kerf ${kerf} mm` : ""}, peça por peça`));
+    for (const path of paths) items.push({ path, settings: g.settings, s });
+  }
+  // cada caminho vai para o menor contorno externo que o contém (ou forma uma peça sozinho)
+  const paths = items.map((it) => it.path);
+  const depth = nestingDepth(paths);
+  const boxes = paths.map((p) => boundsOf(p.points)!);
+  const area = (i: number): number => (boxes[i]!.maxX - boxes[i]!.minX) * (boxes[i]!.maxY - boxes[i]!.minY);
+  const tops = paths.map((p, i) => i).filter((i) => paths[i]!.closed && depth[i] === 0);
+  const owner = paths.map((p, i) => {
+    if (tops.includes(i)) return i;
+    const probe = p.points[0]!;
+    let best = -1;
+    for (const t of tops) {
+      const b = boxes[t]!;
+      if (probe[0] < b.minX || probe[0] > b.maxX || probe[1] < b.minY || probe[1] > b.maxY) continue;
+      if (pointInPolygon(probe, paths[t]!.points) && (best < 0 || area(t) < area(best))) best = t;
+    }
+    return best < 0 ? i : best;
+  });
+  const pieces = new Map<number, number[]>();
+  owner.forEach((o, i) => pieces.set(o, [...(pieces.get(o) ?? []), i]));
+  const remaining = [...pieces.values()];
+  const boxOf = (idx: number[]): Bounds => boundsOf(idx.flatMap((i) => paths[i]!.points))!;
+  const boxDist = (p: Point, b: Bounds): number => Math.hypot(Math.max(b.minX - p[0], 0, p[0] - b.maxX), Math.max(b.minY - p[1], 0, p[1] - b.maxY));
+  while (remaining.length) {
+    // próxima peça: a mais perto do cabeçote
+    let k = 0;
+    let kd = Infinity;
+    remaining.forEach((idx, j) => {
+      const d = boxDist(w.pos, boxOf(idx));
+      if (d < kd) [k, kd] = [j, d];
+    });
+    const idx = remaining.splice(k, 1)[0]!;
+    const ordered = orderPathIndices(
+      idx.map((i) => paths[i]!),
+      w.pos,
+      { innerFirst: mode === "cut" },
+    );
+    for (const o of ordered) {
+      const it = items[idx[o.index]!]!;
+      let pts = o.points;
+      for (let pass = 0; pass < it.settings.passes; pass++) {
+        // caminho aberto vai e volta (sem deslocamento vazio entre os passes)
+        if (pass > 0 && !o.closed) pts = pts.slice().reverse();
+        emitPaths(w, [{ closed: o.closed, points: pts }], it.settings, it.s);
+      }
+    }
+  }
+}
+
 /**
  * Gera o G-code do trabalho inteiro: M4 (potência dinâmica, o laser enfraquece
  * nas curvas e apaga parado), S proporcional à potência, imagem primeiro e
@@ -202,13 +283,16 @@ function emitVector(w: Writer, g: VectorGroup, machine: MachineProfile): void {
 export function generateGcode(design: JobDesign, machine: MachineProfile, options: GenerateOptions = {}): GenerateResult {
   if (!(machine.maxSpindle > 0)) throw new Error("maxSpindle precisa ser maior que zero.");
   const w = new Writer(options.travelFeed ?? 6000);
-  w.comment(`LaserLink: ${design.name}`);
+  w.comment(`Sapienza LaserLink: ${design.name}`);
   w.comment(`Gerado em ${(options.date ?? new Date()).toISOString()}`);
   w.raw("G21 G90");
   w.raw("M4 S0");
   for (const r of design.rasters) emitRaster(w, r, machine);
+  const byPiece = options.passOrder === "piece";
   for (const mode of MODE_ORDER) {
-    for (const g of design.vectors) if (g.mode === mode) emitVector(w, g, machine);
+    const groups = design.vectors.filter((g) => g.mode === mode);
+    if (byPiece && (mode === "cut" || mode === "line") && groups.length) emitByPiece(w, groups, machine);
+    else for (const g of groups) emitVector(w, g, machine);
   }
   w.raw("M5");
   if (options.returnToOrigin ?? true) w.rapid([0, 0]);

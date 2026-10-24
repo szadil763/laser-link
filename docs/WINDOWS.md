@@ -4,6 +4,21 @@ Passo a passo para deixar o agente rodando como serviço no PC ligado à laser, 
 
 > **Versão do Windows:** o Node.js 20 e o Tailscale atuais precisam do **Windows 10 ou 11** (64 ou 32 bits). No Windows 7 ou 8.1 eles não instalam. Se o PC antigo tiver Windows 7, me avise antes: o caminho muda (por exemplo, rodar o agente num Linux leve no mesmo PC).
 
+## Jeito fácil: arquivos de clique duplo
+
+Na pasta do LaserLink (`C:\LaserLink`) há quatro arquivos. Clique duas vezes e responda **Sim** quando o Windows pedir permissão. Eles pedem administrador sozinhos; não precisa abrir o PowerShell.
+
+| Arquivo | Para quê |
+|---|---|
+| **Instalar LaserLink** | Primeira instalação: instala Node.js, Git e NSSM pelo winget, pergunta a porta COM e a área de corte, gera o token, instala o serviço e (se quiser) o Tailscale. Rodar de novo é seguro: mantém a configuração. |
+| **Atualizar LaserLink** | Baixa a versão nova e reinstala o serviço. Para o serviço antes, mesmo se estiver travado. Não use com trabalho em andamento. |
+| **Reiniciar LaserLink** | Reinicia o agente (depois de editar o `laserlink.config.json`, ou se algo travar). |
+| **Abrir LaserLink** | Abre a interface no navegador deste PC. |
+
+Num PC novo, sem o LaserLink ainda: baixe o projeto como ZIP no GitHub (botão **Code > Download ZIP**, ramo `fase-3`), extraia em qualquer pasta e clique duas vezes em **Instalar LaserLink**. Ele baixa o projeto de verdade em `C:\LaserLink` (com Git, para as atualizações funcionarem) e continua de lá.
+
+Os passos abaixo fazem a mesma coisa à mão e servem de referência.
+
 ## 1. Preparar o PC
 
 1. **Energia:** em *Configurações > Sistema > Energia*, coloque "Suspender" em **Nunca** (na tomada). Se o PC dormir, a serial fecha e o trabalho para.
@@ -85,7 +100,7 @@ Get-Service LaserLink      # estado
 Get-Content C:\LaserLink\apps\agent\logs\agente.log -Tail 30 -Wait   # acompanha o log
 ```
 
-Para atualizar o LaserLink: `git pull` e rode o `instalar-servico.ps1` de novo.
+Para atualizar o LaserLink: `git pull` e rode o `instalar-servico.ps1` de novo. O script para o serviço antes de reinstalar as dependências (o agente em execução prende o driver da porta serial) e religa no fim. Não atualize com um trabalho em andamento: parar o serviço cancela o trabalho com segurança.
 Para remover: `scripts\windows\desinstalar-servico.ps1`.
 
 ## 6. Acesso de fora de casa: Tailscale
@@ -106,6 +121,20 @@ Dicas:
 - Para aceitar conexões **só** pelo Tailscale, coloque o IP `100.x.y.z` em `host` no `laserlink.config.json` e reinicie o serviço.
 - **Não** faça port-forward da porta 8787 no roteador e não use serviços de túnel público.
 
+## Projetos recebidos com repositório privado
+
+O agente busca os projetos com o Git do próprio PC da laser. Com o repositório **público**, não precisa configurar nada. Com o repositório **privado**, o serviço (que roda como outro usuário do Windows) precisa de um token só de leitura:
+
+1. No GitHub: foto do perfil > **Settings** > **Developer settings** > **Personal access tokens** > **Fine-grained tokens** > **Generate new token**.
+2. **Repository access**: *Only select repositories* > `laser-link`. **Permissions** > **Contents**: *Read-only*. Nada mais.
+3. Copie o token e coloque no `C:\LaserLink\laserlink.config.json`:
+   ```json
+   "projects": { "token": "github_pat_..." }
+   ```
+4. Clique duas vezes em **Reiniciar LaserLink**.
+
+O token fica só nesse arquivo (que não vai para o GitHub). Ele não dá para mudar nada no repositório.
+
 ## 7. Problemas comuns
 
 | Sintoma | O que fazer |
@@ -113,6 +142,7 @@ Dicas:
 | `Não foi possível abrir COM3` no log | Confira a porta no Gerenciador de Dispositivos e se outro programa (LaserGRBL, LightBurn, monitor serial) não está com a porta aberta. O agente tenta de novo a cada 2 s. |
 | Interface mostra "Laser desconectada" | Cabo USB solto, driver CH340 ou suspensão seletiva de USB ligada (passo 1). |
 | "Token inválido" | O token digitado é diferente do `laserlink.config.json`. Depois de editar o arquivo, `nssm restart LaserLink`. |
+| Trabalho iniciado **no próprio PC da laser** pausou "por falta de conexão" | Veja o motivo no **Registro**. "a página foi fechada, recarregada ou congelada": não feche nem recarregue a aba; no **Edge**, em **Configurações > Sistema e desempenho**, adicione `localhost` e o endereço do LaserLink (ex.: `100.117.34.24`) em **"Nunca colocar estes sites em suspensão"** e deixe o **Modo de eficiência** desligado na tomada; no Chrome, em **Configurações > Desempenho**, use **"Sempre manter estes sites ativos"** (a aba já pede para não ser congelada durante o trabalho, mas isso garante). "caiu sem aviso" ou "Sem sinal… há X s": PC entrando em suspensão ou travado; o **Atualizar/Instalar** já desliga a suspensão na tomada; confira também se o antivírus não está varrendo a pasta `C:\LaserLink` no meio do trabalho. "O agente ficou X s sem rodar": o PC está sobrecarregado; feche outros programas durante o corte. |
 | Não abre de outro PC | Confira se o Tailscale está ligado nos dois aparelhos e se a regra de firewall "LaserLink" existe (`Get-NetFirewallRule -DisplayName LaserLink`). |
 | "Interface não compilada" | Rode `npm run build` na pasta do LaserLink e reinicie o serviço. |
 | Trabalho pausa sozinho | A aba que iniciou o trabalho perdeu a conexão ou ficou em segundo plano no celular. Veja `docs/SEGURANCA.md`. |

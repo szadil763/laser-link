@@ -1,10 +1,10 @@
-# CLAUDE.md — LaserLink
+# CLAUDE.md — Sapienza LaserLink
 
 Guia para o Claude Code trabalhar neste repositório.
 
 ## Contexto
 
-Projeto do Adilson (Guarulhos/SP): controlar remotamente uma laser GRBL ligada a um PC antigo (Windows) a partir de outro PC. Idioma: **português do Brasil** em docs, mensagens de UI e commits. Código e identificadores em inglês.
+Projeto do Adilson (Guarulhos/SP), marca **Sapienza**: o app se chama **Sapienza LaserLink** (nome curto LaserLink). Nomes internos (serviço do Windows, pasta `C:\LaserLink`, `.bat`, pacotes `@laserlink/*`, extensão `.laserlink`) não mudam. Objetivo: controlar remotamente uma laser GRBL ligada a um PC antigo (Windows) a partir de outro PC. Idioma: **português do Brasil** em docs, mensagens de UI e commits. Código e identificadores em inglês.
 
 ## Arquitetura
 
@@ -18,10 +18,10 @@ Monorepo npm workspaces:
 ## Regras inegociáveis (segurança)
 
 1. **Nunca** fazer streaming de G-code pela rede. O arquivo vai inteiro ao agente.
-2. Se o cliente desconectar (ou ficar mudo 6 s) com trabalho em andamento: `!` (feed hold) e, já em Hold, `0x9E` para desligar o laser. Se ninguém reconectar em `reconnectGraceSec`, cancelar com reset e `M5`. Um `M5` direto durante o Hold não serve: ele fica na fila e só roda ao retomar.
+2. Se o cliente desconectar (ou ficar mudo 6 s) com trabalho em andamento: `!` (feed hold) e, já em Hold, `0x9E` para desligar o laser. **Conferir** que o laser apagou (relatório com `FS` potência 0 ou `Ov` sem `A:S/C`); sem confirmação em 2 s (ou sem Hold em 3 s), cancelar na hora com reset, que sempre corta o laser. Se ninguém reconectar em `reconnectGraceSec`, cancelar com reset e `M5`. Um `M5` direto durante o Hold não serve: ele fica na fila e só roda ao retomar. O botão Pausar usa a mesma pausa segura. Com `$32=0` (modo laser desligado), recusar trabalhos. Deslocamentos `G0` sempre com `S0`.
 3. Todo WebSocket exige token. Sem token válido, fechar a conexão.
 4. Comandos de tempo real do GRBL (`!`, `~`, `?`, `0x18`, `0x9E`) passam fora da fila de linhas.
-5. Não adicionar funcionalidade que ligue o laser sem confirmação explícita do usuário na UI (no protocolo: `confirmLaserOn: true`).
+5. Não adicionar funcionalidade que ligue o laser sem confirmação explícita do usuário na UI (no protocolo: `confirmLaserOn: true`). Isso vale para a fila: o próximo trabalho nunca começa sozinho (`queueStart` exige `confirmLaserOn: true`).
 6. Não expor portas na internet; documentar Tailscale ou LAN.
 
 ## Streaming GRBL
@@ -46,6 +46,10 @@ npm run dev:web
 - Não copiar código, interface, ícones ou formato de arquivo do LightBurn.
 - G-code gerado precisa passar em `checkGcode` do agente (há teste em `apps/agent/test/gcode-integration.test.ts`).
 
+## Projetos para a laser (SVG)
+
+Para gerar peças/desenhos para a máquina, use a skill `.claude/skills/laserlink-svg` (formato do SVG, cores das operações, texto em caminhos) e publique com `node scripts/publicar-projeto.mjs` (ramo `projetos`, aparece em Arquivo > Projetos recebidos). Nunca inicie trabalho nem ligue o laser: só entregue o desenho.
+
 ## Próximos passos
 
-Veja `docs/ROADMAP.md`. Fases 1 e 2 prontas no simulador; falta validar na bancada (`docs/TESTES-NA-BANCADA.md`). Próxima: **3 (diferenciais)**.
+Veja `docs/ROADMAP.md`. Fases 1, 2 e 3 prontas no simulador; falta validar na bancada (`docs/TESTES-NA-BANCADA.md`). Depois: câmera, nesting e editor vetorial (seção "Depois" do roadmap).
