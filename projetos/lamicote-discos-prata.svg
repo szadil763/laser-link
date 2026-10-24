@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="104mm" height="104mm" viewBox="0 0 104 104" data-laserlink-corte="velocidade:3000 potencia:25 passadas:1">
-  <!-- CORTE (vermelho): 4 discos de 50 mm de lamicote prata -->
-  <circle cx="25" cy="25" r="25" fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="79" cy="25" r="25" fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="25" cy="79" r="25" fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="79" cy="79" r="25" fill="none" stroke="#ff0000" stroke-width="0.2"/>
-</svg>
