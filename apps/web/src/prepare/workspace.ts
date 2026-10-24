@@ -1554,6 +1554,17 @@ export class Workspace {
     );
   }
 
+  /** Observação do material escolhido (cuidados) e aviso quando ele não serve para cortar. */
+  private materialNote(l: Layer, hasCut: boolean): string {
+    const mat = this.material(l.materialId);
+    if (!mat) return "";
+    const noCut = hasCut && !mat.presets.some((p) => p.mode === "cut");
+    return (
+      (noCut ? `<p class="warnbox">${esc(mat.name)} é só para gravar: o laser não corta esse material. Troque a operação para gravar ou escolha outro material.</p>` : "") +
+      (mat.notes ? `<p class="note">${esc(mat.notes)}</p>` : "")
+    );
+  }
+
   private materialOptions(selected: string | null): string {
     return (
       `<option value="" ${selected ? "" : "selected"}>Personalizado</option>` +
@@ -1841,6 +1852,7 @@ export class Workspace {
           <div class="label">Operação padrão da camada</div>
           <div class="seg" role="group" aria-label="Operação padrão">${this.modeButtons(l.mode)}</div>
           <label class="field" style="font-size:13px">Material <select class="plain" data-k="material">${this.materialOptions(l.materialId)}</select></label>
+          ${this.materialNote(l, counts.has("cut"))}
           <div class="settings" style="display:grid;gap:8px">${EXEC_ORDER.filter((m) => counts.get(m)).map((m) => this.settingRow(l, m, counts.get(m)!)).join("")}</div>
           <details class="items" ${l.shapes.length <= 12 || l.shapes.some((s) => this.selected.has(s.id)) ? "open" : ""}>
             <summary>Elementos (${l.shapes.length}): escolha a operação de cada um</summary>
@@ -2221,13 +2233,16 @@ export class Workspace {
       const m = draft.find((x) => x.id === current);
       $<HTMLInputElement>("mat-name").value = m?.name ?? "";
       $<HTMLInputElement>("mat-thickness").value = String(m?.thickness ?? "");
+      $<HTMLTextAreaElement>("mat-notes").value = m?.notes ?? "";
       $("mat-body").innerHTML = m
         ? modes
             .map((mode) => {
-              const p = m.presets.find((x) => x.mode === mode) ?? { mode, ...presetFor(undefined, mode) };
+              // operação sem preset = o material não serve para ela (ex.: ardósia não corta)
+              const own = m.presets.find((x) => x.mode === mode);
+              const p = own ?? { mode, ...presetFor(undefined, mode) };
               const extraKey = mode === "cut" ? "kerf" : mode === "fill" || mode === "detail" ? "interval" : "";
               const extraVal = extraKey === "kerf" ? (p.kerf ?? 0) : extraKey === "interval" ? (p.interval ?? 0.2) : "";
-              return `<tr data-mode="${mode}"><td>${MODE_INFO[mode].label}</td>
+              return `<tr data-mode="${mode}" data-on="${!!own}"><td><input type="checkbox" data-k="on" ${own ? "checked" : ""} aria-label="Usar ${MODE_INFO[mode].label} neste material"></td><td>${MODE_INFO[mode].label}</td>
                 <td><input type="number" min="10" data-k="speed" value="${p.speed}" aria-label="Velocidade"></td>
                 <td><input type="number" min="0" max="100" data-k="power" value="${p.power}" aria-label="Potência"></td>
                 <td><input type="number" min="1" max="99" data-k="passes" value="${p.passes}" aria-label="Passes"></td>
@@ -2242,7 +2257,11 @@ export class Workspace {
       if (!m) return;
       m.name = $<HTMLInputElement>("mat-name").value.trim() || m.name;
       m.thickness = Number($<HTMLInputElement>("mat-thickness").value) || 0;
-      m.presets = [...$("mat-body").querySelectorAll<HTMLTableRowElement>("tr")].map((tr) => {
+      const notes = $<HTMLTextAreaElement>("mat-notes").value.trim();
+      if (notes) m.notes = notes;
+      else delete m.notes;
+      const rows = [...$("mat-body").querySelectorAll<HTMLTableRowElement>("tr")].filter((tr) => tr.querySelector<HTMLInputElement>('[data-k="on"]')?.checked);
+      m.presets = rows.map((tr) => {
         const get = (k: string): number | undefined => {
           const inp = tr.querySelector<HTMLInputElement>(`[data-k="${k}"]`);
           return inp ? Number(inp.value) : undefined;
@@ -2254,6 +2273,10 @@ export class Workspace {
         if (interval !== undefined) preset.interval = interval;
         return preset;
       });
+    };
+    $("mat-body").onchange = (e) => {
+      const box = e.target as HTMLInputElement;
+      if (box.dataset.k === "on") box.closest("tr")!.dataset.on = String(box.checked);
     };
     $<HTMLSelectElement>("mat-select").onchange = (e) => {
       readCurrent();

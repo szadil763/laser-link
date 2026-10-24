@@ -129,7 +129,7 @@ O G-code não volta para a interface: só o agente guarda o arquivo.
 
 ### `Material`
 
-A biblioteca fica no agente (`apps/agent/data/materials.json`, fora do git), para valer em qualquer aparelho. Sem o arquivo, o agente usa MDF 3 mm e MDF 6 mm de exemplo.
+A biblioteca fica no agente (`apps/agent/data/materials.json`, fora do git), para valer em qualquer aparelho. Sem o arquivo, o agente usa os materiais de exemplo (`DEFAULT_MATERIALS`); exemplos novos entram sozinhos numa biblioteca já salva (veja docs/MATERIAIS.md).
 
 | Campo | Descrição |
 |---|---|

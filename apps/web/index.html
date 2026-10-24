@@ -611,12 +611,13 @@ descobertas</textarea></label>
           <button type="button" id="mat-delete">Excluir</button>
         </div>
         <div class="fields" style="margin-top:8px">
-          <label class="field">Nome <input type="text" id="mat-name" maxlength="80" /></label>
+          <label class="field" style="grid-column: span 2">Nome <input type="text" id="mat-name" maxlength="80" /></label>
           <label class="field">Espessura <span class="val"><input type="number" id="mat-thickness" min="0" max="100" step="0.5" /><span class="unit">mm</span></span></label>
+          <label class="field" style="grid-column: 1 / -1">Cuidados e observações (aparecem na camada) <textarea id="mat-notes" rows="2" maxlength="500"></textarea></label>
         </div>
         <div class="table-scroll" style="margin-top:8px">
           <table class="mat">
-            <thead><tr><th>Operação</th><th>mm/min</th><th>Potência %</th><th>Passes</th><th>Kerf / intervalo (mm)</th></tr></thead>
+            <thead><tr><th>Usa</th><th>Operação</th><th>mm/min</th><th>Potência %</th><th>Passes</th><th>Kerf / intervalo (mm)</th></tr></thead>
             <tbody id="mat-body"></tbody>
           </table>
         </div>

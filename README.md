@@ -104,7 +104,7 @@ npm run dev:web     # interface em http://localhost:5173; informe ws://localhost
    - **Gravar linha**: marca o contorno.
    - **Gravar preenchido**: hachura dentro da forma (intervalo padrão 0,2 mm).
    - **Detalhado**: preenchimento fino (0,08 mm), para textos e detalhes pequenos.
-3. **Material**: escolha na camada (MDF 3 mm e 6 mm de exemplo) ou ajuste velocidade, potência e passes à mão. O botão **Materiais** edita a biblioteca, que fica salva no agente.
+3. **Material**: escolha na camada (MDF, compensado, balsa, EVA, papel cartão, lamicote, paraná, papelão, acrílico preto, couro, feltro, cortiça, tecido, ardósia e alumínio anodizado de exemplo; cuidados de cada um em [docs/MATERIAIS.md](docs/MATERIAIS.md)) ou ajuste velocidade, potência e passes à mão. O botão **Materiais** edita a biblioteca, que fica salva no agente. **Nunca** corte PVC/vinil, policarbonato, ABS ou couro sintético.
 4. **Edite** se precisar: arraste o elemento selecionado ou use a barra de medidas (posição, tamanho, girar, espelhar, alinhar, contorno deslocado, duplicar, excluir). Desfazer fica na barra de cima (Ctrl+Z). Roda do mouse dá zoom; arrastar o fundo move a vista. O botão **Mesa clara** troca o fundo da mesa entre claro e escuro.
 5. **Ordem dos passes** (janela Camadas), para linhas e cortes com vários passes:
    - **Passe por passe** (padrão): passe 1 em todas as peças, depois o passe 2 em todas… Cada peça esfria entre um passe e outro.
