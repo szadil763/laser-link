@@ -16,6 +16,10 @@ Laser sem supervisão é risco real de incêndio e de ferimento. Este documento 
 
 - [x] Token obrigatório no WebSocket.
 - [x] Desconexão do cliente durante trabalho: `!` e, em Hold, `0x9E` (laser desligado); cancela com reset + `M5` se ninguém reconectar em 60 s.
+- [x] **Laser conferido apagado na pausa:** depois do `0x9E`, o agente espera o GRBL confirmar (potência 0 no relatório ou campo de acessórios sem laser). Sem confirmação em 2 s (placa que ignora o `0x9E`, por exemplo) ou sem entrar em Hold em 3 s, cancela na hora com reset, que sempre corta o laser. O trabalho se perde, mas nada fica queimando.
+- [x] **Pausar** (botão) usa a mesma pausa segura: o laser apaga e é conferido; **Retomar** religa, com confirmação.
+- [x] **Modo laser do GRBL ($32):** o agente lê ao conectar. Com `$32=0`, o laser fica aceso nas pausas e nos `G0`; trabalhos são recusados e a interface mostra **Ligar modo laser** (grava `$32=1`).
+- [x] Deslocamentos `G0` sempre com `S0`: o laser não fica aceso andando, mesmo com o modo laser desligado.
 - [x] Heartbeat: cliente mudo por 6 s = mesma parada acima.
 - [x] Parada em `error:` e `ALARM:`.
 - [x] `Parar` envia reset suave (0x18) e `M5`.

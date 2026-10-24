@@ -14,7 +14,10 @@ import { createStaticHandler } from "./static.js";
 
 const config = loadConfig();
 const simulated = config.serialPort === "sim";
-const link: SerialLink = simulated ? new FakeGrbl({ msPerLine: 30 }) : new NodeSerialLink(config.serialPort, config.baudRate);
+// LASERLINK_SIM_LASER_MODE=0 simula uma placa com o modo laser desligado (só para testes)
+const link: SerialLink = simulated
+  ? new FakeGrbl({ msPerLine: 30, laserMode: process.env.LASERLINK_SIM_LASER_MODE !== "0" })
+  : new NodeSerialLink(config.serialPort, config.baudRate);
 const grbl = new Grbl(link);
 const jobLog = new JobLog(config.logDir);
 const materials = new MaterialStore(config.dataDir);

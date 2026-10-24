@@ -116,6 +116,12 @@ export class Agent {
     grbl.on("log", (level, text) => this.broadcast({ type: "log", level, text }));
     grbl.on("progress", (p) => this.onProgress(p));
     grbl.on("jobEnd", (e) => this.onJobEnd(e));
+    grbl.on("settings", ({ laserMode }) => {
+      this.broadcast({ type: "machine", laserMode });
+      if (laserMode === false) {
+        this.broadcast({ type: "log", level: "error", text: "Modo laser do GRBL desligado ($32=0): o laser pode ficar aceso nas pausas e nos deslocamentos. Trabalhos ficam bloqueados até ligar o modo laser." });
+      }
+    });
     grbl.on("closed", () => {
       this.broadcast({ type: "serial", connected: false });
       this.broadcast({ type: "log", level: "error", text: "Laser desconectada (porta serial fechada). Tentando reconectar…" });
@@ -166,6 +172,7 @@ export class Agent {
         frameFeed: this.config.frameFeed,
       },
       lastResult: this.lastResult,
+      laserMode: this.grbl.laserMode,
     });
     const last = this.grbl.lastStatus;
     if (last) client.send({ type: "status", ...last });
@@ -221,6 +228,8 @@ export class Agent {
       await this.grbl.open();
       this.broadcast({ type: "serial", connected: true });
       this.broadcast({ type: "log", level: "info", text: `Laser conectada (${this.portLabel}).` });
+      // confere o modo laser ($32): com ele desligado, o laser fica aceso em pausas e deslocamentos
+      this.grbl.readSettings();
       console.log(`Serial aberta: ${this.portLabel}`);
     } catch (err) {
       console.warn(`Não foi possível abrir ${this.portLabel}: ${(err as Error).message}. Nova tentativa em ${this.serialRetryMs / 1000} s.`);
@@ -274,6 +283,16 @@ export class Agent {
       case "home":
         grbl.sendLine("$H");
         break;
+      case "setLaserMode":
+        if (this.job || grbl.isRunning) {
+          client.send({ type: "error", message: "Não dá para mudar o modo laser com um trabalho em andamento." });
+          break;
+        }
+        if (grbl.sendLine("$32=1")) {
+          grbl.readSettings();
+          this.broadcast({ type: "log", level: "info", text: "Modo laser ligado no GRBL ($32=1)." });
+        }
+        break;
       case "projectsList":
         if (!this.projects) {
           client.send({ type: "projects", items: [], error: "Projetos recebidos não estão ligados neste agente." });
@@ -307,7 +326,8 @@ export class Agent {
         break;
       }
       case "hold":
-        grbl.feedHold();
+        // a pausa sempre apaga o laser (e confere); retomar religa, com confirmação na tela
+        grbl.safetyHold();
         if (this.job?.state === "running") this.setJobState("paused");
         break;
       case "resume":
@@ -442,6 +462,13 @@ export class Agent {
   private startJob(client: ClientConn, name: string, gcode: string): boolean {
     if (this.job || this.grbl.isRunning) {
       client.send({ type: "error", message: "Já existe um trabalho em andamento." });
+      return false;
+    }
+    if (this.grbl.laserMode === false) {
+      client.send({
+        type: "error",
+        message: "Trabalho recusado: o modo laser do GRBL está desligado ($32=0). Assim o laser fica aceso nas pausas e nos deslocamentos, com risco de incêndio. Clique em \"Ligar modo laser\" no aviso do topo e envie de novo.",
+      });
       return false;
     }
     if (!this.grbl.isReady) {

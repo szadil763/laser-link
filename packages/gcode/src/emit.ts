@@ -80,7 +80,8 @@ class Writer {
     const d = distance(this.pos, p);
     this.travelMm += d;
     this.seconds += (d / this.travelFeed) * 60;
-    this.move(0, p, null, null);
+    // S0 no deslocamento: com o modo laser do GRBL desligado ($32=0), o G0 não apaga o laser sozinho
+    this.move(0, p, null, this.s !== null && this.s > 0 ? 0 : null);
   }
 
   burn(p: Point, feed: number, s: number): void {

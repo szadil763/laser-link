@@ -420,6 +420,7 @@ function onMessage(msg: ServerMessage): void {
       }
       log(`Agente v${msg.version} · porta ${msg.port} · GRBL ${msg.connected ? "conectado" : "desconectado"}`);
       reconnectGraceSec = msg.reconnectGraceSec;
+      renderLaserMode(msg.laserMode);
       renderSerial(msg.connected);
       if (msg.lastResult) renderResult(msg.lastResult);
       if (msg.lastResult && msg.lastResult.outcome !== "completed") {
@@ -434,6 +435,13 @@ function onMessage(msg: ServerMessage): void {
       break;
     case "status":
       $("state").textContent = msg.state;
+      {
+        // indicador do laser (só quando o GRBL informa)
+        const lamp = $("sb-laser");
+        lamp.hidden = msg.laserOn === undefined;
+        lamp.textContent = msg.laserOn ? "· laser aceso" : "· laser apagado";
+        lamp.dataset.on = String(!!msg.laserOn);
+      }
       $("x").textContent = (msg.wpos ?? msg.mpos).x.toFixed(3);
       $("y").textContent = (msg.wpos ?? msg.mpos).y.toFixed(3);
       {
@@ -488,6 +496,9 @@ function onMessage(msg: ServerMessage): void {
       renderSerial(msg.connected);
       break;
     case "pong":
+      break;
+    case "machine":
+      renderLaserMode(msg.laserMode);
       break;
     case "projects":
       renderInbox(msg.items, msg.error);
@@ -553,6 +564,19 @@ document.querySelectorAll<HTMLButtonElement>(".jog button").forEach((btn) => {
 });
 
 $("home").addEventListener("click", () => conn.send({ type: "home" }));
+// ---------- modo laser do GRBL ($32) ----------
+function renderLaserMode(laserMode: boolean | null): void {
+  $("laser-mode-alert").hidden = laserMode !== false;
+}
+$("laser-mode-fix").addEventListener("click", async () => {
+  const ok = await confirmDialog(
+    "Ligar o modo laser do GRBL?",
+    "Grava $32=1 na placa. Não acende o laser: faz ele apagar sozinho nas pausas e nos deslocamentos, e ajusta a potência nas curvas. Fica gravado na placa.",
+    "Ligar modo laser",
+  );
+  if (ok && !conn.send({ type: "setLaserMode" })) toast("Sem conexão com o agente. Conecte e tente de novo.");
+});
+
 // ---------- projetos recebidos (ramo projetos do GitHub) ----------
 function inboxStatus(text: string): void {
   $("ib-status").textContent = text;

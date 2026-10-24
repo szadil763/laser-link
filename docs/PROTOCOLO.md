@@ -1,7 +1,7 @@
 # Protocolo WebSocket
 
 Mensagens JSON. Tipos em `packages/shared/src/protocol.ts`; validação das mensagens do cliente em `packages/shared/src/validate.ts`.
-Versão atual: **0.6.0** (`PROTOCOL_VERSION`). O agente informa a versão no `hello`; a interface avisa se for diferente.
+Versão atual: **0.7.0** (`PROTOCOL_VERSION`). O agente informa a versão no `hello`; a interface avisa se for diferente.
 
 ## Endereço e autenticação
 
@@ -36,7 +36,8 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 | `jog` | `axis` (`X`/`Y`), `distance` (mm), `feed` (mm/min) | Movimento relativo (`$J=G91 G21 ...`) |
 | `home` | | `$H` |
 | `setOrigin` | `x`, `y` (opcionais, juntos) | `G10 L20 P1 X{x} Y{y}`: a posição atual do cabeçote vira esse ponto (sem `x`/`y`, vira X0 Y0). O ponto precisa estar na área útil; fora dela, ou com trabalho em andamento, o agente recusa com `error` |
-| `hold` | | `!` |
+| `hold` | | `!` e, em Hold, `0x9E` com conferência do laser apagado (igual à perda de conexão; sem confirmação em 2 s, reset) |
+| `setLaserMode` | | `$32=1` e relê `$$`. Recusado durante trabalho. Não acende o laser |
 | `resume` | `confirmLaserOn: true` | `~`. Quem retoma vira o dono do trabalho |
 | `stop` | | `!` + `0x18` + `M5` (cancela o trabalho) |
 | `unlock` | | `$X` |
@@ -56,8 +57,9 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 
 | `type` | Campos |
 |---|---|
-| `hello` | `version`, `port`, `connected`, `job` (`JobInfo` ou `null`), `reconnectGraceSec`, `limits {maxSpindle, workArea {x,y}, framePower, frameFeed}`, `lastResult` (`JobResult` ou `null`) |
-| `status` | `state`, `mpos {x,y,z}`, `wpos {x,y,z}` (se o WCO já é conhecido), `feed`, `spindle` |
+| `hello` | `version`, `port`, `connected`, `job` (`JobInfo` ou `null`), `reconnectGraceSec`, `limits {maxSpindle, workArea {x,y}, framePower, frameFeed}`, `lastResult` (`JobResult` ou `null`), `laserMode` (`$32`: `true`, `false` ou `null` se desconhecido) |
+| `machine` | `laserMode`: enviado quando o agente lê (ou relê) o `$$` |
+| `status` | `state`, `mpos {x,y,z}`, `wpos {x,y,z}` (se o WCO já é conhecido), `feed`, `spindle`, `laserOn` (do campo `A:` do GRBL, quando vem) |
 | `log` | `level`, `text` |
 | `progress` | `sent`, `total`, `running` |
 | `job` | `job` (`JobInfo` ou `null`): enviado sempre que o trabalho muda de estado |

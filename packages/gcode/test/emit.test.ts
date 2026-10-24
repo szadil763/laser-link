@@ -27,10 +27,24 @@ describe("generateGcode", () => {
     expect(r.gcode).toContain("S850");
     expect(r.gcode).toContain("S250");
     expect(lines.at(-2)).toBe("M5");
-    expect(lines.at(-1)).toMatch(/^G0 X0 Y0$/);
+    expect(lines.at(-1)).toBe("G0 X0 Y0 S0");
     expect(r.maxS).toBe(850);
     expect(powerToS(33.3, machine)).toBe(333);
     expect(powerToS(150, machine)).toBe(1000);
+  });
+
+  it("nenhum deslocamento G0 com o laser aceso (S0 antes de andar sem queimar)", () => {
+    for (const passOrder of ["pass", "piece"] as const) {
+      let sNow = 0;
+      let motion = "";
+      for (const l of codeLines(generateGcode(design, machine, { date, passOrder }).gcode)) {
+        const g = /\bG([01])\b/.exec(l);
+        if (g) motion = g[1]!;
+        const sw = /\bS(\d+)/.exec(l);
+        if (sw) sNow = Number(sw[1]);
+        if (motion === "0" && /[XY]/.test(l)) expect(sNow, `${passOrder}: ${l}`).toBe(0);
+      }
+    }
   });
 
   it("grava linhas antes de cortar e corta o furo antes do contorno", () => {

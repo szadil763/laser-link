@@ -39,7 +39,11 @@ O que os testes automáticos (com o simulador) **não** conseguem provar e preci
 
 ## 4. Perda de conexão (o mais importante)
 
-Faça com o laser desligado, depois com potência baixa.
+Faça com o laser desligado, depois com potência baixa, num **retalho** e com alguém olhando a máquina.
+
+- [ ] Ao conectar, o **Registro** não mostra "Modo laser do GRBL desligado". Se mostrar, clique em **Ligar modo laser** no aviso do topo.
+- [ ] Trabalho com potência baixa e **Pausar** pelo botão: o cabeçote para e **o laser apaga**. O Registro mostra "Laser desligado e conferido". Na barra de baixo aparece "laser apagado". **Retomar** religa o laser e continua.
+- [ ] **Tirar o cabo de rede/desligar o Wi-Fi** do PC que iniciou: em ~6 s o cabeçote para e o laser apaga. No Registro: "Laser desligado e conferido". Se a placa não obedecer, em até 2 s o agente cancela com reset ("Parada de segurança…") e o laser apaga do mesmo jeito.
 
 - [ ] **Fechar a aba** que iniciou o trabalho: em menos de 1 s o cabeçote para. Com potência baixa, **o laser apaga** em até ~0,5 s depois de parar (o agente envia `0x9E` quando o GRBL confirma o Hold).
 - [ ] Reabrir a interface: aparece o aviso "Trabalho pausado" com o motivo. **Retomar** pede confirmação, o laser volta a acender e o trabalho continua.

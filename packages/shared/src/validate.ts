@@ -62,6 +62,8 @@ export function parseClientMessage(value: unknown): ClientMessage | null {
       return { type: "queueAdd", name: value.name.trim(), gcode: value.gcode };
     case "projectsList":
       return { type: "projectsList" };
+    case "setLaserMode":
+      return { type: "setLaserMode" };
     case "projectGet":
       if (typeof value.path !== "string" || value.path.length > 300) return null;
       return { type: "projectGet", path: value.path };

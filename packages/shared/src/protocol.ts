@@ -31,6 +31,8 @@ export type ClientMessage =
   /** Guarda um trabalho na fila do agente. Não liga o laser: o agente só confere e guarda. */
   | { type: "queueAdd"; name: string; gcode: string }
   | { type: "queueRemove"; id: string }
+  /** Liga o modo laser do GRBL ($32=1). Não liga o laser: faz ele apagar em pausas e deslocamentos. */
+  | { type: "setLaserMode" }
   /** Muda a posição de um trabalho na fila (0 = próximo). */
   | { type: "queueMove"; id: string; index: number }
   /** Inicia um trabalho da fila. Liga o laser: a UI precisa ter pedido confirmação. */
@@ -196,8 +198,12 @@ export type ServerMessage =
       limits: AgentLimits;
       /** Último trabalho encerrado, para quem reconecta saber o que aconteceu enquanto estava fora. */
       lastResult: JobResult | null;
+      /** $32 do GRBL (modo laser). null = não lido ainda ou firmware sem essa configuração. */
+      laserMode: boolean | null;
     }
-  | { type: "status"; state: MachineState; mpos: Position; wpos?: Position; feed: number; spindle: number }
+  | { type: "status"; state: MachineState; mpos: Position; wpos?: Position; feed: number; spindle: number; laserOn?: boolean }
+  /** Configuração da máquina lida do GRBL ($$). */
+  | { type: "machine"; laserMode: boolean | null }
   | { type: "log"; level: "info" | "warn" | "error"; text: string }
   | { type: "progress"; sent: number; total: number; running: boolean }
   | { type: "job"; job: JobInfo | null }
@@ -213,4 +219,4 @@ export type ServerMessage =
   | { type: "pong"; t: number }
   | { type: "error"; message: string };
 
-export const PROTOCOL_VERSION = "0.6.0";
+export const PROTOCOL_VERSION = "0.7.0";

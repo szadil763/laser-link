@@ -92,6 +92,13 @@
       </header>
 
       <div id="alerts">
+        <section id="laser-mode-alert" class="alert" hidden role="alert">
+          <h2>Modo laser desligado no GRBL ($32=0)</h2>
+          <p>Assim o laser pode ficar aceso nas pausas e nos deslocamentos, com risco de incêndio, e os cantos queimam mais. Os trabalhos ficam bloqueados até ligar o modo laser.</p>
+          <div class="row">
+            <button id="laser-mode-fix" class="primary">Ligar modo laser</button>
+          </div>
+        </section>
         <section id="job-alert" class="alert" hidden role="alert">
           <h2>Trabalho pausado</h2>
           <p id="job-alert-text"></p>
@@ -365,7 +372,7 @@
 
       <footer class="statusbar" aria-label="Situação">
         <span id="sb-cursor">Cursor: —</span>
-        <span>Máquina: <b id="state">—</b> · X <span id="x">0.000</span> Y <span id="y">0.000</span></span>
+        <span>Máquina: <b id="state">—</b> · X <span id="x">0.000</span> Y <span id="y">0.000</span> <b id="sb-laser" class="sb-laser" hidden></b></span>
         <span class="muted">Ordem: imagem, detalhado, preenchido, linhas e cortes (furos antes do contorno).</span>
         <span class="version" id="sb-version" title="Versão desta interface (commit e data). Depois de atualizar, ela deve mudar."></span>
       </footer>
