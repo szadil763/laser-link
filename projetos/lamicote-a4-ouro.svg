@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300mm" height="400mm" viewBox="0 0 300 400" data-laserlink="mesa" data-laserlink-corte="velocidade:3000 potencia:25 passadas:1">
+  <!-- Folha A4 de lamicote ouro: canto da folha em (20,20) mm da mesa. 15 lâminas de 53,5 mm -->
+  <!-- CORTE (vermelho): primeiro as estrelas (vazadas), depois os círculos -->
+  <path d="M67.384,29.873 L72.934,44.526 L89.586,44.924 L76.365,54.377 L81.105,69.276 L67.384,60.465 L53.662,69.276 L58.403,54.377 L45.182,44.924 L61.833,44.526 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M124.884,29.873 L130.434,44.526 L147.086,44.924 L133.865,54.377 L138.605,69.276 L124.884,60.465 L111.162,69.276 L115.903,54.377 L102.682,44.924 L119.333,44.526 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M182.384,29.873 L187.934,44.526 L204.586,44.924 L191.365,54.377 L196.105,69.276 L182.384,60.465 L168.662,69.276 L173.403,54.377 L160.182,44.924 L176.833,44.526 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M67.384,87.373 L72.934,102.026 L89.586,102.424 L76.365,111.877 L81.105,126.776 L67.384,117.965 L53.662,126.776 L58.403,111.877 L45.182,102.424 L61.833,102.026 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M124.884,87.373 L130.434,102.026 L147.086,102.424 L133.865,111.877 L138.605,126.776 L124.884,117.965 L111.162,126.776 L115.903,111.877 L102.682,102.424 L119.333,102.026 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M182.384,87.373 L187.934,102.026 L204.586,102.424 L191.365,111.877 L196.105,126.776 L182.384,117.965 L168.662,126.776 L173.403,111.877 L160.182,102.424 L176.833,102.026 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M67.384,144.873 L72.934,159.526 L89.586,159.924 L76.365,169.377 L81.105,184.276 L67.384,175.465 L53.662,184.276 L58.403,169.377 L45.182,159.924 L61.833,159.526 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M124.884,144.873 L130.434,159.526 L147.086,159.924 L133.865,169.377 L138.605,184.276 L124.884,175.465 L111.162,184.276 L115.903,169.377 L102.682,159.924 L119.333,159.526 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M182.384,144.873 L187.934,159.526 L204.586,159.924 L191.365,169.377 L196.105,184.276 L182.384,175.465 L168.662,184.276 L173.403,169.377 L160.182,159.924 L176.833,159.526 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M67.384,202.373 L72.934,217.026 L89.586,217.423 L76.365,226.877 L81.105,241.776 L67.384,232.965 L53.662,241.776 L58.403,226.877 L45.182,217.423 L61.833,217.026 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M124.884,202.373 L130.434,217.026 L147.086,217.423 L133.865,226.877 L138.605,241.776 L124.884,232.965 L111.162,241.776 L115.903,226.877 L102.682,217.423 L119.333,217.026 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M182.384,202.373 L187.934,217.026 L204.586,217.423 L191.365,226.877 L196.105,241.776 L182.384,232.965 L168.662,241.776 L173.403,226.877 L160.182,217.423 L176.833,217.026 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M67.384,259.873 L72.934,274.526 L89.586,274.923 L76.365,284.377 L81.105,299.276 L67.384,290.465 L53.662,299.276 L58.403,284.377 L45.182,274.923 L61.833,274.526 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M124.884,259.873 L130.434,274.526 L147.086,274.923 L133.865,284.377 L138.605,299.276 L124.884,290.465 L111.162,299.276 L115.903,284.377 L102.682,274.923 L119.333,274.526 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <path d="M182.384,259.873 L187.934,274.526 L204.586,274.923 L191.365,284.377 L196.105,299.276 L182.384,290.465 L168.662,299.276 L173.403,284.377 L160.182,274.923 L176.833,274.526 Z" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="67.5" cy="53.5" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="125" cy="53.5" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="182.5" cy="53.5" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="67.5" cy="111" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="125" cy="111" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="182.5" cy="111" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="67.5" cy="168.5" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="125" cy="168.5" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="182.5" cy="168.5" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="67.5" cy="226" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="125" cy="226" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="182.5" cy="226" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="67.5" cy="283.5" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="125" cy="283.5" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="182.5" cy="283.5" r="26.75" fill="none" stroke="#ff0000" stroke-width="0.2"/>
+</svg>
