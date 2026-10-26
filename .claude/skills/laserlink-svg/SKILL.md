@@ -1,6 +1,6 @@
 ---
 name: laserlink-svg
-description: Gera arquivos SVG prontos para a laser GRBL da Sapienza (app Sapienza LaserLink) e, quando possível, publica o arquivo para aparecer no app em Arquivo > Projetos recebidos. Use sempre que pedirem para desenhar, criar, gerar ou mandar uma peça, placa, painel, letreiro, chaveiro, caixa, plaquinha, bandeirola, molde ou qualquer desenho "para a laser", "para cortar", "para gravar" ou "para o LaserLink" ou "para o Sapienza LaserLink", mesmo que a pessoa não diga "SVG".
+description: Gera arquivos SVG prontos para a laser GRBL da Sapienza (app Sapienza LaserLink) e, quando possível, publica o arquivo para aparecer no app em Arquivo > Projetos recebidos. Use sempre que pedirem para desenhar, criar, gerar ou mandar uma peça, placa, painel, letreiro, chaveiro, caixa, plaquinha, bandeirola, molde ou qualquer desenho "para a laser", "para cortar", "para gravar" ou "para o LaserLink" ou "para o Sapienza LaserLink", mesmo que a pessoa não diga "SVG". Também use quando colarem um código de pedido de carimbo começando com SAP1: (kit de carimbos Stilo personalizados com caixa de MDF).
 ---
 
 # SVG para a laser do Sapienza LaserLink
@@ -108,6 +108,29 @@ Se o `git push` for recusado (sem permissão de escrita no repositório), não i
 **Em outro lugar (chat do claude.ai, celular) ou sem acesso de escrita ao GitHub:** entregue o arquivo `.svg` para baixar e diga: "No LaserLink: **Arquivo > Importar SVG, DXF ou imagem…**". Não diga que falta a pasta de projetos: nesse caso a entrega é só o arquivo.
 
 Sempre termine dizendo o tamanho final, as operações (o que corta, o que grava) e que é preciso conferir com **Simular** e **Enquadrar** antes de cortar.
+
+## Carimbos personalizados Stilo (código SAP1:)
+
+Quando a pessoa colar um código `SAP1:...` (gerado pelo editor do folder Sapienza), gere os arquivos de corte da **caixa** e dos **carimbos**. O código é base64 de JSON: `{k: 2|4|6, s: [[linha1, linha2, fonte, ícone, lado, moldura], ...]}`. Os scripts ficam na pasta do projeto `caixa-carimbos-mdf` (fora do repositório do LaserLink); se não estiver na sessão, peça a pasta ou o repositório.
+
+```bash
+cd caixa-carimbos-mdf
+python3 gerar_pedido.py "SAP1:..." --saida /tmp/pedido [--titulo "Nome do cliente"] [--margem 2.0]
+```
+
+Saídas:
+- `caixa-carimbos-N.svg`: caixa aberta de MDF 3 mm para N carimbos, com o ícone e as frases do pedido gravados na frente e o título atrás. Mesa 300×400, `data-laserlink="mesa"`.
+- `carimbos-N.svg`: folha dos carimbos **negativados e espelhados**. Regra do Adilson: o laser queima o material em volta e deixa só a arte. Preto (gravar preenchido) = fundo espelhado, margem de 2 mm; vermelho (cortar) = contorno de cada carimbo; a arte fica sem queimar.
+- `prova-N.png`: prova em leitura normal para o cliente confirmar. Envie ao usuário.
+
+Fluxo:
+1. Rode `gerar_pedido.py`. Se imprimir "Aviso" (letra abaixo de 2,3 mm), avise a pessoa.
+2. Renderize os SVG em PNG (cairosvg) e **olhe**: letras espelhadas e fundo preto nos carimbos; ícone e frases certos na frente da caixa.
+3. Confira cada um com `node scripts/conferir-svg.mjs arquivo.svg --area 300x400` ("Pronto para o LaserLink").
+4. Publique os dois com `publicar-projeto.mjs` (descrição com o que é e o material) e mande as provas.
+5. Diga as suposições usadas: caixa aberta (o estojo com tampa deslizante só existe para 6, ainda sem parâmetros do pedido), título "Carimbos do Professor" quando o pedido não traz nome, margem de 2 mm e contorno vermelho.
+
+Detalhes: o código não traz modelo de caixa nem nome do cliente; pergunte só se mudar o que será cortado. `carimbo_svg.py --modo arte|fundo` gera as peças soltas (38×14 mm) para outros métodos de matriz. Ícones são originais da Sapienza: nunca copie personagens de terceiros.
 
 ## Exemplo mínimo
 
