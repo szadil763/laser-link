@@ -111,26 +111,33 @@ Sempre termine dizendo o tamanho final, as operações (o que corta, o que grava
 
 ## Carimbos personalizados Stilo (código SAP1:)
 
-Quando a pessoa colar um código `SAP1:...` (gerado pelo editor do folder Sapienza), gere os arquivos de corte da **caixa** e dos **carimbos**. O código é base64 de JSON: `{k: 2|4|6, s: [[linha1, linha2, fonte, ícone, lado, moldura], ...]}`. Os scripts ficam na pasta do projeto `caixa-carimbos-mdf` (fora do repositório do LaserLink); se não estiver na sessão, peça a pasta ou o repositório.
+**REGRA Nº 1: pedido de cliente é seguido EXATAMENTE como veio no código.** Mesmas linhas de texto (até 3 por carimbo), letra, ícone, lado, moldura, quantidade, modelo de caixa e nome na caixa. Se algo **não puder ser cumprido** (caixa estojo sem gerador para essa quantidade, ícone ou letra inexistente, caractere que a fonte não tem, letra pequena demais, texto que não cabe, ambiguidade), **PARE e consulte o Adilson ANTES de gerar ou publicar**: diga o que não dá e as opções. Nunca troque em silêncio por algo parecido. São pedidos de clientes reais.
+
+Quando a pessoa colar um código `SAP1:...` (gerado pelo editor do folder Sapienza), gere os arquivos de corte da **caixa** e dos **carimbos**. O código é base64 de JSON: `{k: 2|4|6, s: [[linha1, linha2, fonte, ícone, lado, moldura, linha3], ...], c: nome na caixa, b: "aberta"|"estojo", u: cidade}` (a linha 3 é opcional e pode faltar nos códigos antigos). Os scripts ficam na pasta do projeto `caixa-carimbos-mdf` (fora do repositório do LaserLink); se não estiver na sessão, peça a pasta ou o repositório.
 
 ```bash
 cd caixa-carimbos-mdf
 python3 gerar_pedido.py "SAP1:..." --saida /tmp/pedido [--titulo "Nome do cliente"] [--margem 2.0]
 ```
 
+`gerar_pedido.py` **para sozinho (código de saída 3)** e lista o que não dá para cumprir. Só use `--aceitar-desvios` depois de o Adilson autorizar cada desvio, e escreva o desvio autorizado na descrição publicada.
+
 Saídas:
 - `caixa-carimbos-N.svg`: caixa aberta de MDF 3 mm para N carimbos, com o ícone e as frases do pedido gravados na frente e o título atrás. Mesa 300×400, `data-laserlink="mesa"`.
-- `carimbos-N.svg`: folha dos carimbos **negativados e espelhados**. Regra do Adilson: o laser queima o material em volta e deixa só a arte. Preto (gravar preenchido) = fundo espelhado, margem de 2 mm; vermelho (cortar) = contorno de cada carimbo; a arte fica sem queimar.
+- `carimbos-N.svg`: folha dos carimbos 35 × 15 mm **negativados e espelhados**. O laser queima o material em volta e deixa só a arte. Preto (gravar preenchido) = fundo espelhado, margem de 2 mm; vermelho (cortar) = contorno de cada carimbo.
 - `prova-N.png`: prova em leitura normal para o cliente confirmar. Envie ao usuário.
 
-Fluxo:
-1. Rode `gerar_pedido.py`. Se imprimir "Aviso" (letra abaixo de 2,3 mm), avise a pessoa.
-2. Renderize os SVG em PNG (cairosvg) e **olhe**: letras espelhadas e fundo preto nos carimbos; ícone e frases certos na frente da caixa.
-3. Confira cada um com `node scripts/conferir-svg.mjs arquivo.svg --area 300x400` ("Pronto para o LaserLink").
-4. Publique os dois com `publicar-projeto.mjs` (descrição com o que é e o material) e mande as provas.
-5. Diga as suposições usadas: caixa aberta (o estojo com tampa deslizante só existe para 6, ainda sem parâmetros do pedido), título "Carimbos do Professor" quando o pedido não traz nome, margem de 2 mm e contorno vermelho.
+Os arquivos já saem com **um caminho fechado por contorno** (`vetores.py`): o LaserLink lê cada `<path>` como uma linha só, então subcaminhos grudados criam traços falsos e perdem o fechamento.
 
-Detalhes: o código não traz modelo de caixa nem nome do cliente; pergunte só se mudar o que será cortado. `carimbo_svg.py --modo arte|fundo` gera as peças soltas (38×14 mm) para outros métodos de matriz. Ícones são originais da Sapienza: nunca copie personagens de terceiros.
+Fluxo:
+1. Decodifique o código e liste o pedido (linhas, letra, ícone, lado, moldura, caixa). Rode `gerar_pedido.py`. Se ele parar, consulte o Adilson.
+2. Renderize os SVG em PNG (cairosvg) e **olhe**: letras espelhadas e fundo preto nos carimbos; ícone e frases certos.
+3. **Confira o resultado contra o código decodificado** e diga isso na entrega.
+4. Confira cada arquivo com `node scripts/conferir-svg.mjs arquivo.svg --area 300x400` ("Pronto para o LaserLink").
+5. Publique os dois com `publicar-projeto.mjs` e mande as provas.
+6. Diga só as suposições que o pedido não define (título quando não há nome, margem de 2 mm, contorno vermelho).
+
+Ícones são originais da Sapienza: nunca copie personagens de terceiros.
 
 ## Exemplo mínimo
 
