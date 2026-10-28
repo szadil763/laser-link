@@ -111,7 +111,7 @@ Sempre termine dizendo o tamanho final, as operações (o que corta, o que grava
 
 ## Carimbos personalizados Stilo (código SAP1:)
 
-**REGRA Nº 1: pedido de cliente é seguido EXATAMENTE como veio no código.** Mesmas linhas de texto (até 3 por carimbo), letra, ícone, lado, moldura, quantidade, modelo de caixa e nome na caixa. Se algo **não puder ser cumprido** (caixa estojo sem gerador para essa quantidade, ícone ou letra inexistente, caractere que a fonte não tem, letra pequena demais, texto que não cabe, ambiguidade), **PARE e consulte o Adilson ANTES de gerar ou publicar**: diga o que não dá e as opções. Nunca troque em silêncio por algo parecido. São pedidos de clientes reais.
+**REGRA Nº 1: pedido de cliente é seguido EXATAMENTE como veio no código.** Mesmas linhas de texto (até 3 por carimbo), letra, ícone, lado, moldura, quantidade, modelo de caixa e nome na caixa. Se algo **não puder ser cumprido** (estojo para quantidade diferente de 2, 4 ou 6, ícone ou letra inexistente, caractere que a fonte não tem, letra pequena demais, texto que não cabe, ambiguidade), **PARE e consulte o Adilson ANTES de gerar ou publicar**: diga o que não dá e as opções. Nunca troque em silêncio por algo parecido. São pedidos de clientes reais.
 
 Quando a pessoa colar um código `SAP1:...` (gerado pelo editor do folder Sapienza), gere os arquivos de corte da **caixa** e dos **carimbos**. O código é base64 de JSON: `{k: 2|4|6, s: [[linha1, linha2, fonte, ícone, lado, moldura, linha3], ...], c: nome na caixa, b: "aberta"|"estojo", u: cidade}` (a linha 3 é opcional e pode faltar nos códigos antigos). Os scripts ficam na pasta do projeto `caixa-carimbos-mdf` (fora do repositório do LaserLink); se não estiver na sessão, peça a pasta ou o repositório.
 
@@ -123,7 +123,7 @@ python3 gerar_pedido.py "SAP1:..." --saida /tmp/pedido [--titulo "Nome do client
 `gerar_pedido.py` **para sozinho (código de saída 3)** e lista o que não dá para cumprir. Só use `--aceitar-desvios` depois de o Adilson autorizar cada desvio, e escreva o desvio autorizado na descrição publicada.
 
 Saídas:
-- `caixa-carimbos-N.svg`: caixa aberta de MDF 3 mm para N carimbos, com o ícone e as frases do pedido gravados na frente e o título atrás. Mesa 300×400, `data-laserlink="mesa"`.
+- `caixa-carimbos-N.svg` (pedido `b:"aberta"`) ou `estojo-carimbos-N-folha-1-de-2.svg` + `folha-2-de-2` (pedido `b:"estojo"`, caixa FECHADA com tampa deslizante): MDF 3 mm para N carimbos, com o ícone e as frases do pedido gravados na frente e o título atrás. Mesa 300×400, `data-laserlink="mesa"`.
 - `carimbos-N.svg`: folha dos carimbos 35 × 15 mm **negativados e espelhados**. O laser queima o material em volta e deixa só a arte. Preto (gravar preenchido) = fundo espelhado, margem de 2 mm; vermelho (cortar) = contorno de cada carimbo.
 - `prova-N.png`: prova em leitura normal para o cliente confirmar. Envie ao usuário.
 
