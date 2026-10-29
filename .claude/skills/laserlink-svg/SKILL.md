@@ -141,7 +141,7 @@ Fluxo:
 3. **Confira o resultado contra o código decodificado** e diga isso na entrega.
 4. Confira cada arquivo com `node scripts/conferir-svg.mjs arquivo.svg --area 300x400` ("Pronto para o LaserLink").
 5. Publique os dois com `publicar-projeto.mjs` e mande as provas.
-6. Diga só as suposições que o pedido não define (título quando não há nome, margem de 2 mm, contorno vermelho).
+6. Diga só as suposições que o pedido não define (título quando não há nome, contorno vermelho de 35 × 16 mm).
 
 Ícones são originais da Sapienza: nunca copie personagens de terceiros.
 
