@@ -113,7 +113,7 @@ Sempre termine dizendo o tamanho final, as operações (o que corta, o que grava
 
 **REGRA Nº 1: pedido de cliente é seguido EXATAMENTE como veio no código.** Mesmas linhas de texto (até 3 por carimbo), letra, ícone, lado, moldura, quantidade, modelo de caixa e nome na caixa. Se algo **não puder ser cumprido** (estojo para quantidade diferente de 2, 4 ou 6, ícone ou letra inexistente, caractere que a fonte não tem, letra pequena demais, texto que não cabe, ambiguidade), **PARE e consulte o Adilson ANTES de gerar ou publicar**: diga o que não dá e as opções. Nunca troque em silêncio por algo parecido. São pedidos de clientes reais.
 
-**Medida do carimbo: área de impressão 35 × 16 mm** (largura × altura), peça de corte 39 × 20 mm com a margem de 2 mm. Confira no arquivo antes de entregar (`<rect>` vermelho 39 × 20) e diga na entrega.
+**Medida do carimbo: 35 × 16 mm** (largura × altura). O **contorno vermelho de corte também é 35 × 16 mm**, sem margem extra (39 × 20 ficava justo demais na máquina de carimbo). Confira no arquivo antes de entregar (`<rect>` vermelho 35 × 16) e diga na entrega.
 
 **REGRA Nº 3: carimbo vai com o material "borracha carimbo".** O `carimbos-N.svg` sai com `data-laserlink-material="borracha carimbo"` no `<svg>`: o LaserLink usa esse material cadastrado em **Materiais** (cortar, gravar preenchido etc. com velocidade, potência e passes dele) em vez do primeiro da lista. Se o material não existir, o app avisa. Nunca publique carimbo sem esse atributo; as caixas de MDF não levam. Qualquer arquivo pode pedir um material pelo nome com esse atributo.
 
@@ -130,7 +130,7 @@ python3 gerar_pedido.py "SAP1:..." --saida /tmp/pedido [--titulo "Nome do client
 
 Saídas:
 - `caixa-carimbos-N.svg` (pedido `b:"aberta"`) ou `estojo-carimbos-N-folha-1-de-2.svg` + `folha-2-de-2` (pedido `b:"estojo"`, caixa FECHADA com tampa deslizante): MDF 3 mm para N carimbos, com o ícone e as frases do pedido gravados na frente e o título atrás. Mesa 300×400, `data-laserlink="mesa"`.
-- `carimbos-N.svg`: folha dos carimbos 35 × 16 mm **negativados e espelhados**. O laser queima o material em volta e deixa só a arte. Preto (gravar preenchido) = fundo espelhado, margem de 2 mm; vermelho (cortar) = contorno de cada carimbo.
+- `carimbos-N.svg`: folha dos carimbos 35 × 16 mm **negativados e espelhados**. O laser queima o material em volta e deixa só a arte. Preto (gravar preenchido) = fundo espelhado dentro da peça de 35 × 16 mm; vermelho (cortar) = contorno de 35 × 16 mm de cada carimbo.
 - `prova-N.png`: prova em leitura normal para o cliente confirmar. Envie ao usuário.
 
 Os arquivos já saem com **um caminho fechado por contorno** (`vetores.py`): o LaserLink lê cada `<path>` como uma linha só, então subcaminhos grudados criam traços falsos e perdem o fechamento.
