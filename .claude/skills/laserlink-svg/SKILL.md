@@ -129,7 +129,7 @@ python3 gerar_pedido.py "SAP1:..." --saida /tmp/pedido [--titulo "Nome do client
 `gerar_pedido.py` **para sozinho (código de saída 3)** e lista o que não dá para cumprir. Só use `--aceitar-desvios` depois de o Adilson autorizar cada desvio, e escreva o desvio autorizado na descrição publicada.
 
 Saídas:
-- `caixa-carimbos-N.svg` (pedido `b:"aberta"`) ou `estojo-carimbos-N-folha-1-de-2.svg` + `folha-2-de-2` (pedido `b:"estojo"`, caixa FECHADA com tampa deslizante): MDF 3 mm para N carimbos, com o ícone e as frases do pedido gravados na frente e o título atrás. Mesa 300×400, `data-laserlink="mesa"`.
+- `caixa-carimbos-N.svg` (pedido `b:"aberta"`) ou `estojo-carimbos-N.svg` (pedido `b:"estojo"`, caixa FECHADA com tampa deslizante, **todas as peças em UM arquivo, na mesma mesa**; nunca separar em folhas que abrem em mesas diferentes): MDF 3 mm para N carimbos, com o ícone e as frases do pedido gravados na frente e o título atrás. Mesa 300×400, `data-laserlink="mesa"`.
 - `carimbos-N.svg`: folha dos carimbos 35 × 16 mm **negativados e espelhados**. O laser queima o material em volta e deixa só a arte. Preto (gravar preenchido) = fundo espelhado dentro da peça de 35 × 16 mm; vermelho (cortar) = contorno de 35 × 16 mm de cada carimbo.
 - `prova-N.png`: prova em leitura normal para o cliente confirmar. Envie ao usuário.
 
