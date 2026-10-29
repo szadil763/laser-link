@@ -944,12 +944,17 @@ export class Workspace {
           `${file.name}: ${count} elementos em ${layers.length} camada(s).${skipped ? ` ${skipped} item(ns) sem linhas (textos, cotas, hachuras) ficaram de fora.` : ""}`,
         );
       } else if (/\.svg$/i.test(file.name) || file.type === "image/svg+xml") {
-        const { layers, count } = importSvg(await file.text(), this.materials);
+        const { layers, count, materialName, materialMissing } = importSvg(await file.text(), this.materials);
         this.resetDesign(file.name);
         this.layers = layers;
         this.view.fitTo(null);
         this.refresh();
-        this.host.toast(`${file.name}: ${count} elementos em ${layers.length} camada(s) por cor. Toque num elemento para mudar a operação dele.`);
+        const aviso = materialMissing
+          ? ` ATENÇÃO: o arquivo pede o material "${materialMissing}", que não existe em Materiais; usei o primeiro da lista. Cadastre esse material antes de gravar.`
+          : materialName
+            ? ` Material: ${materialName}.`
+            : "";
+        this.host.toast(`${file.name}: ${count} elementos em ${layers.length} camada(s) por cor.${aviso} Toque num elemento para mudar a operação dele.`);
       } else if (/^image\/(png|jpeg)$/.test(file.type) || /\.(png|jpe?g)$/i.test(file.name)) {
         const mat = this.materials[0];
         const img = await importImage(file, mat, presetFor(mat, "raster"));

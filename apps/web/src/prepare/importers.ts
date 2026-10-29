@@ -26,6 +26,21 @@ function lengthToMm(v: string | null): number | null {
 export interface SvgImport {
   layers: Layer[];
   count: number;
+  /** Material pedido pelo arquivo (data-laserlink-material), quando existe no agente. */
+  materialName?: string;
+  /** O arquivo pediu um material que não está cadastrado: usou o primeiro da lista. */
+  materialMissing?: string;
+}
+
+function norm(t: string): string {
+  return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+}
+
+/** Acha o material pelo nome, sem diferenciar maiúsculas nem acentos. */
+export function findMaterial(materials: readonly Material[], name: string | null): Material | undefined {
+  if (!name || !name.trim()) return undefined;
+  const alvo = norm(name);
+  return materials.find((m) => norm(m.name) === alvo);
 }
 
 /**
@@ -95,7 +110,10 @@ export function importSvg(text: string, materials: readonly Material[]): SvgImpo
   const b = boundsOf([...groups.values()].flat().flatMap((s) => s.points))!;
   const layers: Layer[] = [];
   let n = 0;
-  const mdf = materials[0];
+  // data-laserlink-material="borracha carimbo": o arquivo escolhe o material (velocidade, potência, passes) pelo nome
+  const pedido = svg.getAttribute("data-laserlink-material");
+  const achado = findMaterial(materials, pedido);
+  const mdf = achado ?? materials[0];
   // data-laserlink="mesa": o SVG é a mesa inteira (0,0 no canto de baixo à esquerda) e as posições valem como estão
   const onBed = svg.getAttribute("data-laserlink") === "mesa";
   const bedH = hmm ?? (hasVb ? vb[3]! * sy : b.maxY);
@@ -112,7 +130,7 @@ export function importSvg(text: string, materials: readonly Material[]): SvgImpo
     });
     layers.push(layer);
   }
-  return { layers, count };
+  return { layers, count, ...(achado ? { materialName: achado.name } : {}), ...(pedido?.trim() && !achado ? { materialMissing: pedido.trim() } : {}) };
 }
 
 /** Cores ACI mais comuns do DXF. */
