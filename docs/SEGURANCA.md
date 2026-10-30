@@ -15,19 +15,42 @@ Laser sem supervisão é risco real de incêndio e de ferimento. Este documento 
 ## Software (implementado e planejado)
 
 - [x] Token obrigatório no WebSocket.
-- [x] Desconexão do cliente durante trabalho: `!` + `M5`.
+- [x] Desconexão do cliente durante trabalho: `!` e, em Hold, `0x9E` (laser desligado); cancela com reset + `M5` se ninguém reconectar em 60 s.
+- [x] **Laser conferido apagado na pausa:** depois do `0x9E`, o agente espera o GRBL confirmar (potência 0 no relatório ou campo de acessórios sem laser). Sem confirmação em 2 s (placa que ignora o `0x9E`, por exemplo) ou sem entrar em Hold em 3 s, cancela na hora com reset, que sempre corta o laser. O trabalho se perde, mas nada fica queimando.
+- [x] **Pausar** (botão) usa a mesma pausa segura: o laser apaga e é conferido; **Retomar** religa, com confirmação.
+- [x] **Modo laser do GRBL ($32):** o agente lê ao conectar. Com `$32=0`, o laser fica aceso nas pausas e nos `G0`; trabalhos são recusados e a interface mostra **Ligar modo laser** (grava `$32=1`).
+- [x] Pausa por engano evitada sem afrouxar a regra: se o **próprio agente** ficou parado (PC ocupado ou acordando da suspensão), ele lê os sinais que chegaram antes de concluir que o cliente sumiu. O motivo da pausa no registro diz o que aconteceu (página fechada/congelada, conexão caída, quantos segundos sem sinal).
+- [x] O sinal de vida (ping) sai de um Worker que também guarda o WebSocket: página ocupada (trabalho com um milhão de linhas, desenho pesado) não deixa de mandar sinal. O G-code é gerado, lido e pintado em Workers; a tela só recebe o resultado.
+- [x] A aba dona de um trabalho segura uma Web Lock (o Chrome não a congela) e o instalador desliga a suspensão do Windows na tomada.
+- [x] Deslocamentos `G0` sempre com `S0`: o laser não fica aceso andando, mesmo com o modo laser desligado.
+- [x] Heartbeat: cliente mudo por 6 s = mesma parada acima.
 - [x] Parada em `error:` e `ALARM:`.
 - [x] `Parar` envia reset suave (0x18) e `M5`.
-- [ ] Confirmação extra na UI antes de iniciar o trabalho.
-- [ ] Timeout de heartbeat (cliente mudo = pausa).
-- [ ] Limite máximo de potência configurável no agente.
-- [ ] Log de trabalhos.
+- [x] Confirmação na UI antes de iniciar e de retomar (`confirmLaserOn` no protocolo).
+- [x] Limite de potência (`maxSpindle`) e área útil (`workArea`) no agente: G-code fora dos limites é recusado inteiro.
+- [x] Enquadrar com laser desligado por padrão; potência mínima (`framePower`, no máximo 10% de `maxSpindle`) só com confirmação.
+- [x] G-code gerado pela interface passa pelas mesmas conferências de potência e área no agente.
+- [x] Log de trabalhos em `apps/agent/logs/jobs.jsonl` (início, fim, resultado, motivo e recusas).
+
+## A aba que iniciou o trabalho
+
+O heartbeat vem da aba que iniciou (ou retomou) o trabalho. Se ela fechar, o computador dormir ou o celular apagar a tela e suspender o navegador, o agente pausa o trabalho e desliga o laser. Isso é proposital.
+A interface pede para manter a tela acesa (Wake Lock) nessa aba, mas no celular nem todo navegador respeita. Para trabalhos longos, prefira um computador.
 
 ## Rede
 
 - Use **Tailscale** ou rede local. Não faça port-forward do agente.
 - Troque o token padrão. Gere um longo e aleatório.
+- A interface lembra o token no navegador depois da primeira conexão aceita (opção "Lembrar o token neste computador", ligada por padrão). Em computador compartilhado, desmarque ou use "Esquecer token": aí ele fica só na aba e some quando o navegador fecha.
 - Considere TLS (wss) via proxy se sair da rede local.
+- O firewall do Windows (regra criada pelo `instalar-servico.ps1`) aceita a porta só do Tailscale e da rede local. Veja `WINDOWS.md`.
+
+## Projetos recebidos
+
+- O agente só **busca** o ramo `projetos` no GitHub (conexão de saída, comandos git fixos) e lê os arquivos dessa referência. Nenhuma porta nova, nada é executado dos arquivos.
+- Só caminhos da lista (`projetos/*.svg|dxf|laserlink`) podem ser lidos; outros são recusados.
+- Abrir um projeto só põe o desenho na mesa. Enviar, enquadrar e iniciar continuam pedindo confirmação.
+- Token do GitHub (repositório privado): só leitura, só este repositório, guardado no `laserlink.config.json` (fora do Git).
 
 ## Regra de ouro
 

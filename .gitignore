@@ -8,3 +8,7 @@ laserlink.config.json
 .DS_Store
 .vscode/
 .idea/
+
+# logs de trabalho do agente
+apps/agent/logs/
+apps/agent/data/
