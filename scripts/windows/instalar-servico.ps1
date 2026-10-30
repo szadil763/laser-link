@@ -50,11 +50,16 @@ $NssmCmd = Get-Command $Nssm -ErrorAction SilentlyContinue
 if (-not $NssmCmd) { Fail "nssm.exe não encontrado. Baixe em https://nssm.cc/download, copie o nssm.exe (pasta win64) para C:\Windows\System32 ou passe -Nssm C:\caminho\nssm.exe." }
 $NssmExe = $NssmCmd.Source
 
+# O serviço em execução prende arquivos de node_modules (o driver da porta serial).
+# Para antes de reinstalar as dependências (mesmo se estiver travado); volta a rodar no fim.
+. (Join-Path $PSScriptRoot "comum.ps1")
+Stop-LaserLink $ServiceName
+
 Write-Host "Compilando o LaserLink em $Root ..." -ForegroundColor Cyan
 Push-Location $Root
 try {
   npm ci
-  if ($LASTEXITCODE -ne 0) { Fail "npm ci falhou. Confira a conexão com a internet e tente de novo." }
+  if ($LASTEXITCODE -ne 0) { Fail "npm ci falhou. Veja as mensagens acima. Se aparecer EPERM, feche programas que usam a pasta C:\LaserLink (editor, antivírus) e rode este script de novo. Se falar de rede, confira a internet. O serviço ficou parado: rode o script de novo para religar." }
   npm run build
   if ($LASTEXITCODE -ne 0) { Fail "npm run build falhou. Veja as mensagens acima." }
 } finally {
@@ -97,6 +102,12 @@ if (-not $SemFirewall) {
     -RemoteAddress @("100.64.0.0/10", "LocalSubnet") -Action Allow | Out-Null
   Write-Host "Firewall: porta $Port liberada só para Tailscale (100.64.0.0/10) e rede local." -ForegroundColor Cyan
 }
+
+# O PC da laser não pode dormir no meio de um trabalho: na tomada, sem suspensão nem hibernação.
+# (A tela pode continuar apagando; isso não atrapalha.)
+& powercfg.exe /change standby-timeout-ac 0 | Out-Null
+& powercfg.exe /change hibernate-timeout-ac 0 | Out-Null
+Write-Host "Energia: suspensão e hibernação desligadas na tomada (o PC da laser não dorme no meio de um trabalho)." -ForegroundColor Cyan
 
 & $NssmExe start $ServiceName | Out-Null
 Start-Sleep -Seconds 2

@@ -29,6 +29,7 @@ export function testConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     dataDir: "",
     framePower: 10,
     frameFeed: 3000,
+    projects: null,
     ...overrides,
   };
 }

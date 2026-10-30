@@ -8,7 +8,11 @@ export const HEARTBEAT_TIMEOUT_MS = 6000;
 export type ClientMessage =
   | { type: "jog"; axis: Axis; distance: number; feed: number }
   | { type: "home" }
-  | { type: "setOrigin" }
+  /**
+   * A posição atual do cabeçote vira a origem de trabalho. Sem `x`/`y`: vira X0 Y0.
+   * Com `x`/`y`: vira esse ponto (ex.: o centro do desenho), dentro da área útil.
+   */
+  | { type: "setOrigin"; x?: number; y?: number }
   | { type: "hold" }
   /** Retomar religa o laser: a UI precisa ter pedido confirmação. */
   | { type: "resume"; confirmLaserOn: true }
@@ -23,7 +27,57 @@ export type ClientMessage =
    */
   | { type: "frame"; bounds: FrameBounds; laser: "off" }
   | { type: "frame"; bounds: FrameBounds; laser: "min"; confirmLaserOn: true }
-  | { type: "materialsSave"; materials: Material[] };
+  | { type: "materialsSave"; materials: Material[] }
+  /** Guarda um trabalho na fila do agente. Não liga o laser: o agente só confere e guarda. */
+  | { type: "queueAdd"; name: string; gcode: string }
+  | { type: "queueRemove"; id: string }
+  /** Liga o modo laser do GRBL ($32=1). Não liga o laser: faz ele apagar em pausas e deslocamentos. */
+  | { type: "setLaserMode" }
+  /** Muda a posição de um trabalho na fila (0 = próximo). */
+  | { type: "queueMove"; id: string; index: number }
+  /** Inicia um trabalho da fila. Liga o laser: a UI precisa ter pedido confirmação. */
+  | { type: "queueStart"; id: string; confirmLaserOn: true }
+  /** Busca no GitHub os projetos publicados (ramo projetos) e devolve a lista. Não liga nada. */
+  | { type: "projectsList" }
+  /** Pede o conteúdo de um projeto da lista, para abrir na mesa. */
+  | { type: "projectGet"; path: string };
+
+export type ProjectKind = "laserlink" | "svg" | "dxf";
+
+/** Projeto publicado na pasta projetos/ do ramo projetos. */
+export interface ProjectEntry {
+  /** Caminho no repositório, ex.: projetos/placa-da-porta.svg */
+  path: string;
+  /** Nome do arquivo, sem a pasta. */
+  name: string;
+  kind: ProjectKind;
+  /** Bytes. */
+  size: number;
+  /** Data do último commit do arquivo (ISO 8601) ou "" se não houver. */
+  date: string;
+  /** Mensagem desse commit: o que o projeto é. */
+  description: string;
+}
+
+/** Limites da fila do agente. */
+export const QUEUE_MAX_ITEMS = 20;
+export const QUEUE_MAX_NAME = 120;
+
+/**
+ * Trabalho guardado na fila. O G-code fica só no agente (na memória);
+ * a fila nunca inicia um trabalho sozinha.
+ */
+export interface QueueItem {
+  id: string;
+  name: string;
+  /** Linhas de G-code depois de limpar comentários. */
+  lines: number;
+  /** ISO 8601 */
+  addedAt: string;
+  /** Tempo estimado em segundos (aproximado). */
+  estimatedSec: number;
+  bounds: JobBounds | null;
+}
 
 export interface FrameBounds {
   minX: number;
@@ -144,8 +198,12 @@ export type ServerMessage =
       limits: AgentLimits;
       /** Último trabalho encerrado, para quem reconecta saber o que aconteceu enquanto estava fora. */
       lastResult: JobResult | null;
+      /** $32 do GRBL (modo laser). null = não lido ainda ou firmware sem essa configuração. */
+      laserMode: boolean | null;
     }
-  | { type: "status"; state: MachineState; mpos: Position; wpos?: Position; feed: number; spindle: number }
+  | { type: "status"; state: MachineState; mpos: Position; wpos?: Position; feed: number; spindle: number; laserOn?: boolean }
+  /** Configuração da máquina lida do GRBL ($$). */
+  | { type: "machine"; laserMode: boolean | null }
   | { type: "log"; level: "info" | "warn" | "error"; text: string }
   | { type: "progress"; sent: number; total: number; running: boolean }
   | { type: "job"; job: JobInfo | null }
@@ -153,7 +211,12 @@ export type ServerMessage =
   | { type: "jobRejected"; name: string; problems: JobProblem[]; bounds: JobBounds | null }
   | { type: "serial"; connected: boolean }
   | { type: "materials"; materials: Material[] }
+  /** Fila inteira: enviada ao conectar e a cada mudança. */
+  | { type: "queue"; items: QueueItem[] }
+  /** Lista de projetos publicados. `error`: a busca no GitHub falhou (a lista é a última baixada). */
+  | { type: "projects"; items: ProjectEntry[]; error?: string }
+  | { type: "projectFile"; entry: ProjectEntry; content: string }
   | { type: "pong"; t: number }
   | { type: "error"; message: string };
 
-export const PROTOCOL_VERSION = "0.3.0";
+export const PROTOCOL_VERSION = "0.7.0";

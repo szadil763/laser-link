@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { EventEmitter } from "node:events";
+import type { SerialLink, SerialLinkEvents } from "../src/serial-link.js";
 import { Grbl, RX_BUFFER_SIZE, type JobEnd, type JobProgress } from "../src/grbl.js";
 import { FakeGrbl } from "../src/sim/fake-grbl.js";
 import { openGrbl, sampleJob } from "./helpers.js";
@@ -115,4 +117,36 @@ describe("espera o GRBL ficar pronto", () => {
     expect(grbl.isReady).toBe(true);
     expect(fake.lines).toEqual(["$X"]); // enviado só depois do banner
   });
+});
+
+describe("trabalho grande", () => {
+  it("manda 300 mil linhas sem perder velocidade (fila não fica lenta com o tamanho)", async () => {
+    // "GRBL" que responde ok na hora: mede só o custo do agente
+    class Instant extends EventEmitter<SerialLinkEvents> implements SerialLink {
+      isOpen = false;
+      async open(): Promise<void> {
+        this.isOpen = true;
+        setImmediate(() => this.emit("line", "Grbl 1.1h ['$' for help]"));
+      }
+      close(): void {
+        this.isOpen = false;
+        this.emit("close");
+      }
+      write(data: Buffer): void {
+        const n = data.toString().split("\n").length - 1;
+        if (n) setImmediate(() => { for (let i = 0; i < n; i++) this.emit("line", "ok"); });
+      }
+    }
+    const grbl = new Grbl(new Instant(), { statusPollMs: 1000 });
+    await grbl.open();
+    await new Promise((r) => setTimeout(r, 20));
+    const job = Array.from({ length: 300_000 }, (_, i) => `G1 X${(i % 300) * 0.1} Y${Math.floor(i / 300) * 0.1} S${i % 2 ? 500 : 0}`);
+    const t0 = Date.now();
+    const done = new Promise<JobEnd>((resolve) => grbl.on("jobEnd", resolve));
+    expect(grbl.startJob(job)).toBe(true);
+    expect(await done).toEqual({ outcome: "completed", reason: "Trabalho concluído." });
+    // com Array.shift numa fila deste tamanho levava dezenas de segundos
+    expect(Date.now() - t0).toBeLessThan(5000);
+    grbl.close();
+  }, 20000);
 });

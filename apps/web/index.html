@@ -3,195 +3,380 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LaserLink</title>
+    <title>Sapienza LaserLink</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   </head>
   <body>
-    <main>
-      <div class="top">
-        <h1>LaserLink</h1>
+    <div class="app">
+      <header class="app-top">
+        <h1 class="brand"><img src="/sapienza-logo.svg" alt="" width="30" height="30" /><span>Sapienza</span>&nbsp;LaserLink</h1>
+        <div class="filebar" role="toolbar" aria-label="Arquivo e edição">
+          <details class="menu" id="file-menu">
+            <summary>Arquivo</summary>
+            <div class="menu-body file-menu" role="menu">
+              <button data-file="open" role="menuitem">Abrir projeto… <kbd>Ctrl+O</kbd></button>
+              <button data-file="save" role="menuitem">Salvar <kbd>Ctrl+S</kbd></button>
+              <button data-file="saveas" role="menuitem">Salvar como… <kbd>Ctrl+Shift+S</kbd></button>
+              <p class="label">Importar</p>
+              <button data-file="import" role="menuitem">Importar SVG, DXF ou imagem…</button>
+              <button data-file="inbox" role="menuitem">Projetos recebidos…</button>
+              <button data-file="sample" role="menuitem">Abrir exemplo</button>
+              <p class="label">Exportar</p>
+              <button data-file="export-svg" role="menuitem">Exportar SVG</button>
+              <button data-file="export-dxf" role="menuitem">Exportar DXF</button>
+              <button data-file="export-gcode" role="menuitem">Exportar G-code</button>
+            </div>
+          </details>
+          <details class="menu" id="edit-menu">
+            <summary>Editar</summary>
+            <div class="menu-body file-menu edit-menu" role="menu">
+              <span class="label label-first">Desenhar com o mouse</span>
+              <div class="menu-grid">
+                <button data-draw="rect" role="menuitemcheckbox" aria-pressed="false" title="Retângulo (R). Shift faz quadrado."><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="1"/></svg> Retângulo <kbd>R</kbd></button>
+                <button data-draw="line" role="menuitemcheckbox" aria-pressed="false" title="Linha (L). Shift prende o ângulo."><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19L19 5"/><circle cx="5" cy="19" r="1.5"/><circle cx="19" cy="5" r="1.5"/></svg> Linha <kbd>L</kbd></button>
+                <button data-draw="circle" role="menuitemcheckbox" aria-pressed="false" title="Círculo (C). Shift faz círculo perfeito."><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg> Círculo <kbd>C</kbd></button>
+              </div>
+              <span class="label">Editar</span>
+              <button data-edit="undo" role="menuitem">Desfazer <kbd>Ctrl+Z</kbd></button>
+              <p class="label">Área de transferência</p>
+              <button data-edit="copy" role="menuitem">Copiar <kbd>Ctrl+C</kbd></button>
+              <button data-edit="cut" role="menuitem">Recortar <kbd>Ctrl+X</kbd></button>
+              <button data-edit="paste" role="menuitem">Colar <kbd>Ctrl+V</kbd></button>
+              <button data-edit="duplicate" role="menuitem">Duplicar <kbd>Ctrl+D</kbd></button>
+              <button data-edit="delete" role="menuitem">Excluir <kbd>Delete</kbd></button>
+              <button data-edit="selectall" role="menuitem">Selecionar tudo <kbd>Ctrl+A</kbd></button>
+              <p class="label">Grupos</p>
+              <button data-edit="group" role="menuitem">Agrupar <kbd>Ctrl+G</kbd></button>
+              <button data-edit="ungroup" role="menuitem">Desagrupar <kbd>Ctrl+Shift+G</kbd></button>
+              <p class="label" id="ed-align-label">Alinhar</p>
+              <div class="menu-grid">
+                <button data-align="left">Esquerda</button>
+                <button data-align="hcenter">Centro ↔</button>
+                <button data-align="right">Direita</button>
+                <button data-align="top">Topo</button>
+                <button data-align="vcenter">Centro ↕</button>
+                <button data-align="bottom">Base</button>
+              </div>
+              <button data-align="table-center" role="menuitem">Centralizar na mesa</button>
+              <p class="label">Distribuir (espaços iguais)</p>
+              <div class="menu-grid two">
+                <button data-edit="dist-h">Na horizontal ↔</button>
+                <button data-edit="dist-v">Na vertical ↕</button>
+              </div>
+              <p class="label">Travar</p>
+              <button data-edit="lock" role="menuitem">Travar peça <kbd>Ctrl+L</kbd></button>
+              <button data-edit="unlock" role="menuitem">Destravar peça <kbd>Ctrl+Shift+L</kbd></button>
+              <button data-edit="unlockall" role="menuitem">Destravar tudo</button>
+            </div>
+          </details>
+          <details class="menu" id="win-menu">
+            <summary>Janelas</summary>
+            <div class="menu-body file-menu" role="menu">
+              <button data-win="st-layers" role="menuitem">Camadas <kbd>Alt+1</kbd></button>
+              <button data-win="st-machine" role="menuitem">Máquina <kbd>Alt+2</kbd></button>
+              <button data-win="st-queue" role="menuitem">Fila <kbd>Alt+3</kbd></button>
+              <button data-win="st-log" role="menuitem">Registro <kbd>Alt+4</kbd></button>
+              <span class="label">Tamanho</span>
+              <button data-win="wide" role="menuitem">Ampliar ou reduzir a janela <kbd>Alt+0</kbd></button>
+            </div>
+          </details>
+          <button id="p-undo" title="Desfazer (Ctrl+Z)">Desfazer</button>
+          <input type="file" id="p-file-import" accept=".svg,.dxf,image/svg+xml,image/png,image/jpeg" hidden />
+          <input type="file" id="p-file-project" accept=".laserlink,application/json" hidden />
+        </div>
         <div class="badges" aria-live="polite">
           <span id="link-badge" class="badge" data-level="bad">Desconectado</span>
           <span id="serial-badge" class="badge">Laser: —</span>
         </div>
+      </header>
+
+      <div id="alerts">
+        <section id="laser-mode-alert" class="alert" hidden role="alert">
+          <h2>Modo laser desligado no GRBL ($32=0)</h2>
+          <p>Assim o laser pode ficar aceso nas pausas e nos deslocamentos, com risco de incêndio, e os cantos queimam mais. Os trabalhos ficam bloqueados até ligar o modo laser.</p>
+          <div class="row">
+            <button id="laser-mode-fix" class="primary">Ligar modo laser</button>
+          </div>
+        </section>
+        <section id="job-alert" class="alert" hidden role="alert">
+          <h2>Trabalho pausado</h2>
+          <p id="job-alert-text"></p>
+          <p class="muted" id="job-alert-hint"></p>
+          <div class="row">
+            <button id="alert-resume" class="warn">Retomar trabalho</button>
+            <button id="alert-cancel" class="danger">Cancelar trabalho</button>
+          </div>
+        </section>
+        <section id="done-banner" class="done" hidden role="status" aria-live="polite">
+          <h2 id="done-title"></h2>
+          <p id="done-text"></p>
+          <p id="done-next" class="muted" hidden></p>
+          <div class="row">
+            <button id="done-start-next" class="warn" hidden>Iniciar próximo da fila</button>
+            <button id="done-close">Fechar aviso</button>
+          </div>
+        </section>
+        <section id="rejected" class="alert" hidden role="alert">
+          <strong id="rejected-title"></strong>
+          <ul id="rejected-list"></ul>
+          <button id="rejected-close">Fechar aviso</button>
+        </section>
       </div>
 
-      <section id="job-alert" class="alert" hidden role="alert">
-        <h2>Trabalho pausado</h2>
-        <p id="job-alert-text"></p>
-        <p class="muted" id="job-alert-hint"></p>
-        <div class="row">
-          <button id="alert-resume" class="warn">Retomar trabalho</button>
-          <button id="alert-cancel" class="danger">Cancelar trabalho</button>
+      <div class="propbar" id="p-props" role="toolbar" aria-label="Medidas e edição da seleção">
+        <span class="sel-name" id="ed-name">Nada selecionado</span>
+        <button id="ed-clear" class="icon-btn" title="Limpar seleção (Esc)" aria-label="Limpar seleção">✕</button>
+        <span class="sep"></span>
+        <label class="pf">X <input type="number" step="0.1" id="ed-x" /></label>
+        <label class="pf">Y <input type="number" step="0.1" id="ed-y" /></label>
+        <label class="pf">Larg. <input type="number" step="0.1" min="0.1" id="ed-w" /></label>
+        <label class="pf">Alt. <input type="number" step="0.1" min="0.1" id="ed-h" /></label>
+        <span class="unit">mm</span>
+        <button id="ed-lock" class="icon-btn" aria-pressed="true" title="Manter a proporção ao mudar largura ou altura"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="10.5" width="14" height="10" rx="1.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg><span class="sr">Manter proporção</span></button>
+        <span class="sep"></span>
+        <label class="pf">Girar <input type="number" step="1" id="ed-angle" value="15" /></label>
+        <span class="unit">°</span>
+        <button id="ed-rot">Girar</button>
+        <button id="ed-rl" class="icon-btn" title="Girar 90° anti-horário"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v4h4"/></svg><span class="sr">Girar 90° anti-horário</span></button>
+        <button id="ed-rr" class="icon-btn" title="Girar 90° horário"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4h-4"/></svg><span class="sr">Girar 90° horário</span></button>
+        <button id="ed-fh" class="icon-btn" title="Espelhar na horizontal"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v18" stroke-dasharray="2 2"/><path d="M9 7L3 12l6 5zM15 7l6 5-6 5z"/></svg><span class="sr">Espelhar na horizontal</span></button>
+        <button id="ed-fv" class="icon-btn" title="Espelhar na vertical"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 12h18" stroke-dasharray="2 2"/><path d="M7 9l5-6 5 6zM7 15l5 6 5-6z"/></svg><span class="sr">Espelhar na vertical</span></button>
+        <span class="sep"></span>
+        <details class="menu" id="ed-off-menu">
+          <summary title="Contorno deslocado">Deslocar</summary>
+          <div class="menu-body">
+            <label class="pf">Distância <input type="number" step="0.1" id="ed-off" value="2" /> mm</label>
+            <button id="ed-off-go">Criar</button>
+            <p class="note">Cria uma cópia do contorno afastada para fora (positivo) ou para dentro (negativo).</p>
+          </div>
+        </details>
+        <button id="ed-group" class="icon-btn" title="Agrupar (Ctrl+G): os selecionados passam a andar juntos"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="2.5 2"/><rect x="6.5" y="6.5" width="6" height="6"/><rect x="11.5" y="11.5" width="6" height="6"/></svg><span class="sr">Agrupar</span></button>
+        <button id="ed-ungroup" class="icon-btn" title="Desagrupar (Ctrl+Shift+G): cada elemento volta a ser selecionado sozinho"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><path d="M14 4.5h5.5V10M4.5 14v5.5H10" stroke-dasharray="2 2"/></svg><span class="sr">Desagrupar</span></button>
+        <button id="ed-dup" class="icon-btn" title="Duplicar (Ctrl+D)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/></svg><span class="sr">Duplicar</span></button>
+        <button id="ed-del" class="icon-btn" title="Excluir (Delete)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span class="sr">Excluir</span></button>
+      </div>
+
+      <nav class="rail" aria-label="Ferramentas">
+        <button id="p-multi" aria-pressed="false" title="Selecionar vários elementos"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 3l11 6-5 1.5L9 16z"/><path d="M17 14v6M14 17h6"/></svg><span>Vários</span></button>
+        <button id="p-area" aria-pressed="false" title="Caixa de seleção: arraste na mesa para selecionar o que estiver dentro (Shift + arrastar também funciona)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="3.5" width="13" height="11" stroke-dasharray="2.5 2"/><path d="M13 12l7 3.5-3 1-1.3 3.3z"/></svg><span>Área</span></button>
+        <button id="p-text" title="Adicionar texto"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg><span>Texto</span></button>
+        <button id="p-box-gen" title="Gerar caixa com encaixes"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg><span>Caixa</span></button>
+        <button id="p-parts" title="Peças do carrinho e do robô bípede"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="7.5" cy="16.5" r="3"/><circle cx="16.5" cy="16.5" r="3"/><path d="M5 13V8h9l3 5M10 8V5h3"/></svg><span>Peças</span></button>
+        <button id="p-panel" title="Painel escolar: letras com contorno, bandeirolas e lápis"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 4h18"/><path d="M5 4v5l2 2 2-2V4M10 4v5l2 2 2-2V4M15 4v5l2 2 2-2V4"/><rect x="4" y="14" width="16" height="6" rx="2"/><path d="M8 17h8"/></svg><span>Painel</span></button>
+        <button id="p-matrix" title="Teste de matriz potência × velocidade"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="3.5" width="5" height="5"/><rect x="10" y="3.5" width="5" height="5"/><rect x="16.5" y="3.5" width="4" height="5"/><rect x="3.5" y="10" width="5" height="5"/><rect x="10" y="10" width="5" height="5"/><rect x="3.5" y="16.5" width="5" height="4"/></svg><span>Matriz</span></button>
+        <span class="rail-sep"></span>
+        <button id="p-travel" aria-pressed="true" title="Mostrar deslocamentos sem laser"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 18c3-8 6 2 9-6s5-4 7-6" stroke-dasharray="2.5 2.5"/><circle cx="4" cy="18" r="1.5"/><circle cx="20" cy="6" r="1.5"/></svg><span>Desloc.</span></button>
+        <button id="bed-theme" title="Trocar a mesa entre clara e escura"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg><span id="bed-theme-label">Mesa clara</span></button>
+      </nav>
+
+      <section class="stage" aria-label="Mesa da laser">
+        <div class="stage-head">
+          <div class="seg viewswitch" role="tablist" aria-label="O que mostrar na mesa">
+            <button role="tab" id="view-design" aria-selected="true" aria-controls="p-box">Desenho</button>
+            <button role="tab" id="view-machine" aria-selected="false" aria-controls="c-box">Na máquina</button>
+          </div>
+          <div class="legend" id="p-legend"></div>
+          <button id="stage-clear" class="stage-clear" title="Limpar a mesa que está à mostra">Limpar mesa</button>
+          <div class="legend" id="c-legend" hidden>
+            <span style="--c:var(--bed-todo)">Grava (laser aceso)</span>
+            <span class="dash" style="--c:#6b7480">Deslocamento sem laser</span>
+            <span style="--c:var(--bed-done)">Já executado</span>
+            <b id="c-name"></b>
+          </div>
+        </div>
+        <div class="canvas-box" id="p-box">
+          <canvas id="p-canvas" aria-label="Área útil da laser com o desenho. Toque num elemento para selecioná-lo; arraste um elemento para movê-lo; Shift + toque soma à seleção. Arrastar no vazio move a vista. Roda do mouse dá zoom."></canvas>
+          <div class="bed-warn" id="p-limits" role="status"></div>
+          <div class="empty" id="p-empty">Importe um SVG ou uma imagem (ou arraste o arquivo para cá), use as ferramentas à esquerda ou carregue o exemplo.</div>
+          <div class="hud">
+            <span class="chip" id="p-hud-pos">X 0.0 Y 0.0</span>
+            <span class="chip" id="p-hud-mode">Pré-visualização</span>
+            <span class="chip" id="p-hud-zoom">100%</span>
+            <span class="chip draw" id="p-hud-draw" hidden></span>
+          </div>
+          <div class="zoombar" role="group" aria-label="Zoom">
+            <button id="p-zoom-out" aria-label="Diminuir zoom">−</button>
+            <button id="p-zoom-in" aria-label="Aumentar zoom">+</button>
+            <button id="p-zoom-piece">Ajustar à peça</button>
+            <button id="p-zoom-fit">Mesa inteira</button>
+          </div>
+        </div>
+        <div class="canvas-box" id="c-box" hidden>
+          <canvas id="c-canvas" aria-label="Área útil da laser com o trabalho enviado e a posição do cabeçote em tempo real. Roda do mouse dá zoom; arraste para mover."></canvas>
+          <div class="empty" id="c-empty">Escolha um arquivo G-code na aba Máquina ou envie o desenho para ver a trajetória aqui.</div>
+          <div class="hud">
+            <span class="chip" id="c-hud-pos">X — Y —</span>
+            <span class="chip" id="c-hud-zoom">100%</span>
+          </div>
+          <div class="zoombar" role="group" aria-label="Zoom">
+            <button id="c-zoom-out" aria-label="Diminuir zoom">−</button>
+            <button id="c-zoom-in" aria-label="Aumentar zoom">+</button>
+            <button id="c-zoom-piece">Ajustar ao trabalho</button>
+            <button id="c-zoom-fit">Mesa inteira</button>
+          </div>
+        </div>
+        <div id="p-sim-bar" class="row" hidden>
+          <progress id="p-sim-progress" value="0" max="1" style="flex:1 1 200px"></progress>
+          <span class="muted" id="p-sim-text"></span>
+          <button id="p-sim-stop">Parar simulação</button>
         </div>
       </section>
 
-      <div class="tabs" role="tablist" aria-label="Seções">
-        <button role="tab" id="tab-control" aria-selected="true" aria-controls="view-control">Controle</button>
-        <button role="tab" id="tab-prepare" aria-selected="false" aria-controls="view-prepare">Preparar trabalho</button>
+      <div class="opsbar" id="p-ops" role="group" aria-label="Operação do que está selecionado">
+        <span class="label">Operação</span>
+        <span id="p-ops-buttons" class="seg"></span>
+        <span class="note" id="p-ops-hint">Selecione um elemento na mesa para mudar a operação.</span>
       </div>
 
-      <!-- ================= Controle ================= -->
-      <div id="view-control" class="cols" role="tabpanel" aria-labelledby="tab-control">
-        <section class="sticky" aria-label="Pré-visualização">
-          <h2>Pré-visualização</h2>
-          <div class="canvas-box">
-            <canvas id="c-canvas" aria-label="Área útil da laser com o trabalho e a posição do cabeçote em tempo real. Roda do mouse dá zoom; arraste para mover."></canvas>
-            <div class="empty" id="c-empty">Escolha um arquivo G-code ou envie um trabalho pela aba Preparar trabalho para ver a trajetória aqui.</div>
-            <div class="hud">
-              <span class="chip" id="c-hud-pos">X — Y —</span>
-              <span class="chip" id="c-hud-zoom">100%</span>
-            </div>
-            <div class="zoombar" role="group" aria-label="Zoom">
-              <button id="c-zoom-out" aria-label="Diminuir zoom">−</button>
-              <button id="c-zoom-in" aria-label="Aumentar zoom">+</button>
-              <button id="c-zoom-piece">Ajustar ao trabalho</button>
-              <button id="c-zoom-fit">Mesa inteira</button>
+      <div class="sendbar" id="sendbar" role="group" aria-label="Enviar e acompanhar o trabalho">
+        <div class="dock" id="dock-job" hidden>
+          <p id="job-line" class="muted">Nenhum trabalho em andamento.</p>
+          <progress id="progress" value="0" max="1"></progress>
+          <div class="row">
+            <button id="hold">Pausar</button>
+            <button id="resume">Retomar</button>
+            <button id="stop" class="danger">PARAR</button>
+          </div>
+        </div>
+
+        <div class="dock" id="dock-send">
+          <div class="summary" id="p-summary">
+            <div class="stat"><b id="p-sum-size">—</b><span>tamanho (mm)</span></div>
+            <div class="stat"><b id="p-sum-time">—</b><span>tempo estimado</span></div>
+            <div class="stat"><b id="p-sum-lines">—</b><span>linhas G-code</span></div>
+          </div>
+          <div class="frame-row">
+            <span class="label">Enquadrar com</span>
+            <div class="seg" id="p-frame-mode">
+              <button data-v="off" aria-pressed="true">Laser desligado</button>
+              <button data-v="min" aria-pressed="false" id="p-frame-min">Potência mínima</button>
             </div>
           </div>
-          <div class="legend">
-            <span style="--c:#ff7a59">Grava (laser aceso)</span>
-            <span class="dash" style="--c:#6b7480">Deslocamento sem laser</span>
-            <span style="--c:#fff4d6">Já executado</span>
-            <b id="c-name"></b>
+          <div class="send">
+            <button id="p-frame">Enquadrar</button>
+            <button id="p-sim">Simular</button>
+            <button id="p-send" class="warn">Enviar para a laser</button>
+            <button id="p-enqueue">Guardar na fila</button>
           </div>
-        </section>
-
-        <div class="stack">
-          <section>
-            <h2>Conexão</h2>
-            <div class="row">
-              <input id="url" placeholder="ws://IP-DA-LASER:8787" size="26" aria-label="Endereço do agente" />
-              <input id="token" type="password" placeholder="token" size="18" aria-label="Token" />
-              <button id="connect">Conectar</button>
-              <button id="disconnect">Desconectar</button>
-            </div>
-          </section>
-
-          <section>
-            <h2>Máquina</h2>
-            <p>Estado: <span id="state">—</span> · X <span id="x">0.000</span> Y <span id="y">0.000</span></p>
-            <div class="row">
-              <button id="home">Home</button>
-              <button id="origin">Definir origem</button>
-              <button id="unlock">Destravar</button>
-            </div>
-          </section>
-
-          <section>
-            <h2>Mover</h2>
-            <div class="row" style="margin-bottom:10px">
-              <label>Passo (mm) <input id="step" type="number" value="10" min="0.1" max="500" step="0.1" style="width:80px" /></label>
-              <label>Velocidade (mm/min) <input id="feed" type="number" value="3000" min="10" max="6000" step="100" style="width:90px" /></label>
-            </div>
-            <div class="jog">
-              <span></span><button data-axis="Y" data-dir="1">Y+</button><span></span>
-              <button data-axis="X" data-dir="-1">X−</button><span></span><button data-axis="X" data-dir="1">X+</button>
-              <span></span><button data-axis="Y" data-dir="-1">Y−</button><span></span>
-            </div>
-          </section>
-
-          <section>
-            <h2>Trabalho</h2>
-            <div class="row">
-              <input id="file" type="file" accept=".gcode,.nc,.gc,.txt" aria-label="Arquivo G-code" />
-              <button id="start" class="warn">Iniciar trabalho</button>
-            </div>
-            <div id="rejected" class="alert" hidden role="alert" style="padding:10px;border-radius:8px;margin-top:10px">
-              <strong id="rejected-title"></strong>
-              <ul id="rejected-list"></ul>
-            </div>
-            <p id="limits" class="muted"></p>
-            <p id="job-line" class="muted">Nenhum trabalho em andamento.</p>
-            <p><progress id="progress" value="0" max="1"></progress></p>
-            <div class="row">
-              <button id="hold">Pausar</button>
-              <button id="resume">Retomar</button>
-              <button id="stop" class="danger">PARAR</button>
-            </div>
-            <p id="last-result" class="muted" hidden></p>
-          </section>
-
-          <section>
-            <h2>Registro</h2>
-            <div id="log" aria-live="polite"></div>
-          </section>
         </div>
       </div>
 
-      <!-- ================= Preparar trabalho ================= -->
-      <div id="view-prepare" class="cols" role="tabpanel" aria-labelledby="tab-prepare" hidden>
-        <section class="sticky" aria-label="Mesa da laser">
-          <div class="toolbar">
-            <div class="row">
-              <label class="btn">Importar SVG<input type="file" id="p-file-svg" accept=".svg,image/svg+xml" /></label>
-              <label class="btn">Importar imagem<input type="file" id="p-file-img" accept="image/png,image/jpeg" /></label>
-              <button id="p-text">Texto</button>
-              <button id="p-matrix">Teste de matriz</button>
-              <button id="p-sample">Exemplo</button>
-              <button id="p-clear">Limpar</button>
-            </div>
-            <div class="row">
-              <button id="p-multi" aria-pressed="false">Selecionar vários</button>
-              <button id="p-travel" aria-pressed="true">Deslocamentos</button>
-            </div>
-          </div>
-          <div class="canvas-box" id="p-box">
-            <canvas id="p-canvas" aria-label="Área útil da laser com o desenho. Toque num elemento para selecioná-lo; arraste o selecionado para mover. Roda do mouse dá zoom."></canvas>
-            <div class="empty" id="p-empty">Importe um SVG ou uma imagem (ou arraste o arquivo para cá), adicione um texto ou carregue o exemplo.</div>
-            <div class="hud">
-              <span class="chip" id="p-hud-pos">X 0.0 Y 0.0</span>
-              <span class="chip" id="p-hud-mode">Pré-visualização</span>
-              <span class="chip" id="p-hud-zoom">100%</span>
-            </div>
-            <div class="zoombar" role="group" aria-label="Zoom">
-              <button id="p-zoom-out" aria-label="Diminuir zoom">−</button>
-              <button id="p-zoom-in" aria-label="Aumentar zoom">+</button>
-              <button id="p-zoom-piece">Ajustar à peça</button>
-              <button id="p-zoom-fit">Mesa inteira</button>
-            </div>
-          </div>
-          <div class="legend" id="p-legend"></div>
-          <div id="p-sim-bar" class="row" hidden style="margin-top:8px">
-            <progress id="p-sim-progress" value="0" max="1" style="flex:1 1 200px"></progress>
-            <span class="muted" id="p-sim-text"></span>
-            <button id="p-sim-stop">Parar simulação</button>
-          </div>
-        </section>
-
-        <aside class="stack" aria-label="Camadas e envio">
-          <div id="p-selection" class="selection" hidden aria-live="polite"></div>
-          <section>
+      <aside class="side" id="side" aria-label="Janelas">
+        <div class="tabs side-tabs" role="tablist" aria-label="Janelas">
+          <button role="tab" id="st-layers" aria-controls="sp-layers" aria-selected="true">Camadas</button>
+          <button role="tab" id="st-machine" aria-controls="sp-machine" aria-selected="false">Máquina</button>
+          <button role="tab" id="st-queue" aria-controls="sp-queue" aria-selected="false">Fila <span id="queue-count"></span></button>
+          <button role="tab" id="st-log" aria-controls="sp-log" aria-selected="false">Registro</button>
+          <button id="side-wide" class="icon-btn side-wide" aria-pressed="false" title="Ampliar a janela sobre a mesa (Esc volta)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg><span class="sr">Ampliar janela</span></button>
+        </div>
+        <div class="side-body">
+          <div id="sp-layers" role="tabpanel" aria-labelledby="st-layers">
             <div class="row" style="justify-content: space-between; margin-bottom: 10px">
               <h2 style="margin:0">Camadas</h2>
               <button id="p-materials">Materiais</button>
             </div>
-            <div class="layers" id="p-layers"><p class="note">Nenhum desenho ainda.</p></div>
-          </section>
-          <section style="display:grid; gap:10px">
-            <h2 style="margin:0">Resumo</h2>
-            <div class="summary">
-              <div class="stat"><b id="p-sum-size">—</b><span>tamanho (mm)</span></div>
-              <div class="stat"><b id="p-sum-time">—</b><span>tempo estimado</span></div>
-              <div class="stat"><b id="p-sum-lines">—</b><span>linhas G-code</span></div>
-            </div>
-            <div id="p-limits" class="note"></div>
-            <div class="field" style="font-size:13px">
-              Enquadrar com
-              <div class="seg" id="p-frame-mode">
-                <button data-v="off" aria-pressed="true">Laser desligado</button>
-                <button data-v="min" aria-pressed="false" id="p-frame-min">Potência mínima</button>
+            <div class="pass-order">
+              <div class="row" style="justify-content: space-between">
+                <span class="label">Ordem dos passes</span>
+                <div class="seg" id="p-pass-order" role="group" aria-label="Ordem dos passes">
+                  <button data-v="pass" aria-pressed="true" title="Passe 1 em todas as peças, depois o passe 2 em todas…">Passe por passe</button>
+                  <button data-v="piece" aria-pressed="false" title="Todos os passes de uma peça (furos antes do contorno), depois a próxima">Peça por peça</button>
+                </div>
               </div>
+              <p class="note" id="p-pass-cmp" aria-live="polite"></p>
+              <p class="warnbox" id="p-pass-warn" hidden></p>
             </div>
-            <div class="send">
-              <button id="p-frame">Enquadrar</button>
-              <button id="p-sim">Simular</button>
-              <button id="p-send" class="warn">Enviar para a laser</button>
-            </div>
-            <p class="note">Ordem: imagem, detalhado, preenchido, linhas e por último os cortes (furos antes do contorno). O arquivo vai inteiro ao agente, que confere potência e área antes de começar.</p>
-          </section>
-        </aside>
-      </div>
-    </main>
+            <div class="layers" id="p-layers"><p class="note">Nenhum desenho ainda.</p></div>
+          </div>
+
+          <div id="sp-machine" role="tabpanel" aria-labelledby="st-machine" hidden>
+            <details class="conn" id="conn-box" open>
+              <summary><h2>Conexão</h2> <span class="note" id="conn-sum">Desconectado</span></summary>
+              <div class="row">
+                <input id="url" placeholder="ws://IP-DA-LASER:8787" size="26" aria-label="Endereço do agente" />
+                <input id="token" type="password" placeholder="token" size="18" aria-label="Token" />
+                <button id="connect">Conectar</button>
+                <button id="disconnect">Desconectar</button>
+              </div>
+              <div class="row">
+                <label class="check"><input type="checkbox" id="remember-token" checked /> Lembrar o token neste computador</label>
+                <button id="forget-token">Esquecer token</button>
+              </div>
+              <p class="note">Desmarque em computador compartilhado: aí o token some quando o navegador fecha.</p>
+              <p id="limits" class="note"></p>
+            </details>
+            <section>
+              <h2>Máquina e movimento</h2>
+              <div class="row" style="margin-bottom:10px">
+                <button id="home">Home</button>
+                <button id="unlock">Destravar</button>
+              </div>
+              <div class="move-grid">
+                <div class="move-fields">
+                  <label class="field">Passo (mm) <input id="step" type="number" value="10" min="0.1" max="500" step="0.1" /></label>
+                  <label class="field">Velocidade (mm/min) <input id="feed" type="number" value="3000" min="10" max="6000" step="100" /></label>
+                </div>
+                <div class="jog">
+                  <span></span><button data-axis="Y" data-dir="1">Y+</button><span></span>
+                  <button data-axis="X" data-dir="-1">X−</button><span></span><button data-axis="X" data-dir="1">X+</button>
+                  <span></span><button data-axis="Y" data-dir="-1">Y−</button><span></span>
+                </div>
+              </div>
+            </section>
+            <section>
+              <h2>Origem do trabalho</h2>
+              <div class="origin-grid">
+                <div class="anchor" id="origin-anchor" role="group" aria-label="Ponto do desenho que fica no carrinho">
+                    <button data-a="tl" aria-pressed="false" title="Canto de cima, à esquerda"><span class="sr">Canto de cima, à esquerda</span></button>
+                    <button data-a="tc" aria-pressed="false" title="Meio de cima"><span class="sr">Meio de cima</span></button>
+                    <button data-a="tr" aria-pressed="false" title="Canto de cima, à direita"><span class="sr">Canto de cima, à direita</span></button>
+                    <button data-a="ml" aria-pressed="false" title="Meio da esquerda"><span class="sr">Meio da esquerda</span></button>
+                    <button data-a="mc" aria-pressed="false" title="Centro"><span class="sr">Centro</span></button>
+                    <button data-a="mr" aria-pressed="false" title="Meio da direita"><span class="sr">Meio da direita</span></button>
+                    <button data-a="bl" aria-pressed="true" title="Canto de baixo, à esquerda"><span class="sr">Canto de baixo, à esquerda</span></button>
+                    <button data-a="bc" aria-pressed="false" title="Meio de baixo"><span class="sr">Meio de baixo</span></button>
+                    <button data-a="br" aria-pressed="false" title="Canto de baixo, à direita"><span class="sr">Canto de baixo, à direita</span></button>
+                </div>
+                <div class="origin-actions">
+                  <button id="origin" title="O carrinho vira o canto 0,0 da mesa">Definir origem aqui</button>
+                  <button id="origin-design" class="primary" title="O carrinho vira o ponto marcado do desenho">Origem pelo desenho</button>
+                </div>
+              </div>
+              <p class="note" id="origin-hint">Leve o carrinho até o lugar certo no material. <b>Definir origem aqui</b>: o carrinho vira o canto 0,0 da mesa. <b>Origem pelo desenho</b>: o carrinho vira o ponto marcado ao lado (da seleção, ou do desenho todo) e o trabalho sai em volta dele.</p>
+            </section>
+            <section>
+              <h2>Arquivo G-code</h2>
+              <div class="row">
+                <input id="file" type="file" accept=".gcode,.nc,.gc,.txt" aria-label="Arquivo G-code" />
+                <button id="start" class="warn">Iniciar trabalho</button>
+                <button id="enqueue">Guardar na fila</button>
+              </div>
+              <p id="last-result" class="muted" hidden></p>
+              <label class="check"><input type="checkbox" id="sound-on" checked /> Tocar som quando um trabalho terminar</label>
+            </section>
+          </div>
+
+          <div id="sp-queue" role="tabpanel" aria-labelledby="st-queue" hidden>
+            <p class="note">A fila fica no agente e todos os aparelhos veem a mesma. Ela nunca começa um trabalho sozinha: cada início pede confirmação.</p>
+            <ol class="queue" id="queue-list"></ol>
+            <p class="muted" id="queue-empty">Nenhum trabalho na fila. Use "Guardar na fila" embaixo da mesa ou na janela Máquina.</p>
+          </div>
+
+          <div id="sp-log" role="tabpanel" aria-labelledby="st-log" hidden>
+            <div id="log" aria-live="polite"></div>
+          </div>
+        </div>
+
+      </aside>
+
+      <footer class="statusbar" aria-label="Situação">
+        <span id="sb-cursor">Cursor: —</span>
+        <span>Máquina: <b id="state">—</b> · X <span id="x">0.000</span> Y <span id="y">0.000</span> <b id="sb-laser" class="sb-laser" hidden></b></span>
+        <span class="muted">Ordem: imagem, detalhado, preenchido, linhas e cortes (furos antes do contorno).</span>
+        <span class="version" id="sb-version" title="Versão desta interface (commit e data). Depois de atualizar, ela deve mudar."></span>
+      </footer>
+    </div>
 
     <dialog id="confirm-dialog" aria-labelledby="confirm-title">
       <form method="dialog">
@@ -224,12 +409,44 @@
       </form>
     </dialog>
 
+    <dialog id="dlg-text-edit" aria-labelledby="te-title">
+      <form method="dialog">
+        <h2 id="te-title">Editar texto</h2>
+        <p class="note">O texto novo fica no mesmo lugar do antigo.</p>
+        <div class="fields" style="margin-top:10px">
+          <label class="field" style="grid-column: 1 / -1">Texto <textarea id="te-text" rows="2" maxlength="400"></textarea></label>
+          <label class="field" style="grid-column: 1 / -1">Fonte <select id="te-font" class="plain font-select"></select></label>
+          <label class="field">Altura <span class="val"><input type="number" id="te-height" min="1" max="200" step="0.5" /><span class="unit">mm</span></span></label>
+        </div>
+        <div class="row end">
+          <button value="cancel">Voltar</button>
+          <button value="ok" class="primary">Trocar texto</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="dlg-saveas" aria-labelledby="sa-title">
+      <form method="dialog">
+        <h2 id="sa-title">Salvar como</h2>
+        <p class="note">O projeto vai para a pasta de downloads do navegador, com a extensão .laserlink. Para abrir depois: Arquivo &gt; Abrir projeto.</p>
+        <label class="field" style="margin-top:10px">Nome do projeto <input type="text" id="sa-name" maxlength="80" /></label>
+        <div class="row end">
+          <button value="cancel">Voltar</button>
+          <button value="ok" class="primary">Salvar</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="dlg-text" aria-labelledby="tx-title">
       <form method="dialog">
         <h2 id="tx-title">Adicionar texto</h2>
-        <p class="note">Fonte de traço único, boa para gravar em linha. Só maiúsculas, números e sinais comuns; acentos são removidos (Ç vira C).</p>
         <div class="fields" style="margin-top:10px">
-          <label class="field" style="grid-column: 1 / -1">Texto <input type="text" id="tx-text" maxlength="200" value="LASERLINK" /></label>
+          <label class="field" style="grid-column: 1 / -1">Texto <textarea id="tx-text" rows="2" maxlength="400">Sapienza</textarea></label>
+          <label class="field" style="grid-column: 1 / -1">Fonte <span class="val"><select id="tx-font" class="plain font-select"></select><button type="button" id="tx-font-load" title="TTF, OTF ou WOFF">Carregar fonte…</button></span></label>
+          <div class="font-sample" id="tx-sample" style="grid-column: 1 / -1" aria-hidden="true">Sapienza</div>
+          <p class="note" id="tx-font-note" style="grid-column: 1 / -1"></p>
+          <label class="field">Operação <select id="tx-mode"><option value="fill">Gravar preenchido</option><option value="line">Gravar contorno</option><option value="cut">Cortar as letras</option></select></label>
+          <label class="field">Alinhar <select id="tx-align"><option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option></select></label>
           <label class="field">Altura <span class="val"><input type="number" id="tx-height" value="8" min="1" max="200" step="0.5" /><span class="unit">mm</span></span></label>
           <label class="field">X <span class="val"><input type="number" id="tx-x" value="20" step="1" /><span class="unit">mm</span></span></label>
           <label class="field">Y <span class="val"><input type="number" id="tx-y" value="20" step="1" /><span class="unit">mm</span></span></label>
@@ -237,6 +454,156 @@
         <div class="row end">
           <button value="cancel">Voltar</button>
           <button value="ok" class="primary">Adicionar texto</button>
+        </div>
+      </form>
+    </dialog>
+
+    <input type="file" id="font-file" accept=".ttf,.otf,.woff,font/ttf,font/otf,font/woff" hidden />
+
+    <dialog id="dlg-inbox" aria-labelledby="ib-title">
+      <form method="dialog">
+        <h2 id="ib-title">Projetos recebidos</h2>
+        <p class="note">Arquivos publicados no GitHub (ramo <b>projetos</b>), por exemplo pelo Claude. Abrir só põe o desenho na mesa: nada vai para a máquina sem você mandar.</p>
+        <div class="row" style="margin-top:8px">
+          <button type="button" id="ib-refresh">Buscar novos</button>
+          <span class="note" id="ib-status" aria-live="polite"></span>
+        </div>
+        <ul class="inbox" id="ib-list"></ul>
+        <div class="row end">
+          <button value="cancel">Fechar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="dlg-panel" aria-labelledby="pn-title">
+      <form method="dialog">
+        <h2 id="pn-title">Painel escolar</h2>
+        <p class="note">Peças para murais e painéis, geradas a partir das medidas. O que não cabe na mesa vai para a chapa seguinte: gere a chapa 1, corte, depois a 2…</p>
+        <div class="fields" style="margin-top:10px">
+          <label class="field" style="grid-column: 1 / -1">O que fazer <select id="pn-kind">
+            <option value="phrase">Frase com contorno (letras + base)</option>
+            <option value="bunting">Bandeirolas com letras</option>
+            <option value="pencil">Lápis decorativo</option>
+          </select></label>
+          <label class="field" style="grid-column: 1 / -1">Fonte <span class="val"><select id="pn-font" class="plain font-select"></select><button type="button" id="pn-font-load" title="TTF, OTF ou WOFF">Carregar fonte…</button></span></label>
+          <div class="font-sample" id="pn-sample" style="grid-column: 1 / -1" aria-hidden="true">Escola</div>
+        </div>
+        <fieldset id="pn-phrase" class="pn-group">
+          <div class="fields">
+            <label class="field" style="grid-column: 1 / -1">Frase (uma linha por linha do painel) <textarea id="ph-text" rows="3" maxlength="400">Escola, um lugar de
+descobertas</textarea></label>
+            <label class="field">Altura das letras <span class="val"><input type="number" id="ph-height" value="50" min="10" max="280" step="1" /><span class="unit">mm</span></span></label>
+            <label class="field">Contorno da base <span class="val"><input type="number" id="ph-border" value="6" min="0" max="40" step="0.5" /><span class="unit">mm</span></span></label>
+            <label class="field">Base <select id="ph-base"><option value="word">Uma por palavra</option><option value="letter">Uma por letra</option><option value="line">Uma por linha</option></select></label>
+          </div>
+          <label class="check"><input type="checkbox" id="ph-guide" checked /> Gravar na base onde colar as letras</label>
+          <p class="note">Contorno 0 = só as letras, sem base. Fontes de contorno (não use traço único).</p>
+        </fieldset>
+        <fieldset id="pn-bunting" class="pn-group" hidden>
+          <div class="fields">
+            <label class="field" style="grid-column: 1 / -1">Texto (uma bandeirola por letra; espaço = bandeirola lisa) <input type="text" id="bt-text" value="BEM-VINDOS" maxlength="60" /></label>
+            <label class="field">Formato <select id="bt-shape"><option value="pencil">Lápis</option><option value="triangle">Triângulo</option><option value="swallowtail">Retângulo com bico</option><option value="rect">Retângulo</option></select></label>
+            <label class="field">Largura <span class="val"><input type="number" id="bt-w" value="80" min="20" max="280" /><span class="unit">mm</span></span></label>
+            <label class="field">Altura <span class="val"><input type="number" id="bt-h" value="140" min="30" max="280" /><span class="unit">mm</span></span></label>
+            <label class="field">Furo do barbante <span class="val"><input type="number" id="bt-hole" value="5" min="0" max="20" step="0.5" /><span class="unit">mm</span></span></label>
+            <label class="field">Letra <select id="bt-letter"><option value="cut">Recortada (para colar)</option><option value="engrave">Gravada</option><option value="hollow">Vazada</option></select></label>
+            <label class="field">Tamanho da letra <span class="val"><input type="number" id="bt-scale" value="80" min="30" max="100" step="5" /><span class="unit">%</span></span></label>
+          </div>
+        </fieldset>
+        <fieldset id="pn-pencil" class="pn-group" hidden>
+          <div class="fields">
+            <label class="field">Comprimento <span class="val"><input type="number" id="pc-l" value="380" min="60" max="1000" /><span class="unit">mm</span></span></label>
+            <label class="field">Largura <span class="val"><input type="number" id="pc-w" value="60" min="15" max="280" /><span class="unit">mm</span></span></label>
+            <label class="field">Peças <select id="pc-split"><option value="0">Uma peça, divisas gravadas</option><option value="1">Uma peça por cor</option></select></label>
+            <label class="field" style="grid-column: 1 / -1">Texto no corpo (opcional) <input type="text" id="pc-label" value="" maxlength="30" placeholder="ex.: 5º ano B" /></label>
+          </div>
+        </fieldset>
+        <div class="fields" style="margin-top:8px">
+          <label class="field">Chapa <span class="val"><input type="number" id="pn-sheet" value="1" min="1" step="1" /><span class="unit" id="pn-sheets"></span></span></label>
+        </div>
+        <p class="note error-text" id="pn-error" role="alert"></p>
+        <div class="row end">
+          <button value="cancel">Voltar</button>
+          <button value="ok" class="primary">Gerar na mesa</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="dlg-box" aria-labelledby="bx-title">
+      <form method="dialog">
+        <h2 id="bx-title">Caixa com encaixes</h2>
+        <p class="note">Gera as peças de uma caixa com dentes (finger joints). O kerf vem do material escolhido e compensa a largura do corte para os encaixes ficarem justos.</p>
+        <div class="fields" style="margin-top:10px">
+          <label class="field">Largura <span class="val"><input type="number" id="bx-w" value="100" min="10" step="1" /><span class="unit">mm</span></span></label>
+          <label class="field">Profundidade <span class="val"><input type="number" id="bx-d" value="80" min="10" step="1" /><span class="unit">mm</span></span></label>
+          <label class="field">Altura <span class="val"><input type="number" id="bx-h" value="60" min="10" step="1" /><span class="unit">mm</span></span></label>
+          <label class="field">Medidas <select id="bx-measure"><option value="outside">Externas</option><option value="inside">Internas (espaço útil)</option></select></label>
+          <label class="field">Espessura <span class="val"><input type="number" id="bx-t" value="3" min="0.5" max="20" step="0.1" /><span class="unit">mm</span></span></label>
+          <label class="field">Largura do dente <span class="val"><input type="number" id="bx-f" value="10" min="1" step="0.5" /><span class="unit">mm</span></span></label>
+          <label class="field">Material <select id="bx-material"></select></label>
+          <label class="field">Kerf <span class="val"><input type="number" id="bx-kerf" value="0.15" min="0" max="1" step="0.01" /><span class="unit">mm</span></span></label>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <label class="row"><input type="checkbox" id="bx-lid" checked /> Com tampa</label>
+          <label class="row"><input type="checkbox" id="bx-labels" checked /> Gravar o nome de cada peça</label>
+        </div>
+        <p class="note" id="bx-error" role="alert"></p>
+        <div class="row end">
+          <button value="cancel">Voltar</button>
+          <button value="ok" class="primary">Gerar caixa</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="dlg-parts" aria-labelledby="pt-title">
+      <form method="dialog">
+        <h2 id="pt-title">Peças dos projetos</h2>
+        <p class="note">Projetos próprios do Sapienza LaserLink, com medidas ajustáveis. As medidas de motores, servos e placas mudam entre fabricantes: confira com paquímetro antes de cortar. Montagem em <b>docs/PECAS.md</b>.</p>
+        <div class="fields" style="margin-top:10px">
+          <label class="field" style="grid-column: 1 / -1">Projeto <select id="pt-kind"><option value="car">Carrinho RC (2 motores TT, roda boba, ESP32)</option><option value="otto">Robô bípede tipo Otto (4 servos SG90, HC-SR04)</option></select></label>
+          <label class="field">Material <select id="pt-material"></select></label>
+          <label class="field">Espessura <span class="val"><input type="number" id="pt-t" value="3" min="1" max="10" step="0.1" /><span class="unit">mm</span></span></label>
+          <label class="field">Kerf <span class="val"><input type="number" id="pt-kerf" value="0.15" min="0" max="1" step="0.01" /><span class="unit">mm</span></span></label>
+        </div>
+        <fieldset id="pt-car" style="border:0;padding:0;margin:10px 0 0">
+          <div class="label">Chassi</div>
+          <div class="fields">
+            <label class="field">Comprimento <span class="val"><input type="number" id="car-l" value="150" min="110" /><span class="unit">mm</span></span></label>
+            <label class="field">Largura <span class="val"><input type="number" id="car-w" value="120" min="110" /><span class="unit">mm</span></span></label>
+            <label class="field" style="grid-column: span 2">Texto gravado <input type="text" id="car-label" value="LASERLINK" maxlength="24" /></label>
+          </div>
+          <div class="label" style="margin-top:8px">Motor TT</div>
+          <div class="fields">
+            <label class="field">Espessura <span class="val"><input type="number" id="car-mt" value="18.8" step="0.1" /><span class="unit">mm</span></span></label>
+            <label class="field">Fim → eixo <span class="val"><input type="number" id="car-axle" value="11.3" step="0.1" /><span class="unit">mm</span></span></label>
+            <label class="field">Eixo → 1º furo <span class="val"><input type="number" id="car-h1" value="8.5" step="0.1" /><span class="unit">mm</span></span></label>
+            <label class="field">Entre furos <span class="val"><input type="number" id="car-hs" value="17.5" step="0.1" /><span class="unit">mm</span></span></label>
+          </div>
+          <div class="label" style="margin-top:8px">ESP32 DevKit e roda boba</div>
+          <div class="fields">
+            <label class="field">Furos ESP32 (comprimento) <span class="val"><input type="number" id="car-bx" value="47" step="0.1" /><span class="unit">mm</span></span></label>
+            <label class="field">Furos ESP32 (largura) <span class="val"><input type="number" id="car-by" value="23.5" step="0.1" /><span class="unit">mm</span></span></label>
+            <label class="field">Furos da roda boba <span class="val"><input type="number" id="car-cs" value="23" step="0.1" /><span class="unit">mm</span></span></label>
+          </div>
+        </fieldset>
+        <fieldset id="pt-otto" hidden style="border:0;padding:0;margin:10px 0 0">
+          <div class="label">Corpo (medidas externas)</div>
+          <div class="fields">
+            <label class="field">Largura <span class="val"><input type="number" id="ot-w" value="64" min="50" /><span class="unit">mm</span></span></label>
+            <label class="field">Profundidade <span class="val"><input type="number" id="ot-d" value="56" min="45" /><span class="unit">mm</span></span></label>
+            <label class="field">Altura <span class="val"><input type="number" id="ot-h" value="52" min="45" /><span class="unit">mm</span></span></label>
+            <label class="field">Altura da perna <span class="val"><input type="number" id="ot-leg" value="36" min="30" /><span class="unit">mm</span></span></label>
+          </div>
+          <div class="label" style="margin-top:8px">Sensor HC-SR04</div>
+          <div class="fields">
+            <label class="field">Entre centros <span class="val"><input type="number" id="ot-ss" value="26" step="0.1" /><span class="unit">mm</span></span></label>
+            <label class="field">Diâmetro do furo <span class="val"><input type="number" id="ot-sd" value="16.5" step="0.1" /><span class="unit">mm</span></span></label>
+          </div>
+        </fieldset>
+        <p class="note" id="pt-error" role="alert"></p>
+        <div class="row end">
+          <button value="cancel">Voltar</button>
+          <button value="ok" class="primary">Gerar peças</button>
         </div>
       </form>
     </dialog>
@@ -251,12 +618,13 @@
           <button type="button" id="mat-delete">Excluir</button>
         </div>
         <div class="fields" style="margin-top:8px">
-          <label class="field">Nome <input type="text" id="mat-name" maxlength="80" /></label>
+          <label class="field" style="grid-column: span 2">Nome <input type="text" id="mat-name" maxlength="80" /></label>
           <label class="field">Espessura <span class="val"><input type="number" id="mat-thickness" min="0" max="100" step="0.5" /><span class="unit">mm</span></span></label>
+          <label class="field" style="grid-column: 1 / -1">Cuidados e observações (aparecem na camada) <textarea id="mat-notes" rows="2" maxlength="500"></textarea></label>
         </div>
         <div class="table-scroll" style="margin-top:8px">
           <table class="mat">
-            <thead><tr><th>Operação</th><th>mm/min</th><th>Potência %</th><th>Passes</th><th>Kerf / intervalo (mm)</th></tr></thead>
+            <thead><tr><th>Usa</th><th>Operação</th><th>mm/min</th><th>Potência %</th><th>Passes</th><th>Kerf / intervalo (mm)</th></tr></thead>
             <tbody id="mat-body"></tbody>
           </table>
         </div>

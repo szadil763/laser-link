@@ -1,3 +1,4 @@
+import { QUEUE_MAX_NAME } from "./protocol.js";
 import type { Axis, ClientMessage, FrameBounds, Material, MaterialMode, MaterialPreset } from "./protocol.js";
 
 type Obj = Record<string, unknown>;
@@ -24,8 +25,12 @@ export function parseClientMessage(value: unknown): ClientMessage | null {
     case "jog":
       if (!isAxis(value.axis) || !isFiniteNumber(value.distance) || !isFiniteNumber(value.feed)) return null;
       return { type: "jog", axis: value.axis, distance: value.distance, feed: value.feed };
+    case "setOrigin": {
+      if (value.x === undefined && value.y === undefined) return { type: "setOrigin" };
+      if (!isFiniteNumber(value.x) || !isFiniteNumber(value.y)) return null;
+      return { type: "setOrigin", x: value.x, y: value.y };
+    }
     case "home":
-    case "setOrigin":
     case "hold":
     case "stop":
     case "unlock":
@@ -51,9 +56,33 @@ export function parseClientMessage(value: unknown): ClientMessage | null {
       const materials = parseMaterials(value.materials);
       return materials ? { type: "materialsSave", materials } : null;
     }
+    case "queueAdd":
+      if (typeof value.name !== "string" || typeof value.gcode !== "string") return null;
+      if (value.name.trim().length === 0 || value.name.length > QUEUE_MAX_NAME) return null;
+      return { type: "queueAdd", name: value.name.trim(), gcode: value.gcode };
+    case "projectsList":
+      return { type: "projectsList" };
+    case "setLaserMode":
+      return { type: "setLaserMode" };
+    case "projectGet":
+      if (typeof value.path !== "string" || value.path.length > 300) return null;
+      return { type: "projectGet", path: value.path };
+    case "queueRemove":
+      if (!isId(value.id)) return null;
+      return { type: "queueRemove", id: value.id };
+    case "queueMove":
+      if (!isId(value.id) || !isFiniteNumber(value.index) || !Number.isInteger(value.index)) return null;
+      return { type: "queueMove", id: value.id, index: value.index };
+    case "queueStart":
+      if (!isId(value.id) || value.confirmLaserOn !== true) return null;
+      return { type: "queueStart", id: value.id, confirmLaserOn: true };
     default:
       return null;
   }
+}
+
+function isId(v: unknown): v is string {
+  return typeof v === "string" && v.length > 0 && v.length <= 64;
 }
 
 function parseBounds(v: unknown): FrameBounds | null {

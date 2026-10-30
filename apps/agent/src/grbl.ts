@@ -14,6 +14,11 @@ const RT_RESUME = Buffer.from("~");
 const RT_RESET = Buffer.from([0x18]);
 const RT_SPINDLE_STOP = Buffer.from([0x9e]); // override: liga/desliga o laser, só vale em Hold
 
+/** Tempo para o GRBL confirmar a pausa (Hold) depois do "!". */
+export const HOLD_CONFIRM_MS = 3000;
+/** Tempo para o GRBL confirmar o laser desligado depois do 0x9E. Sem confirmação: reset. */
+export const LASER_OFF_CONFIRM_MS = 2000;
+
 export interface GrblStatus {
   state: MachineState;
   mpos: Position;
@@ -21,6 +26,11 @@ export interface GrblStatus {
   wpos?: Position;
   feed: number;
   spindle: number;
+  /**
+   * Laser (spindle) aceso segundo o campo "A:" do GRBL 1.1. Só vem nos relatórios que trazem
+   * os overrides ("Ov:"); sem eles, fica indefinido.
+   */
+  laserOn?: boolean;
 }
 
 export interface JobEnd {
@@ -40,6 +50,8 @@ interface GrblEvents {
   progress: [JobProgress];
   jobEnd: [JobEnd];
   closed: [];
+  /** Configurações lidas com $$ (só o que interessa ao agente). */
+  settings: [{ laserMode: boolean | null }];
 }
 
 /** Linha enviada ao GRBL e ainda sem resposta. */
@@ -64,7 +76,10 @@ export class Grbl extends EventEmitter<GrblEvents> {
   private readonly pollMs: number;
 
   // Uma fila só para tudo que é linha (jog, $H, trabalho): a contagem de bytes nunca se perde.
+  // `queueHead` aponta a próxima linha: tirar do começo de uma lista com um milhão de itens
+  // (Array.shift) custa caro e deixava o GRBL sem linhas em trabalhos grandes.
   private queue: Queued[] = [];
+  private queueHead = 0;
   private inFlight: InFlight[] = [];
   private inFlightBytes = 0;
 
@@ -82,6 +97,13 @@ export class Grbl extends EventEmitter<GrblEvents> {
   private spindleStopPending = false;
   /** 0x9E já enviado neste Hold (é alternância: mandar duas vezes religaria). */
   private spindleStopped = false;
+  /**
+   * Conferência da parada de segurança: esperando o Hold, esperando o laser apagar ou já conferido.
+   * Se o prazo vencer sem confirmação, o trabalho é cancelado com reset (o reset sempre corta o laser).
+   */
+  private safety: { stage: "waitHold" | "waitOff" | "confirmed"; timer?: NodeJS.Timeout } | null = null;
+  /** $32 do GRBL (modo laser). null = ainda não lido ou o firmware não tem. */
+  private laserModeSetting: boolean | null = null;
 
   private wco: Position | null = null;
   private last: GrblStatus | null = null;
@@ -114,6 +136,16 @@ export class Grbl extends EventEmitter<GrblEvents> {
     return this.last;
   }
 
+  /** Modo laser do GRBL ($32). null = desconhecido. */
+  get laserMode(): boolean | null {
+    return this.laserModeSetting;
+  }
+
+  /** Pede as configurações ($$). Só fora de trabalho. */
+  readSettings(): void {
+    if (!this.running && !this.aborting) this.enqueue({ text: "$$" });
+  }
+
   async open(): Promise<void> {
     await this.link.open();
     this.resetLineState();
@@ -138,6 +170,7 @@ export class Grbl extends EventEmitter<GrblEvents> {
     // Ao retomar, o GRBL religa o laser que o 0x9E tinha desligado.
     this.spindleStopPending = false;
     this.spindleStopped = false;
+    this.clearSafety();
     this.writeRaw(RT_RESUME);
   }
 
@@ -148,8 +181,41 @@ export class Grbl extends EventEmitter<GrblEvents> {
    */
   safetyHold(): void {
     this.feedHold();
-    // Espera um relatório novo com Hold (no máximo um ciclo de polling).
-    if (!this.spindleStopped) this.spindleStopPending = true;
+    if (this.spindleStopped) return;
+    // Espera um relatório novo com Hold (no máximo um ciclo de polling) para mandar o 0x9E.
+    this.spindleStopPending = true;
+    if (!this.safety) this.armSafety("waitHold", HOLD_CONFIRM_MS, "o GRBL não confirmou a pausa");
+  }
+
+  /** O laser foi desligado e o GRBL confirmou (FS com potência 0 ou "A:" sem laser). */
+  get isLaserOffConfirmed(): boolean {
+    return this.safety?.stage === "confirmed";
+  }
+
+  private armSafety(stage: "waitHold" | "waitOff", ms: number, why: string): void {
+    if (this.safety?.timer) clearTimeout(this.safety.timer);
+    const timer = setTimeout(() => {
+      if (this.safety?.stage !== stage) return;
+      this.safety = null;
+      this.emit("log", "error", `Parada de segurança: ${why} em ${ms / 1000} s. Cancelando com reset para garantir o laser desligado.`);
+      this.abortJob(`Parada de segurança: ${why}. O trabalho foi cancelado com reset, que corta o laser.`);
+    }, ms);
+    this.safety = { stage, timer };
+  }
+
+  private clearSafety(): void {
+    if (this.safety?.timer) clearTimeout(this.safety.timer);
+    this.safety = null;
+  }
+
+  /** Relatório em Hold depois do 0x9E: o laser apagou? */
+  private checkLaserOff(s: GrblStatus): void {
+    if (this.safety?.stage !== "waitOff") return;
+    if (s.laserOn === false || s.spindle === 0) {
+      this.clearSafety();
+      this.safety = { stage: "confirmed" };
+      this.emit("log", "info", "Laser desligado e conferido com o trabalho em pausa.");
+    }
   }
 
   get isSpindleStopped(): boolean {
@@ -162,6 +228,7 @@ export class Grbl extends EventEmitter<GrblEvents> {
     this.waitReady();
     this.spindleStopPending = false;
     this.spindleStopped = false;
+    this.clearSafety();
     // O GRBL descarta o que estava no buffer e não responde mais a essas linhas.
     this.resetLineState();
   }
@@ -185,7 +252,7 @@ export class Grbl extends EventEmitter<GrblEvents> {
     this.total = lines.length;
     this.acked = 0;
     this.running = true;
-    lines.forEach((text, i) => this.queue.push({ text, jobLine: i + 1 }));
+    for (let i = 0; i < lines.length; i++) this.queue.push({ text: lines[i]!, jobLine: i + 1 });
     this.emitProgress();
     this.pump();
     return true;
@@ -197,7 +264,7 @@ export class Grbl extends EventEmitter<GrblEvents> {
     this.aborting = true;
     this.feedHold();
     this.running = false;
-    this.queue = [];
+    this.clearQueue();
     if (hadJob) {
       this.emitProgress();
       this.emit("jobEnd", { outcome: "aborted", reason });
@@ -219,7 +286,8 @@ export class Grbl extends EventEmitter<GrblEvents> {
     this.spindleStopPending = false;
     this.spindleStopped = true;
     this.writeRaw(RT_SPINDLE_STOP);
-    this.emit("log", "warn", "Laser desligado (override 0x9E) com o trabalho em pausa.");
+    this.emit("log", "warn", "Pausa: pedido para desligar o laser (0x9E). Conferindo…");
+    this.armSafety("waitOff", LASER_OFF_CONFIRM_MS, "o laser não confirmou que desligou");
   }
 
   private waitReady(): void {
@@ -245,16 +313,30 @@ export class Grbl extends EventEmitter<GrblEvents> {
     this.pump();
   }
 
+  private clearQueue(): void {
+    this.queue = [];
+    this.queueHead = 0;
+  }
+
   private pump(): void {
-    while (this.queue.length > 0 && this.isReady) {
-      const next = this.queue[0]!;
+    if (!this.isReady) return;
+    // junta as linhas que cabem no buffer do GRBL numa escrita só
+    let out = "";
+    while (this.queueHead < this.queue.length) {
+      const next = this.queue[this.queueHead]!;
       const size = Buffer.byteLength(next.text) + 1;
       if (this.inFlightBytes + size > RX_BUFFER_SIZE) break;
-      this.queue.shift();
+      this.queueHead += 1;
       this.inFlight.push({ text: next.text, size, jobLine: next.jobLine });
       this.inFlightBytes += size;
-      this.writeRaw(Buffer.from(next.text + "\n"));
+      out += next.text + "\n";
     }
+    if (this.queueHead >= this.queue.length) this.clearQueue();
+    else if (this.queueHead >= 65536) {
+      this.queue = this.queue.slice(this.queueHead);
+      this.queueHead = 0;
+    }
+    if (out) this.writeRaw(Buffer.from(out));
   }
 
   private onLine(line: string): void {
@@ -277,7 +359,11 @@ export class Grbl extends EventEmitter<GrblEvents> {
         if (status.wco) this.wco = status.wco;
         const { wco: _wco, ...rest } = status;
         this.last = rest;
-        if (rest.state === "Hold") this.applySpindleStop();
+        if (rest.state === "Hold") {
+          // confere primeiro: o relatório que dispara o 0x9E é anterior a ele
+          this.checkLaserOff(rest);
+          this.applySpindleStop();
+        }
         this.emit("status", rest);
       }
     } else if (line.startsWith("Grbl ")) {
@@ -286,12 +372,19 @@ export class Grbl extends EventEmitter<GrblEvents> {
       this.resetLineState();
       if (unexpected && this.running) {
         this.running = false;
-        this.queue = [];
+        this.clearQueue();
         this.emitProgress();
         this.emit("jobEnd", { outcome: "error", reason: "O GRBL reiniciou durante o trabalho." });
       }
       this.emit("log", "info", line);
       this.markReady();
+    } else if (/^\$\d+=/.test(line)) {
+      // resposta do $$: guarda o que interessa e não enche o registro
+      const m = /^\$32=(\d+)/.exec(line);
+      if (m) {
+        this.laserModeSetting = m[1] === "1";
+        this.emit("settings", { laserMode: this.laserModeSetting });
+      }
     } else {
       this.emit("log", "info", line);
     }
@@ -319,12 +412,13 @@ export class Grbl extends EventEmitter<GrblEvents> {
 
   private onClose(): void {
     this.stopPolling();
+    this.clearSafety();
     this.ready = false;
     if (this.readyTimer) clearTimeout(this.readyTimer);
     this.readyTimer = undefined;
     const hadJob = this.running;
     this.running = false;
-    this.queue = [];
+    this.clearQueue();
     this.resetLineState();
     if (hadJob) {
       this.emitProgress();
@@ -395,6 +489,10 @@ export function parseStatus(line: string, knownWco: Position | null = null): Par
 
   const [feed = 0, spindle = 0] = (fields.get("FS") ?? fields.get("F") ?? "0,0").split(",").map(Number);
   const status: ParsedStatus = { state, mpos, feed, spindle };
+  // "A:S" (horário) ou "A:C" (anti-horário) = laser aceso. Com "Ov:" e sem "A:", tudo apagado.
+  const acc = fields.get("A");
+  if (acc !== undefined) status.laserOn = /[SC]/.test(acc);
+  else if (fields.has("Ov")) status.laserOn = false;
   if (wpos) status.wpos = wpos;
   if (wco) status.wco = wco;
   return status;

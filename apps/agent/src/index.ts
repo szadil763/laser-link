@@ -7,17 +7,22 @@ import { loadConfig } from "./config.js";
 import { Grbl } from "./grbl.js";
 import { JobLog } from "./job-log.js";
 import { MaterialStore } from "./materials.js";
+import { ProjectInbox } from "./projects.js";
 import { NodeSerialLink, type SerialLink } from "./serial-link.js";
 import { FakeGrbl } from "./sim/fake-grbl.js";
 import { createStaticHandler } from "./static.js";
 
 const config = loadConfig();
 const simulated = config.serialPort === "sim";
-const link: SerialLink = simulated ? new FakeGrbl({ msPerLine: 30 }) : new NodeSerialLink(config.serialPort, config.baudRate);
+// LASERLINK_SIM_LASER_MODE=0 simula uma placa com o modo laser desligado (só para testes)
+const link: SerialLink = simulated
+  ? new FakeGrbl({ msPerLine: 30, laserMode: process.env.LASERLINK_SIM_LASER_MODE !== "0" })
+  : new NodeSerialLink(config.serialPort, config.baudRate);
 const grbl = new Grbl(link);
 const jobLog = new JobLog(config.logDir);
 const materials = new MaterialStore(config.dataDir);
-const agent = new Agent({ config, grbl, jobLog, materials, portLabel: simulated ? "simulador" : config.serialPort });
+const projects = config.projects ? new ProjectInbox(config.projects) : undefined;
+const agent = new Agent({ config, grbl, jobLog, materials, projects, portLabel: simulated ? "simulador" : config.serialPort });
 
 function tokenOk(given: string | null): boolean {
   if (!given) return false;
@@ -53,7 +58,7 @@ wss.on("connection", (ws, req) => {
     }
     agent.receive(client, parsed);
   });
-  ws.on("close", () => agent.disconnect(client));
+  ws.on("close", (code) => agent.disconnect(client, closeDetail(code)));
   ws.on("error", () => ws.close());
 });
 
@@ -63,10 +68,18 @@ server.on("error", (err) => {
 });
 
 server.listen(config.wsPort, config.host, () => {
-  console.log(`LaserLink agente em http://${config.host}:${config.wsPort} (interface e WebSocket)`);
+  console.log(`Sapienza LaserLink: agente em http://${config.host}:${config.wsPort} (interface e WebSocket)`);
   if (simulated) console.log("Modo simulador: GRBL falso, nenhuma máquina conectada.");
   void agent.start();
 });
+
+/** Código de fechamento do WebSocket em palavras, para o motivo da pausa no registro. */
+function closeDetail(code: number): string {
+  if (code === 1000) return "a página fechou a conexão";
+  if (code === 1001) return "a página foi fechada, recarregada ou congelada pelo navegador";
+  if (code === 1006) return "a conexão caiu sem aviso: rede, suspensão do PC ou navegador travado";
+  return `código ${code}`;
+}
 
 function shutdown(): void {
   agent.shutdown();

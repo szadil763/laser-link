@@ -4,6 +4,19 @@ export type Point = readonly [number, number];
 export interface Path {
   points: Point[];
   closed: boolean;
+  /** Letras de um texto editável: todas as letras do mesmo texto têm o mesmo `id`. */
+  text?: TextTag;
+}
+
+/** O que foi escrito, para a interface poder editar o texto depois. */
+export interface TextTag {
+  id: string;
+  value: string;
+  /** Altura das maiúsculas, mm. */
+  height: number;
+  align: "left" | "center" | "right";
+  /** Fonte (id da interface); sem valor = traço único. */
+  font?: string;
 }
 
 /**
