@@ -64,6 +64,8 @@
                 <button data-edit="dist-h">Na horizontal ↔</button>
                 <button data-edit="dist-v">Na vertical ↕</button>
               </div>
+              <p class="label">Aproveitar a chapa</p>
+              <button data-edit="fill-bed" role="menuitem">Preencher a mesa com a peça…</button>
               <p class="label">Travar</p>
               <button data-edit="lock" role="menuitem">Travar peça <kbd>Ctrl+L</kbd></button>
               <button data-edit="unlock" role="menuitem">Destravar peça <kbd>Ctrl+Shift+L</kbd></button>
@@ -149,6 +151,25 @@
             <label class="pf">Distância <input type="number" step="0.1" id="ed-off" value="2" /> mm</label>
             <button id="ed-off-go">Criar</button>
             <p class="note">Cria uma cópia do contorno afastada para fora (positivo) ou para dentro (negativo).</p>
+          </div>
+        </details>
+        <details class="menu" id="ed-fill-menu">
+          <summary class="icon-sum" title="Preencher a mesa: repete a peça selecionada por toda a placa"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="1.5" stroke-dasharray="2.5 2"/><rect x="6" y="6" width="5" height="5"/><rect x="13" y="6" width="5" height="5"/><rect x="6" y="13" width="5" height="5"/><rect x="13" y="13" width="5" height="5"/></svg><span class="sr">Preencher a mesa</span></summary>
+          <div class="menu-body fill-body">
+            <p class="note">Repete a peça selecionada (com furos e gravações) dentro da placa que está na mesa. O contorno tracejado mostra a placa.</p>
+            <div class="fill-grid">
+              <label class="pf">Placa <input type="number" step="any" min="1" id="fl-w" aria-label="Largura da placa" /> ×</label>
+              <label class="pf"><input type="number" step="any" min="1" id="fl-h" aria-label="Altura da placa" /> mm</label>
+              <label class="pf">Canto da placa X <input type="number" step="any" min="0" id="fl-x" value="0" /></label>
+              <label class="pf">Y <input type="number" step="any" min="0" id="fl-y" value="0" /> mm</label>
+              <button type="button" id="fl-bed" class="fill-wide">Usar a mesa inteira</button>
+              <label class="pf">Espaço entre peças <input type="number" step="any" min="0" id="fl-gap" value="2" /> mm</label>
+              <label class="pf">Margem da borda <input type="number" step="any" min="0" id="fl-margin" value="3" /> mm</label>
+              <label class="pf">Quantidade <input type="number" step="1" min="1" id="fl-max" placeholder="máximo" /></label>
+              <label class="pf check"><input type="checkbox" id="fl-rot" checked /> Girar 90° se couber mais</label>
+            </div>
+            <p class="note" id="fl-info" aria-live="polite"></p>
+            <button id="fl-go" class="primary">Preencher</button>
           </div>
         </details>
         <button id="ed-group" class="icon-btn" title="Agrupar (Ctrl+G): os selecionados passam a andar juntos"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="2.5 2"/><rect x="6.5" y="6.5" width="6" height="6"/><rect x="11.5" y="11.5" width="6" height="6"/></svg><span class="sr">Agrupar</span></button>
@@ -248,10 +269,18 @@
           </div>
           <div class="frame-row">
             <span class="label">Enquadrar com</span>
-            <div class="seg" id="p-frame-mode">
+            <div class="seg" id="p-frame-mode" role="group" aria-label="Enquadrar com">
               <button data-v="off" aria-pressed="true">Laser desligado</button>
               <button data-v="min" aria-pressed="false" id="p-frame-min">Potência mínima</button>
             </div>
+          </div>
+          <div class="frame-row">
+            <span class="label">Executar</span>
+            <div class="seg" id="p-scope" role="group" aria-label="O que executar">
+              <button data-v="all" aria-pressed="true">Tudo</button>
+              <button data-v="selection" aria-pressed="false" title="Só as peças selecionadas (com os furos e gravações de dentro delas)">Só a seleção</button>
+            </div>
+            <span class="note" id="p-scope-note" aria-live="polite"></span>
           </div>
           <div class="send">
             <button id="p-frame">Enquadrar</button>

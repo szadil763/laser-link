@@ -83,7 +83,8 @@ button[aria-pressed="true"] { background: #2b3a55; border-color: var(--accent); 
 .propbar .unit { font-size: 12px; }
 .sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px; }
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; padding: 4px !important; }
-.icon-btn svg, .rail svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.propbar summary.icon-sum { padding: 4px 6px; }
+.icon-btn svg, .rail svg, summary.icon-sum svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 details.menu { position: relative; }
 details.menu > summary { list-style: none; cursor: pointer; border: 1px solid var(--line); border-radius: 6px; background: #2a2d33; display: inline-flex; align-items: center; gap: 4px; }
@@ -114,6 +115,8 @@ summary[aria-disabled] { opacity: .5; pointer-events: none; }
 kbd { font: 11px var(--mono); color: var(--muted); }
 .stage-clear { margin-left: auto; min-height: 36px; order: 3; }
 details.menu.flip .menu-body { left: auto; right: 0; }
+/* menu fechado não ocupa espaço (senão alarga a página perto da borda direita) */
+details.menu:not([open]) > .menu-body { display: none; }
 
 .rail { grid-area: rail; display: flex; gap: 6px; overflow-x: auto; background: var(--panel); border-radius: 10px; padding: 6px; }
 .rail button { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 58px; min-height: 52px; padding: 4px; font-size: 11px; }
@@ -152,6 +155,13 @@ details.conn > :not(summary) + :not(summary) { margin-top: 8px; }
 .sendbar.job-on #dock-send .summary, .sendbar.job-on #dock-send .frame-row { display: none; }
 .frame-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .frame-row .seg button { min-height: 36px; }
+#p-scope-note { font-size: 12px; }
+#p-scope-note:empty { display: none; }
+.fill-body { width: min(320px, 90vw); }
+.fill-grid { display: grid; grid-template-columns: auto auto; gap: 6px 10px; align-items: center; justify-content: start; }
+.fill-grid .pf:nth-child(n + 5), .fill-grid .fill-wide { grid-column: 1 / -1; }
+.fill-grid .pf.check input { width: auto; min-height: 0; }
+#fl-info { margin: 0; color: var(--text); }
 
 /* uma linha só: se o texto mudar de tamanho (posição do mouse), a mesa não pode mudar de altura */
 .statusbar { grid-area: status; display: flex; gap: 18px; flex-wrap: nowrap; align-items: center; font-size: 13px; color: var(--muted); padding: 2px 6px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; min-width: 0; height: 22px; }
@@ -203,6 +213,8 @@ details.conn > :not(summary) + :not(summary) { margin-top: 8px; }
   #dock-send .stat span { font-size: 11px; white-space: nowrap; }
   #dock-send .frame-row, #dock-send .frame-row .seg { flex-wrap: nowrap; flex: 0 0 auto; white-space: nowrap; }
   #dock-send .send { flex-wrap: nowrap; flex: 0 0 auto; }
+  /* barra numa linha só: a contagem fica no próprio botão "Só a seleção" */
+  #p-scope-note { display: none; }
   #dock-send .send button { flex: 0 0 auto; min-height: 38px; }
 
   .rail { flex-direction: column; overflow-x: hidden; overflow-y: auto; }
@@ -220,8 +232,8 @@ details.conn > :not(summary) + :not(summary) { margin-top: 8px; }
   .stage-head .legend { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
   .stage-head .legend b { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 }
-/* tela de computador estreita: a barra de envio pode usar duas linhas */
-@media (min-width: 980px) and (max-width: 1279px) and (min-height: 560px) {
+/* tela de computador até 1600 px: a barra de envio pode usar duas linhas */
+@media (min-width: 980px) and (max-width: 1599px) and (min-height: 560px) {
   #dock-send { flex-wrap: wrap !important; }
   #dock-send .frame-row .label { display: none; }
 }

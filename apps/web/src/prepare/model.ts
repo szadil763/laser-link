@@ -191,13 +191,13 @@ export function designBounds(layers: readonly Layer[], image: ImageItem | null):
   return boundsOf(pts);
 }
 
-/** Converte o projeto da tela no formato do gerador de G-code. */
-export function toJobDesign(name: string, layers: readonly Layer[], image: ImageItem | null): JobDesign {
+/** Converte o projeto da tela no formato do gerador de G-code. `include` limita aos elementos escolhidos (executar só a seleção). */
+export function toJobDesign(name: string, layers: readonly Layer[], image: ImageItem | null, include?: (s: Shape) => boolean): JobDesign {
   const vectors: VectorGroup[] = [];
   for (const l of layers) {
     if (!l.enabled) continue;
     for (const mode of MODES) {
-      const shapes = l.shapes.filter((s) => effectiveMode(s, l) === mode);
+      const shapes = l.shapes.filter((s) => effectiveMode(s, l) === mode && (!include || include(s)));
       if (!shapes.length) continue;
       vectors.push({
         name: `${l.name}`,

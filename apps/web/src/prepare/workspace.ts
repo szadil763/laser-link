@@ -11,6 +11,7 @@ import {
   designToSvg,
   matrixTest,
   offsetPath,
+  planFill,
   pointInPolygon,
   textToPaths,
   buntingParts,
@@ -137,6 +138,13 @@ export class Workspace {
   private multi = false;
   private showTravel = true;
   private frameMode: "off" | "min" = "off";
+  /** "selection": o trabalho leva só as peças selecionadas (com o que está dentro delas). */
+  private jobScope: "all" | "selection" = "all";
+  /** Muda a cada edição ou seleção: invalida a lista de elementos do trabalho. */
+  private scopeVersion = 0;
+  private scopeCache: { version: number; ids: Set<string> } | null = null;
+  /** Placa mostrada na mesa enquanto a janela Preencher a mesa está aberta. */
+  private fillPreview: Bounds | null = null;
   /** Ordem dos passes de linhas e cortes (fica lembrada neste navegador). */
   private passOrder: PassOrder = loadPassOrder();
   /** Tempo estimado na outra ordem de passes, para comparar (null = não se aplica). */
@@ -740,6 +748,7 @@ export class Workspace {
   }
 
   private async exportGcode(): Promise<void> {
+    if (this.scopeEmpty()) return;
     const r = await this.regenerateNow();
     if (!r) return this.host.toast("Nada para exportar.");
     this.download(`${this.fileBase()}.gcode`, r.gcode, "text/plain");
@@ -1516,6 +1525,7 @@ export class Workspace {
     } else if (act === "cut") this.cutSel();
     else if (act === "paste") this.paste();
     else if (act === "duplicate") this.duplicateSel();
+    else if (act === "fill-bed") this.openFill();
     else if (act === "delete") this.deleteSel();
     else if (act === "selectall") {
       this.selected.clear();
@@ -1557,6 +1567,196 @@ export class Workspace {
     } else this.host.toast("Nada para desfazer.");
   }
 
+  // ---------- executar só a seleção ----------
+
+  /** Os elementos e tudo que está dentro dos contornos fechados deles (furos, gravações), com os grupos inteiros. */
+  private withInside(ids: Iterable<string>): Set<string> {
+    const out = new Set(ids);
+    const outlines = [...out].map((id) => this.findShape(id)?.s).filter((s): s is Shape => !!s && s.closed && s.points.length > 2);
+    const boxes = outlines.map((o) => boundsOf(o.points)!);
+    const groups = new Set<string>();
+    for (const l of this.layers) {
+      for (const s of l.shapes) {
+        const p = s.points[0];
+        if (!out.has(s.id) && p) {
+          const inside = outlines.some((o, i) => {
+            const b = boxes[i]!;
+            return o.id !== s.id && p[0] >= b.minX && p[0] <= b.maxX && p[1] >= b.minY && p[1] <= b.maxY && pointInPolygon(p, o.points);
+          });
+          if (inside) out.add(s.id);
+        }
+        if (out.has(s.id) && s.group) groups.add(s.group);
+      }
+    }
+    for (const l of this.layers) for (const s of l.shapes) if (s.group && groups.has(s.group)) out.add(s.id);
+    return out;
+  }
+
+  /** O que vai para o trabalho em "Só a seleção" (null = tudo). */
+  private jobIds(): Set<string> | null {
+    if (this.jobScope === "all") return null;
+    if (this.scopeCache?.version !== this.scopeVersion) this.scopeCache = { version: this.scopeVersion, ids: this.withInside(this.selected) };
+    return this.scopeCache.ids;
+  }
+
+  private shapeCount(): number {
+    return this.layers.reduce((n, l) => n + (l.enabled ? l.shapes.length : 0), 0);
+  }
+
+  private renderScope(): void {
+    const ids = this.jobIds();
+    const note = $("p-scope-note");
+    const btn = document.querySelector<HTMLButtonElement>('#p-scope [data-v="selection"]');
+    if (!ids) note.textContent = "";
+    else if (!ids.size) note.textContent = "Selecione na mesa as peças a executar.";
+    else note.textContent = `${ids.size} de ${this.shapeCount()} elementos${this.image?.enabled ? " · sem a imagem" : ""}`;
+    if (btn) btn.textContent = ids ? `Só a seleção (${ids.size}/${this.shapeCount()})` : "Só a seleção";
+  }
+
+  /** Em "Só a seleção" sem nada selecionado: avisa e não deixa seguir. */
+  private scopeEmpty(): boolean {
+    const ids = this.jobIds();
+    if (!ids || ids.size) return false;
+    this.host.toast("Executar só a seleção: selecione na mesa as peças que quer executar, ou escolha Tudo.");
+    return true;
+  }
+
+  /** Linha para a confirmação de envio quando só parte da mesa vai. */
+  private scopeLine(): string {
+    const ids = this.jobIds();
+    return ids ? `Só as peças selecionadas: ${ids.size} de ${this.shapeCount()} elementos. O resto da mesa não será feito.\n\n` : "";
+  }
+
+  // ---------- preencher a mesa ----------
+
+  private openFill(): void {
+    const menu = $<HTMLDetailsElement>("ed-fill-menu");
+    if (!this.selected.size) {
+      menu.open = false;
+      return this.host.toast("Selecione na mesa a peça que quer repetir.");
+    }
+    if (!$<HTMLInputElement>("fl-w").value) {
+      // última placa usada, ou a mesa inteira
+      let saved: { w: number; h: number; x: number; y: number } | null = null;
+      try {
+        saved = JSON.parse(localStorage.getItem("laserlink.placa") ?? "null");
+      } catch {
+        saved = null;
+      }
+      const a = this.limits.workArea;
+      $<HTMLInputElement>("fl-w").value = String(saved?.w ?? a.x);
+      $<HTMLInputElement>("fl-h").value = String(saved?.h ?? a.y);
+      $<HTMLInputElement>("fl-x").value = String(saved?.x ?? 0);
+      $<HTMLInputElement>("fl-y").value = String(saved?.y ?? 0);
+    }
+    menu.open = true;
+    this.updateFillInfo();
+  }
+
+  /** Lê a janela e calcula as posições, sem mexer em nada. Devolve o motivo quando não dá. */
+  private planFillSel():
+    | { plan: NonNullable<ReturnType<typeof planFill>>; items: Array<{ s: Shape; l: Layer }>; b: Bounds; plate: Bounds }
+    | { error: string; plate: Bounds | null } {
+    const num = (id: string): number => Number($<HTMLInputElement>(id).value);
+    const w = num("fl-w");
+    const h = num("fl-h");
+    const x = num("fl-x") || 0;
+    const y = num("fl-y") || 0;
+    if (!(w > 0 && h > 0)) return { error: "Informe a largura e a altura da placa.", plate: null };
+    const plate = { minX: x, minY: y, maxX: x + w, maxY: y + h };
+    const a = this.limits.workArea;
+    if (x < 0 || y < 0 || plate.maxX > a.x + 0.01 || plate.maxY > a.y + 0.01) {
+      return { error: `A placa passa da área útil da máquina (${a.x} × ${a.y} mm). Confira a medida e o canto.`, plate };
+    }
+    const ids = this.withInside(this.selected);
+    const items = [...ids].map((id) => this.findShape(id)).filter((f): f is { s: Shape; l: Layer } => !!f && !f.s.locked);
+    if (!items.length) return { error: "Selecione a peça que quer repetir (peças travadas não se movem).", plate };
+    const b = boundsOf(items.flatMap(({ s }) => s.points))!;
+    const margin = Math.max(0, num("fl-margin") || 0);
+    const gap = Math.max(0, num("fl-gap") || 0);
+    const area = { minX: plate.minX + margin, minY: plate.minY + margin, maxX: plate.maxX - margin, maxY: plate.maxY - margin };
+    // outras peças da mesa (inclusive travadas) ficam onde estão: as cópias desviam delas
+    const moving = new Set(items.map(({ s }) => s.id));
+    const obstacles: Bounds[] = [];
+    for (const l of this.layers) {
+      if (!l.enabled) continue;
+      for (const s of l.shapes) if (!moving.has(s.id) && s.points.length) obstacles.push(boundsOf(s.points)!);
+    }
+    const maxRaw = $<HTMLInputElement>("fl-max").value.trim();
+    const max = maxRaw ? Math.max(1, Math.floor(Number(maxRaw))) : undefined;
+    const plan = planFill(b.maxX - b.minX, b.maxY - b.minY, { area, gap, allowRotate: $<HTMLInputElement>("fl-rot").checked, obstacles, ...(max ? { max } : {}) });
+    if (!plan) return { error: "A peça não cabe na placa com essa margem (ou o espaço livre está ocupado por outras peças).", plate };
+    return { plan, items, b, plate };
+  }
+
+  private updateFillInfo(): void {
+    if (!$<HTMLDetailsElement>("ed-fill-menu").open) return;
+    const r = this.planFillSel();
+    this.fillPreview = r.plate;
+    if ("error" in r) $("fl-info").textContent = r.error;
+    else {
+      const { plan } = r;
+      const full = plan.cols * plan.rows;
+      $("fl-info").textContent =
+        `Cabem ${plan.slots.length} peça(s)${plan.rotated ? ", giradas 90°" : ""}` +
+        (plan.slots.length < full ? ` (grade ${plan.cols} × ${plan.rows}; ${full - plan.slots.length} posição(ões) ocupada(s) ou além da quantidade).` : ` (grade ${plan.cols} × ${plan.rows}).`);
+    }
+    $<HTMLButtonElement>("fl-go").disabled = "error" in r;
+    this.requestDraw();
+  }
+
+  /** Move a peça para a primeira posição da placa e põe uma cópia em cada uma das outras. */
+  private applyFill(): void {
+    const r = this.planFillSel();
+    if ("error" in r) return this.host.toast(r.error);
+    const { plan, items, b, plate } = r;
+    try {
+      localStorage.setItem("laserlink.placa", JSON.stringify({ w: plate.maxX - plate.minX, h: plate.maxY - plate.minY, x: plate.minX, y: plate.minY }));
+    } catch {
+      /* sem armazenamento: só não lembra a placa */
+    }
+    this.history.push(this.layers);
+    const cx = (b.minX + b.maxX) / 2;
+    const cy = (b.minY + b.maxY) / 2;
+    const turn = (p: Point): Point => (plan.rotated ? [cx - (p[1] - cy), cy + (p[0] - cx)] : p);
+    const original = items.map(({ s }) => s.points.slice());
+    const tb = boundsOf(original.flat().map(turn))!;
+    // várias peças soltas viram um grupo por posição: cada cópia anda inteira
+    const units = new Set(items.map(({ s }) => s.group ?? s.id)).size;
+    this.selected.clear();
+    plan.slots.forEach(([sx, sy], k) => {
+      const move = (p: Point): Point => {
+        const q = turn(p);
+        return [q[0] + sx - tb.minX, q[1] + sy - tb.minY];
+      };
+      const slotGroup = units > 1 ? newId("GU") : null;
+      const groups = new Map<string, string>();
+      items.forEach(({ s, l }, i) => {
+        const pts = original[i]!.map(move);
+        let target: Shape;
+        if (k === 0) {
+          s.points = pts;
+          target = s;
+        } else {
+          target = makeShape(pts, `${s.name} (${k + 1})`, s.closed, s.mode);
+          if (s.group && !slotGroup) {
+            if (!groups.has(s.group)) groups.set(s.group, newId("G"));
+            target.group = groups.get(s.group);
+          }
+          l.shapes.push(target);
+        }
+        if (slotGroup) target.group = slotGroup;
+        this.selected.add(target.id);
+      });
+    });
+    $<HTMLDetailsElement>("ed-fill-menu").open = false;
+    this.fillPreview = null;
+    this.refresh();
+    const w = plate.maxX - plate.minX;
+    const h = plate.maxY - plate.minY;
+    this.host.toast(`${plan.slots.length} peça(s) na placa de ${w} × ${h} mm${plan.rotated ? ", giradas 90°" : ""}. Confira com Simular e Enquadrar. Ctrl+Z desfaz.`);
+  }
+
   // ---------- geração (com atraso para não travar enquanto edita) ----------
 
   /** Gera agora (fora da tela) e devolve o resultado; reaproveita se nada mudou desde a última geração. */
@@ -1573,7 +1773,8 @@ export class Workspace {
     const id = ++this.genSeq;
     let design: JobDesign;
     try {
-      design = toJobDesign(this.designName || "Trabalho", this.layers, this.image);
+      const ids = this.jobIds();
+      design = toJobDesign(this.designName || "Trabalho", this.layers, ids ? null : this.image, ids ? (sh) => ids.has(sh.id) : undefined);
     } catch (err) {
       this.finishGenerate(id, null, (err as Error).message);
       return;
@@ -1648,6 +1849,8 @@ export class Workspace {
   // ---------- painéis ----------
 
   private refresh(): void {
+    this.scopeVersion += 1;
+    this.renderScope();
     $("p-empty").hidden = this.layers.some((l) => l.shapes.length) || !!this.image;
     this.renderSelection();
     this.renderLayers();
@@ -1663,6 +1866,11 @@ export class Workspace {
    * cada clique lento).
    */
   private refreshSelection(): void {
+    this.scopeVersion += 1;
+    this.renderScope();
+    // em "Só a seleção" o trabalho muda junto com a seleção
+    if (this.jobScope === "selection") this.scheduleGenerate();
+    if (this.fillPreview) this.updateFillInfo();
     this.renderSelection();
     for (const el of $("p-layers").querySelectorAll<HTMLElement>(".item")) el.dataset.sel = String(this.selected.has(el.dataset.id ?? ""));
     this.requestDraw();
@@ -1739,6 +1947,7 @@ export class Workspace {
       cut: has,
       paste: this.clipboard.length > 0,
       duplicate: has,
+      "fill-bed": has,
       delete: has && lockedSel < items.length,
       selectall: this.layers.some((l) => l.shapes.length),
       group: groups.size >= 2,
@@ -1829,6 +2038,23 @@ export class Workspace {
       if (btn.dataset.align) this.alignSel(btn.dataset.align);
       else this.editAction(btn.dataset.edit ?? "");
     });
+    const fillMenu = $<HTMLDetailsElement>("ed-fill-menu");
+    fillMenu.addEventListener("toggle", () => {
+      if (fillMenu.open) this.openFill();
+      else {
+        this.fillPreview = null;
+        this.requestDraw();
+      }
+    });
+    fillMenu.querySelector(".fill-grid")!.addEventListener("input", () => this.updateFillInfo());
+    $("fl-bed").addEventListener("click", () => {
+      $<HTMLInputElement>("fl-w").value = String(this.limits.workArea.x);
+      $<HTMLInputElement>("fl-h").value = String(this.limits.workArea.y);
+      $<HTMLInputElement>("fl-x").value = "0";
+      $<HTMLInputElement>("fl-y").value = "0";
+      this.updateFillInfo();
+    });
+    $("fl-go").addEventListener("click", () => this.applyFill());
     $("ed-off-go").addEventListener("click", () => {
       this.offsetSel(num("ed-off"));
       $<HTMLDetailsElement>("ed-off-menu").open = false;
@@ -2170,6 +2396,8 @@ export class Workspace {
       }
       ctx.drawImage(this.simDone.canvas, 0, 0);
     }
+    // "Só a seleção": o que fica de fora aparece apagado
+    const jobIds = this.jobIds();
     for (const l of this.layers) {
       if (!l.enabled) continue;
       for (const s of l.shapes) {
@@ -2177,7 +2405,7 @@ export class Workspace {
         const color = l.color.startsWith("hsl") && m === "fill" ? l.color : MODE_INFO[m].color;
         ctx.strokeStyle = color;
         ctx.lineWidth = (m === "cut" ? 1.7 : 1.2) * d;
-        ctx.globalAlpha = anim ? 0.35 : 1;
+        ctx.globalAlpha = anim ? 0.35 : jobIds && !jobIds.has(s.id) ? 0.22 : 1;
         v.polyline(s.points);
         ctx.stroke();
         if (this.selected.has(s.id) && !anim) {
@@ -2196,6 +2424,15 @@ export class Workspace {
       }
     }
     ctx.globalAlpha = 1;
+    const plate = this.fillPreview;
+    if (plate && !anim) {
+      ctx.strokeStyle = bedColors().selection;
+      ctx.lineWidth = 1.5 * d;
+      ctx.setLineDash([8 * d, 5 * d]);
+      v.polyline([[plate.minX, plate.minY], [plate.maxX, plate.minY], [plate.maxX, plate.maxY], [plate.minX, plate.maxY], [plate.minX, plate.minY]]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
     let head = this.head;
     let lit = false;
     if (anim) {
@@ -2259,6 +2496,7 @@ export class Workspace {
   // ---------- simular, enquadrar, enviar ----------
 
   private async startSim(): Promise<void> {
+    if (this.scopeEmpty()) return;
     const r = await this.regenerateNow();
     if (!r) return;
     $("p-hud-mode").textContent = "Preparando a simulação…";
@@ -2300,6 +2538,7 @@ export class Workspace {
 
   private async frame(): Promise<void> {
     if (!this.host.isConnected()) return this.host.toast("Conecte ao agente para enquadrar na laser.");
+    if (this.scopeEmpty()) return;
     const r = await this.regenerateNow();
     const b = r ? this.burnBounds : null;
     if (!b) return this.host.toast("Nada para enquadrar.");
@@ -2320,12 +2559,13 @@ export class Workspace {
 
   private async sendJob(): Promise<void> {
     if (!this.host.isConnected()) return this.host.toast("Conecte ao agente (aba Máquina, à direita) para enviar o trabalho.");
+    if (this.scopeEmpty()) return;
     const r = await this.regenerateNow();
     if (!r) return;
-    const name = `${this.designName || "Trabalho"}.gcode`;
+    const name = `${this.designName || "Trabalho"}${this.jobScope === "selection" ? " (seleção)" : ""}.gcode`;
     const ok = await this.host.confirm(
       `Enviar "${name}"?`,
-      `Isto liga o laser. Tempo estimado: ${fmtTime(r.estimatedSeconds)}.\n\nConfirme que a área está livre, a exaustão ligada e que há alguém presente ou câmera ao vivo.\n\nMantenha esta aba aberta: se ela fechar ou perder a conexão, o agente pausa o trabalho.`,
+      `${this.scopeLine()}Isto liga o laser. Tempo estimado: ${fmtTime(r.estimatedSeconds)}.\n\nConfirme que a área está livre, a exaustão ligada e que há alguém presente ou câmera ao vivo.\n\nMantenha esta aba aberta: se ela fechar ou perder a conexão, o agente pausa o trabalho.`,
       "Enviar e ligar o laser",
     );
     if (!ok) return;
@@ -2335,9 +2575,10 @@ export class Workspace {
   /** Guarda na fila do agente. Não liga o laser: iniciar pede confirmação depois. */
   private async enqueueJob(): Promise<void> {
     if (!this.host.isConnected()) return this.host.toast("Conecte ao agente (aba Máquina, à direita) para guardar na fila.");
+    if (this.scopeEmpty()) return;
     const r = await this.regenerateNow();
     if (!r) return;
-    const name = `${this.designName || "Trabalho"}.gcode`;
+    const name = `${this.designName || "Trabalho"}${this.jobScope === "selection" ? " (seleção)" : ""}.gcode`;
     if (this.host.send({ type: "queueAdd", name, gcode: r.gcode })) {
       this.host.onQueued(name, r.gcode);
       this.host.toast(`"${name}" enviado para a fila (${fmtTime(r.estimatedSeconds)}). Inicie pela aba Fila.`);
@@ -2569,6 +2810,17 @@ export class Workspace {
       if (!btn) return;
       this.frameMode = btn.dataset.v === "min" ? "min" : "off";
       for (const b of $("p-frame-mode").querySelectorAll("button")) b.setAttribute("aria-pressed", String(b === btn));
+    });
+    $("p-scope").addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement).closest("button");
+      if (!btn) return;
+      this.jobScope = btn.dataset.v === "selection" ? "selection" : "all";
+      for (const b of $("p-scope").querySelectorAll("button")) b.setAttribute("aria-pressed", String(b === btn));
+      this.scopeVersion += 1;
+      this.renderScope();
+      if (this.jobScope === "selection" && !this.selected.size) this.host.toast("Agora selecione na mesa as peças que quer executar. O resto fica apagado e não é feito.");
+      this.scheduleGenerate();
+      this.requestDraw();
     });
     $("p-frame").addEventListener("click", () => void this.frame());
     $("p-sim").addEventListener("click", () => this.startSim());
