@@ -619,7 +619,7 @@ descobertas</textarea></label>
         </div>
         <div class="fields" style="margin-top:8px">
           <label class="field" style="grid-column: span 2">Nome <input type="text" id="mat-name" maxlength="80" /></label>
-          <label class="field">Espessura <span class="val"><input type="number" id="mat-thickness" min="0" max="100" step="0.5" /><span class="unit">mm</span></span></label>
+          <label class="field">Espessura <span class="val"><input type="number" id="mat-thickness" min="0" max="100" step="any" /><span class="unit">mm</span></span></label>
           <label class="field" style="grid-column: 1 / -1">Cuidados e observações (aparecem na camada) <textarea id="mat-notes" rows="2" maxlength="500"></textarea></label>
         </div>
         <div class="table-scroll" style="margin-top:8px">
@@ -630,7 +630,7 @@ descobertas</textarea></label>
         </div>
         <div class="row end">
           <button value="cancel">Fechar sem salvar</button>
-          <button value="ok" class="primary" id="mat-save">Salvar no agente</button>
+          <button value="ok" class="primary" id="mat-save" formnovalidate>Salvar no agente</button>
         </div>
       </form>
     </dialog>

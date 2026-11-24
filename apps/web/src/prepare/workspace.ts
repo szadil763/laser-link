@@ -43,6 +43,7 @@ import {
   newId,
   presetFor,
   rebuildImage,
+  syncToMaterial,
   toJobDesign,
   type ImageItem,
   type Layer,
@@ -146,6 +147,8 @@ export class Workspace {
   private limits: AgentLimits = { maxSpindle: 1000, workArea: { x: 400, y: 400 }, framePower: 10, frameFeed: 3000 };
   private haveLimits = false;
   private materials: Material[] = structuredClone(DEFAULT_MATERIALS);
+  /** "Salvar no agente" foi clicado e a biblioteca nova ainda não voltou. */
+  private materialsSaving = false;
   private result: GenerateResult | null = null;
   private resultError: string | null = null;
   /** Deslocamentos sem laser do resultado atual (x0, y0, x1, y1…), para desenhar na mesa. */
@@ -257,8 +260,35 @@ export class Workspace {
   }
 
   setMaterials(list: Material[]): void {
+    const prev = this.materials;
     this.materials = list;
-    this.renderLayers();
+    // camadas com material seguem a biblioteca: sem isto ficavam com os valores antigos
+    const changed = this.syncMaterials(prev);
+    if (this.materialsSaving) {
+      this.materialsSaving = false;
+      this.host.toast(changed.length ? `Materiais salvos. Camadas atualizadas: ${changed.join(", ")}.` : "Materiais salvos.");
+    } else if (changed.length) {
+      this.host.toast(`A biblioteca de materiais mudou. Camadas atualizadas: ${changed.join(", ")}.`);
+    }
+    if (changed.length) this.refresh();
+    else this.renderLayers();
+  }
+
+  /** Aplica os valores atuais da biblioteca às camadas (e à imagem) que usam um material. Devolve os nomes das que mudaram. */
+  private syncMaterials(prev?: readonly Material[]): string[] {
+    const changed: string[] = [];
+    const before = (id: string): Material | undefined => prev?.find((m) => m.id === id);
+    for (const l of this.layers) {
+      const mat = this.material(l.materialId);
+      if (!mat) continue;
+      let any = false;
+      for (const m of MODES) any = syncToMaterial(l.settings[m], mat, m, before(mat.id)) || any;
+      if (any) changed.push(l.name);
+    }
+    const img = this.image;
+    const imat = img ? this.material(img.materialId) : undefined;
+    if (img && imat && syncToMaterial(img.settings, imat, "raster", before(imat.id))) changed.push(img.name);
+    return changed;
   }
 
   /** Posição real do cabeçote (status do GRBL), mostrada quando não há simulação. */
@@ -1089,10 +1119,16 @@ export class Workspace {
     this.layers = p.layers;
     this.image = p.image;
     this.fileHandle = null;
+    // o projeto guarda uma cópia dos valores; o material pode ter sido ajustado depois
+    const changed = this.syncMaterials();
     this.finishTexts();
     this.view.fitTo(null);
     this.refresh();
-    this.host.toast(`Projeto "${p.name}" aberto.`);
+    this.host.toast(
+      changed.length
+        ? `Projeto "${p.name}" aberto. Valores atualizados com a biblioteca de materiais: ${changed.join(", ")}.`
+        : `Projeto "${p.name}" aberto.`,
+    );
   }
 
   /** Salvar (asNew = Salvar como). Com o seletor de arquivos do navegador quando existe; senão, baixa o arquivo. */
@@ -2330,10 +2366,10 @@ export class Workspace {
               const extraKey = mode === "cut" ? "kerf" : mode === "fill" || mode === "detail" ? "interval" : "";
               const extraVal = extraKey === "kerf" ? (p.kerf ?? 0) : extraKey === "interval" ? (p.interval ?? 0.2) : "";
               return `<tr data-mode="${mode}" data-on="${!!own}"><td><input type="checkbox" data-k="on" ${own ? "checked" : ""} aria-label="Usar ${MODE_INFO[mode].label} neste material"></td><td>${MODE_INFO[mode].label}</td>
-                <td><input type="number" min="10" data-k="speed" value="${p.speed}" aria-label="Velocidade"></td>
-                <td><input type="number" min="0" max="100" data-k="power" value="${p.power}" aria-label="Potência"></td>
-                <td><input type="number" min="1" max="99" data-k="passes" value="${p.passes}" aria-label="Passes"></td>
-                <td>${extraKey ? `<input type="number" step="0.01" data-k="${extraKey}" value="${extraVal}" aria-label="${extraKey === "kerf" ? "Kerf" : "Intervalo"}">` : "—"}</td></tr>`;
+                <td><input type="number" min="1" step="any" data-k="speed" value="${p.speed}" aria-label="Velocidade"></td>
+                <td><input type="number" min="0" max="100" step="any" data-k="power" value="${p.power}" aria-label="Potência"></td>
+                <td><input type="number" min="1" max="50" data-k="passes" value="${p.passes}" aria-label="Passes"></td>
+                <td>${extraKey ? `<input type="number" step="any" data-k="${extraKey}" value="${extraVal}" aria-label="${extraKey === "kerf" ? "Kerf" : "Intervalo"}">` : "—"}</td></tr>`;
             })
             .join("")
         : "";
@@ -2384,6 +2420,19 @@ export class Workspace {
       current = draft[0]!.id;
       render();
     };
+    // confere antes de mandar: o agente recusa a lista inteira se um valor sair dos limites
+    $("mat-save").onclick = (e) => {
+      readCurrent();
+      for (const m of draft) {
+        const problem = materialProblem(m);
+        if (!problem) continue;
+        e.preventDefault();
+        current = m.id;
+        render();
+        this.host.toast(`Não salvei: ${m.name}: ${problem}`);
+        return;
+      }
+    };
     $("mat-note").textContent = this.host.isConnected()
       ? "A biblioteca fica salva no agente e vale para todos os aparelhos. Os valores de exemplo precisam ser ajustados com o teste de matriz na sua máquina."
       : "Sem conexão com o agente: você pode ver os exemplos, mas para salvar precisa conectar (aba Máquina).";
@@ -2394,7 +2443,7 @@ export class Workspace {
         if (dlg.returnValue !== "ok") return;
         readCurrent();
         if (!this.host.isConnected()) return this.host.toast("Conecte ao agente para salvar os materiais.");
-        this.host.send({ type: "materialsSave", materials: draft });
+        if (this.host.send({ type: "materialsSave", materials: draft })) this.materialsSaving = true;
       },
       { once: true },
     );
@@ -2617,4 +2666,19 @@ function segDist(p: Point, a: Point, b: Point): number {
   let t = l2 ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2 : 0;
   t = Math.max(0, Math.min(1, t));
   return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
+}
+
+/** O que impede o agente de aceitar o material (mesmos limites de `parseMaterials`), ou null. */
+export function materialProblem(m: Material): string | null {
+  if (!m.name.trim()) return "dê um nome ao material.";
+  if (!(m.thickness >= 0 && m.thickness <= 100)) return "a espessura precisa ficar entre 0 e 100 mm.";
+  for (const p of m.presets) {
+    const op = MODE_INFO[p.mode].label;
+    if (!(p.speed > 0 && p.speed <= 100000)) return `${op}: a velocidade precisa ser maior que zero (até 100000 mm/min).`;
+    if (!(p.power >= 0 && p.power <= 100)) return `${op}: a potência precisa ficar entre 0 e 100%.`;
+    if (!(Number.isInteger(p.passes) && p.passes >= 1 && p.passes <= 50)) return `${op}: os passes precisam ficar entre 1 e 50.`;
+    if (p.kerf !== undefined && !(p.kerf >= 0 && p.kerf <= 2)) return `${op}: o kerf precisa ficar entre 0 e 2 mm.`;
+    if (p.interval !== undefined && !(p.interval >= 0.02 && p.interval <= 2)) return `${op}: o intervalo precisa ficar entre 0,02 e 2 mm.`;
+  }
+  return null;
 }

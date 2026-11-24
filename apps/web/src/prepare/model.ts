@@ -96,6 +96,26 @@ export function presetFor(material: Material | undefined, mode: MaterialMode): O
   return s;
 }
 
+/**
+ * Atualiza uma configuração ligada a um material com os valores atuais dele.
+ * Velocidade, potência e passes vêm sempre do material (mexer neles na camada já tira o material).
+ * Kerf e intervalo podem ser ajustados na camada sem tirar o material: só seguem o material
+ * quando ainda estão iguais ao valor antigo dele (`prev`). Devolve true se algo mudou.
+ */
+export function syncToMaterial(target: OpSettings, mat: Material, mode: MaterialMode, prev?: Material): boolean {
+  const next = presetFor(mat, mode);
+  const old = prev ? presetFor(prev, mode) : null;
+  const before = JSON.stringify(target);
+  target.speed = next.speed;
+  target.power = next.power;
+  target.passes = next.passes;
+  for (const k of ["kerf", "interval"] as const) {
+    if (next[k] === undefined) continue;
+    if (target[k] === undefined || (old && target[k] === old[k])) target[k] = next[k];
+  }
+  return JSON.stringify(target) !== before;
+}
+
 let uid = 0;
 export const newId = (prefix: string): string => `${prefix}${++uid}`;
 
