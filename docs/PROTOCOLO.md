@@ -1,7 +1,7 @@
 # Protocolo WebSocket
 
 Mensagens JSON. Tipos em `packages/shared/src/protocol.ts`; validação das mensagens do cliente em `packages/shared/src/validate.ts`.
-Versão atual: **0.7.0** (`PROTOCOL_VERSION`). O agente informa a versão no `hello`; a interface avisa se for diferente.
+Versão atual: **0.8.0** (`PROTOCOL_VERSION`). O agente informa a versão no `hello`; a interface avisa se for diferente.
 
 ## Endereço e autenticação
 
@@ -50,6 +50,10 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 | `queueStart` | `id`, `confirmLaserOn: true` | Confere de novo (a origem pode ter mudado) e inicia como um `job`. Só sai da fila se iniciar |
 | `projectsList` | | Busca no GitHub o ramo `projetos` (`git fetch` para `refs/laserlink/projetos`, sem mexer na pasta de trabalho) e responde `projects` |
 | `projectGet` | `path` (da última lista) | Responde `projectFile` com o conteúdo. Caminho fora da lista é recusado com `error` |
+| `updateCheck` | `force?: true` | Confere no GitHub se há commits novos no ramo instalado (`git fetch` para `refs/laserlink/atualizacao`, sem mexer na pasta de trabalho) e responde `update`. Sem `force`, vale a resposta dos últimos 10 minutos |
+| `updateApply` | `confirmRestart: true` | Confere de novo e, no serviço do Windows, inicia a tarefa agendada `LaserLink Atualizar` (`scripts/windows/atualizar-auto.ps1`, como SYSTEM): para o serviço, instala, compila e religa; se falhar, volta para a versão anterior. Recusado com `error` se houver trabalho em andamento ou pausado. Enquanto atualiza, o agente recusa trabalhos novos |
+
+`confirmRestart: true` é obrigatório em `updateApply` (a interface pede confirmação antes).
 
 `confirmLaserOn: true` é obrigatório em `resume`, `job`, `queueStart` e `frame` com `laser: "min"`: sem ele a mensagem é recusada. A interface só envia esse campo depois que a pessoa confirma.
 
@@ -57,7 +61,7 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 
 | `type` | Campos |
 |---|---|
-| `hello` | `version`, `port`, `connected`, `job` (`JobInfo` ou `null`), `reconnectGraceSec`, `limits {maxSpindle, workArea {x,y}, framePower, frameFeed}`, `lastResult` (`JobResult` ou `null`), `laserMode` (`$32`: `true`, `false` ou `null` se desconhecido) |
+| `hello` | `version`, `port`, `connected`, `job` (`JobInfo` ou `null`), `reconnectGraceSec`, `limits {maxSpindle, workArea {x,y}, framePower, frameFeed}`, `lastResult` (`JobResult` ou `null`), `laserMode` (`$32`: `true`, `false` ou `null` se desconhecido), `appVersion` (commit e data instalados, ou `"dev"`), `lastUpdate` (`{ok, message, version, at}` da última atualização pelo app, se foi nas últimas 2 h; senão `null`) |
 | `machine` | `laserMode`: enviado quando o agente lê (ou relê) o `$$` |
 | `status` | `state`, `mpos {x,y,z}`, `wpos {x,y,z}` (se o WCO já é conhecido), `feed`, `spindle`, `laserOn` (do campo `A:` do GRBL, quando vem) |
 | `log` | `level`, `text` |
@@ -70,6 +74,7 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 | `queue` | `items` (`QueueItem[]`): enviado logo após o `hello` e a cada mudança na fila |
 | `projects` | `items` (`ProjectEntry[]`: `path`, `name`, `kind` `laserlink`/`svg`/`dxf`, `size`, `date`, `description` = mensagem do commit), `error?` (a busca falhou; a lista é a última baixada) |
 | `projectFile` | `entry`, `content` (texto do arquivo, até 8 MB) |
+| `update` | `info`: `state` (`current`, `available`, `applying` ou `error`), `current`, `latest?`, `changes` (títulos dos commits novos, até 15), `slow?` (pacotes novos: demora mais), `canApply`, `reason?` (erro ou por que não dá para atualizar pelo app) |
 | `pong` | `t` |
 | `error` | `message` |
 

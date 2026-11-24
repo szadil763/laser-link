@@ -11,13 +11,25 @@ Na pasta do LaserLink (`C:\LaserLink`) há quatro arquivos. Clique duas vezes e 
 | Arquivo | Para quê |
 |---|---|
 | **Instalar LaserLink** | Primeira instalação: instala Node.js, Git e NSSM pelo winget, pergunta a porta COM e a área de corte, gera o token, instala o serviço e (se quiser) o Tailscale. Rodar de novo é seguro: mantém a configuração. |
-| **Atualizar LaserLink** | Baixa a versão nova e reinstala o serviço. Para o serviço antes, mesmo se estiver travado. Não use com trabalho em andamento. |
+| **Atualizar LaserLink** | Baixa a versão nova e reinstala o serviço. Para o serviço antes, mesmo se estiver travado. Não use com trabalho em andamento. Depois de rodar uma vez, dá para atualizar pelo app (veja abaixo). |
 | **Reiniciar LaserLink** | Reinicia o agente (depois de editar o `laserlink.config.json`, ou se algo travar). |
 | **Abrir LaserLink** | Abre a interface no navegador deste PC. |
 
 Num PC novo, sem o LaserLink ainda: baixe o projeto como ZIP no GitHub (botão **Code > Download ZIP**, ramo `fase-3`), extraia em qualquer pasta e clique duas vezes em **Instalar LaserLink**. Ele baixa o projeto de verdade em `C:\LaserLink` (com Git, para as atualizações funcionarem) e continua de lá.
 
 Os passos abaixo fazem a mesma coisa à mão e servem de referência.
+
+### Atualizar pelo app
+
+Na janela **Máquina**, seção **Atualização do LaserLink**: **Procurar atualização** mostra a versão nova e o que mudou, e **Atualizar agora** instala (de qualquer computador conectado, inclusive pelo celular). Quando há versão nova, aparece **Atualização disponível** na barra de baixo.
+
+- Não funciona com trabalho em andamento ou pausado: termine ou pare antes.
+- O agente para por 1 a 3 minutos (uns 5 quando a versão instala pacotes novos) e volta sozinho. A página recarrega sozinha quando ele volta. Abra a página pelo endereço do agente (ex.: `http://100.117.34.24:8787`) para isso funcionar.
+- Se algo falhar, o LaserLink volta para a versão anterior e religa. O app avisa o motivo. O passo a passo fica em `apps\agent\logs\atualizacao.log`.
+- Como funciona: o agente baixa a versão nova e cria a tarefa agendada **LaserLink Atualizar**, que roda `scripts\windows\atualizar-auto.ps1` como SYSTEM, fora do serviço. Ela para o serviço, instala, compila, religa e se apaga.
+- **Primeira vez:** o botão só funciona depois de rodar o **Atualizar LaserLink** uma vez com esta versão (ele marca o serviço com `LASERLINK_SERVICE=1`). Antes disso, o app mostra a versão nova e diz para usar o arquivo.
+- Para desligar o botão: `"updates": false` no `laserlink.config.json`.
+- Com arquivos do LaserLink alterados à mão neste PC, o app não atualiza sozinho: use o **Atualizar LaserLink**.
 
 ## 1. Preparar o PC
 

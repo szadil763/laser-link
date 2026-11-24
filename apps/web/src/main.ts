@@ -1,5 +1,5 @@
 import "./styles.css";
-import { PROTOCOL_VERSION, type JobInfo, type JobResult, type ProjectEntry, type QueueItem, type ServerMessage } from "@laserlink/shared";
+import { PROTOCOL_VERSION, type JobInfo, type JobResult, type ProjectEntry, type QueueItem, type ServerMessage, type UpdateInfo, type UpdateResult } from "@laserlink/shared";
 import { chime } from "./chime.js";
 import { confirmDialog } from "./confirm-dialog.js";
 import { Connection, type LinkState } from "./connection.js";
@@ -454,6 +454,11 @@ function onMessage(msg: ServerMessage): void {
       workspace.setLimits(msg.limits);
       renderJob(msg.job);
       if (msg.job?.state === "connectionLost") log(`Atenção: "${msg.job.name}" está pausado por perda de conexão.`);
+      if (onAgentVersion(msg.appVersion, msg.job !== null, msg.lastUpdate)) break;
+      conn.send({ type: "updateCheck" });
+      break;
+    case "update":
+      renderUpdate(msg.info);
       break;
     case "status":
       $("state").textContent = msg.state;
@@ -772,4 +777,131 @@ $("forget-token").addEventListener("click", () => {
   }
   tokenInput.value = "";
   toast("Token apagado deste navegador. Na próxima vez, cole o token de novo.");
+});
+
+// ---------- atualização do LaserLink ----------
+
+const hashOf = (v: string): string => v.split(" ")[0] ?? v;
+
+/** Esta página veio do mesmo agente da conexão: recarregar traz a interface nova. */
+function pageFromThisAgent(): boolean {
+  try {
+    return new URL(urlInput.value.trim().replace(/^ws/i, "http")).host === location.host;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Chamado no hello. Avisa o resultado da última atualização e, se o agente está numa
+ * versão diferente desta página, recarrega (só sem trabalho: recarregar a aba que cuida
+ * de um trabalho faria o agente pausar). Devolve true se a página vai recarregar.
+ */
+function onAgentVersion(appVersion: string, jobActive: boolean, last: UpdateResult | null): boolean {
+  $("up-current").textContent = appVersion;
+  if (last) {
+    let seen: string | null = null;
+    try {
+      seen = localStorage.getItem("laserlink.updateSeen");
+      localStorage.setItem("laserlink.updateSeen", last.at);
+    } catch {
+      /* sem armazenamento: avisa de novo na próxima conexão */
+    }
+    if (seen !== last.at) {
+      if (last.ok) {
+        log(`LaserLink atualizado para ${appVersion}.`);
+        toast(`LaserLink atualizado para ${hashOf(appVersion)}.`);
+      } else {
+        log(`ERRO na atualização: ${last.message}`);
+        toast(`A atualização não deu certo: ${last.message}`);
+      }
+    }
+  }
+  const agent = hashOf(appVersion);
+  const page = hashOf(__APP_VERSION__);
+  if (agent === "dev" || page === "dev" || agent === page) {
+    $("sb-update").hidden = true;
+    return false;
+  }
+  let tried: string | null = null;
+  try {
+    tried = sessionStorage.getItem("laserlink.reloadFor");
+  } catch {
+    tried = agent; // sem como lembrar: não arrisca recarregar em laço
+  }
+  if (!jobActive && pageFromThisAgent() && tried !== agent) {
+    try {
+      sessionStorage.setItem("laserlink.reloadFor", agent);
+    } catch {
+      /* ignorar */
+    }
+    log(`O agente está na versão ${appVersion}. Recarregando a página…`);
+    location.reload();
+    return true;
+  }
+  log(`O agente está na versão ${appVersion} e esta página na ${__APP_VERSION__}. Recarregue a página (Ctrl+Shift+R)${jobActive ? " quando o trabalho terminar" : ""}.`);
+  const btn = $("sb-update");
+  btn.textContent = "Recarregue a página";
+  btn.hidden = false;
+  return false;
+}
+
+function renderUpdate(info: UpdateInfo): void {
+  $("up-current").textContent = info.current;
+  const status = $("up-status");
+  const apply = $<HTMLButtonElement>("up-apply");
+  const list = $("up-changes");
+  $<HTMLButtonElement>("up-check").disabled = info.state === "applying";
+  apply.hidden = !(info.state === "available" && info.canApply);
+  apply.disabled = false;
+  list.hidden = !(info.state === "available" && info.changes.length > 0);
+  list.replaceChildren(
+    ...info.changes.map((c) => {
+      const li = document.createElement("li");
+      li.textContent = c;
+      return li;
+    }),
+  );
+  if (info.state === "current") status.textContent = "Você já está na versão mais nova.";
+  else if (info.state === "applying") status.textContent = "Atualizando… O agente para e volta sozinho em alguns minutos. A página recarrega quando ele voltar.";
+  else if (info.state === "error") status.textContent = info.reason ?? "Não deu para conferir agora.";
+  else {
+    const parts = [`Versão nova: ${info.latest ?? "?"}. O que mudou:`];
+    if (info.slow) parts.unshift("Esta versão instala pacotes novos: a atualização pode levar uns 5 minutos.");
+    if (!info.canApply && info.reason) parts.unshift(info.reason);
+    status.textContent = parts.join(" ");
+  }
+  const sb = $("sb-update");
+  // "Recarregue a página" vale mais: a página está numa versão diferente do agente
+  if (!sb.hidden && sb.textContent === "Recarregue a página") return;
+  if (info.state === "available") {
+    sb.textContent = "Atualização disponível";
+    sb.hidden = false;
+  } else if (sb.textContent === "Atualização disponível") sb.hidden = true;
+}
+
+$("up-check").addEventListener("click", () => {
+  if (conn.state !== "connected" && conn.state !== "unstable") return toast("Conecte ao agente para procurar atualização.");
+  $("up-status").textContent = "Conferindo no GitHub…";
+  conn.send({ type: "updateCheck", force: true });
+});
+
+$("up-apply").addEventListener("click", async () => {
+  if (currentJob) return toast("Há um trabalho em andamento ou pausado. Termine ou pare o trabalho antes de atualizar.");
+  const ok = await confirmDialog(
+    "Atualizar o LaserLink agora?",
+    "O agente para por alguns minutos para instalar a versão nova e volta sozinho. Nesse tempo a laser fica sem controle pelo app.\n\nSe algo der errado, ele volta para a versão atual.\n\nA página recarrega sozinha quando o agente voltar.",
+    "Atualizar e reiniciar o agente",
+  );
+  if (!ok) return;
+  if (conn.send({ type: "updateApply", confirmRestart: true })) {
+    $<HTMLButtonElement>("up-apply").disabled = true;
+    $("up-status").textContent = "Pedindo a atualização…";
+  }
+});
+
+$("sb-update").addEventListener("click", () => {
+  if ($("sb-update").textContent === "Recarregue a página") return location.reload();
+  showSide("st-machine");
+  $("update-box").scrollIntoView({ block: "center" });
 });

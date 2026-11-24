@@ -3,7 +3,8 @@ import { createServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import type { ServerMessage } from "@laserlink/shared";
 import { Agent, type ClientConn } from "./agent.js";
-import { loadConfig } from "./config.js";
+import { join } from "node:path";
+import { DEFAULT_REPO_DIR, loadConfig } from "./config.js";
 import { Grbl } from "./grbl.js";
 import { JobLog } from "./job-log.js";
 import { MaterialStore } from "./materials.js";
@@ -11,6 +12,7 @@ import { ProjectInbox } from "./projects.js";
 import { NodeSerialLink, type SerialLink } from "./serial-link.js";
 import { FakeGrbl } from "./sim/fake-grbl.js";
 import { createStaticHandler } from "./static.js";
+import { Updater } from "./updater.js";
 
 const config = loadConfig();
 const simulated = config.serialPort === "sim";
@@ -22,7 +24,17 @@ const grbl = new Grbl(link);
 const jobLog = new JobLog(config.logDir);
 const materials = new MaterialStore(config.dataDir);
 const projects = config.projects ? new ProjectInbox(config.projects) : undefined;
-const agent = new Agent({ config, grbl, jobLog, materials, projects, portLabel: simulated ? "simulador" : config.serialPort });
+const repoDir = config.projects?.repoDir ?? DEFAULT_REPO_DIR;
+const updater = config.updates
+  ? new Updater({
+      repoDir,
+      remote: config.projects?.remote ?? "origin",
+      ...(config.projects?.token ? { token: config.projects.token } : {}),
+      // o script do Windows grava o resultado sempre aqui (ele não lê o laserlink.config.json)
+      dataDir: join(repoDir, "apps", "agent", "data"),
+    })
+  : undefined;
+const agent = new Agent({ config, grbl, jobLog, materials, projects, updater, portLabel: simulated ? "simulador" : config.serialPort });
 
 function tokenOk(given: string | null): boolean {
   if (!given) return false;

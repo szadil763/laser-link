@@ -30,6 +30,7 @@ export function testConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     framePower: 10,
     frameFeed: 3000,
     projects: null,
+    updates: false,
     ...overrides,
   };
 }

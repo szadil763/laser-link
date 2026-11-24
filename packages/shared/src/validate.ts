@@ -64,6 +64,11 @@ export function parseClientMessage(value: unknown): ClientMessage | null {
       return { type: "projectsList" };
     case "setLaserMode":
       return { type: "setLaserMode" };
+    case "updateCheck":
+      return value.force === true ? { type: "updateCheck", force: true } : { type: "updateCheck" };
+    case "updateApply":
+      if (value.confirmRestart !== true) return null;
+      return { type: "updateApply", confirmRestart: true };
     case "projectGet":
       if (typeof value.path !== "string" || value.path.length > 300) return null;
       return { type: "projectGet", path: value.path };

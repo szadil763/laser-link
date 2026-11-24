@@ -34,10 +34,12 @@ export interface AgentConfig {
    * null = desligado. Padrão: remoto origin, ramo projetos, na pasta do próprio LaserLink.
    */
   projects: { repoDir: string; remote: string; branch: string; token?: string } | null;
+  /** Botão "Atualizar" no app (usa o remoto e o token dos projetos). Padrão: ligado. */
+  updates: boolean;
 }
 
 /** Raiz do repositório do LaserLink (apps/agent/src ou dist → três pastas acima). */
-const DEFAULT_REPO_DIR = fileURLToPath(new URL("../../../", import.meta.url));
+export const DEFAULT_REPO_DIR = fileURLToPath(new URL("../../../", import.meta.url));
 
 /** apps/agent/logs, tanto rodando de src/ (tsx) quanto de dist/ (node). */
 const DEFAULT_LOG_DIR = fileURLToPath(new URL("../logs/", import.meta.url));
@@ -77,6 +79,7 @@ export function loadConfig(): AgentConfig {
     framePower: 0,
     frameFeed: raw.frameFeed ?? 3000,
     projects: null,
+    updates: raw.updates !== false,
   };
   if (raw.projects !== false) {
     const p = raw.projects ?? {};

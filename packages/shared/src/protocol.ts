@@ -40,7 +40,14 @@ export type ClientMessage =
   /** Busca no GitHub os projetos publicados (ramo projetos) e devolve a lista. Não liga nada. */
   | { type: "projectsList" }
   /** Pede o conteúdo de um projeto da lista, para abrir na mesa. */
-  | { type: "projectGet"; path: string };
+  | { type: "projectGet"; path: string }
+  /** Confere no GitHub se há versão nova do LaserLink. Não muda nada. Sem `force`, vale a resposta dos últimos 10 minutos. */
+  | { type: "updateCheck"; force?: true }
+  /**
+   * Baixa e instala a versão nova. O agente para por alguns minutos e volta sozinho.
+   * Recusado com trabalho em andamento. A UI precisa ter pedido confirmação.
+   */
+  | { type: "updateApply"; confirmRestart: true };
 
 export type ProjectKind = "laserlink" | "svg" | "dxf";
 
@@ -186,6 +193,39 @@ export interface AgentLimits {
   frameFeed: number;
 }
 
+/** Situação das atualizações do LaserLink. */
+export interface UpdateInfo {
+  /**
+   * - `current`: já é a versão mais nova.
+   * - `available`: há versão nova no GitHub.
+   * - `applying`: atualizando (o agente vai parar e voltar).
+   * - `error`: não deu para conferir (`reason` diz por quê).
+   */
+  state: "current" | "available" | "applying" | "error";
+  /** Versão instalada: commit e data, ex.: "261667c · 24/11 18:34". */
+  current: string;
+  /** Versão nova, quando `available`. */
+  latest?: string;
+  /** O que mudou (títulos dos commits novos, do mais novo para o mais antigo; no máximo 15). */
+  changes: string[];
+  /** A versão nova instala pacotes novos: a atualização demora mais. */
+  slow?: boolean;
+  /** Dá para atualizar pelo app neste agente. */
+  canApply: boolean;
+  /** Erro da conferência ou por que não dá para atualizar pelo app. */
+  reason?: string;
+}
+
+/** Resultado da última atualização feita pelo app (gravado pelo script do Windows). */
+export interface UpdateResult {
+  ok: boolean;
+  message: string;
+  /** Versão que ficou instalada. */
+  version: string;
+  /** ISO 8601 */
+  at: string;
+}
+
 export type ServerMessage =
   | {
       type: "hello";
@@ -200,6 +240,10 @@ export type ServerMessage =
       lastResult: JobResult | null;
       /** $32 do GRBL (modo laser). null = não lido ainda ou firmware sem essa configuração. */
       laserMode: boolean | null;
+      /** Versão do LaserLink instalada no agente (commit e data), ou "dev". */
+      appVersion: string;
+      /** Última atualização feita pelo app, se foi há pouco (para avisar quem conecta depois). */
+      lastUpdate: UpdateResult | null;
     }
   | { type: "status"; state: MachineState; mpos: Position; wpos?: Position; feed: number; spindle: number; laserOn?: boolean }
   /** Configuração da máquina lida do GRBL ($$). */
@@ -216,7 +260,8 @@ export type ServerMessage =
   /** Lista de projetos publicados. `error`: a busca no GitHub falhou (a lista é a última baixada). */
   | { type: "projects"; items: ProjectEntry[]; error?: string }
   | { type: "projectFile"; entry: ProjectEntry; content: string }
+  | { type: "update"; info: UpdateInfo }
   | { type: "pong"; t: number }
   | { type: "error"; message: string };
 
-export const PROTOCOL_VERSION = "0.7.0";
+export const PROTOCOL_VERSION = "0.8.0";

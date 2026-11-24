@@ -17,6 +17,7 @@ import type { Grbl, JobEnd, JobProgress } from "./grbl.js";
 import type { JobLog } from "./job-log.js";
 import type { MaterialStore } from "./materials.js";
 import type { ProjectInbox } from "./projects.js";
+import type { Updater } from "./updater.js";
 import { frameGcode, parseGcode, segmentSeconds } from "@laserlink/gcode";
 
 /** Um cliente já autenticado. O transporte (WebSocket) fica fora desta classe. */
@@ -34,6 +35,8 @@ export interface AgentOptions {
   materials?: MaterialStore;
   /** Projetos publicados no GitHub (ramo projetos). Sem isso, a lista responde com um aviso. */
   projects?: ProjectInbox;
+  /** Atualização do LaserLink pelo app. Sem isso, o app avisa que não está disponível. */
+  updater?: Updater;
   /** Intervalo entre tentativas de reabrir a serial. Padrão: 2 s. */
   serialRetryMs?: number;
 }
@@ -95,6 +98,7 @@ export class Agent {
   private readonly jobLog: JobLog | null;
   private readonly materials: MaterialStore | null;
   private readonly projects: ProjectInbox | null;
+  private readonly updater: Updater | null;
   private readonly ticker: NodeJS.Timeout;
   private readonly serialRetryMs: number;
   private serialTimer: NodeJS.Timeout | null = null;
@@ -114,6 +118,7 @@ export class Agent {
     this.jobLog = options.jobLog ?? null;
     this.materials = options.materials ?? null;
     this.projects = options.projects ?? null;
+    this.updater = options.updater ?? null;
     this.serialRetryMs = options.serialRetryMs ?? 2000;
     this.recoverUnfinishedJobs();
 
@@ -179,6 +184,8 @@ export class Agent {
       },
       lastResult: this.lastResult,
       laserMode: this.grbl.laserMode,
+      appVersion: this.updater?.current ?? "dev",
+      lastUpdate: this.updater?.lastResult() ?? null,
     });
     const last = this.grbl.lastStatus;
     if (last) client.send({ type: "status", ...last });
@@ -306,6 +313,16 @@ export class Agent {
           break;
         }
         void this.projects.refresh().then((r) => client.send({ type: "projects", ...r }));
+        break;
+      case "updateCheck":
+        if (!this.updater) {
+          client.send({ type: "update", info: { state: "error", current: "dev", changes: [], canApply: false, reason: "A atualização pelo app não está ligada neste agente." } });
+          break;
+        }
+        void this.updater.check(msg.force === true).then((info) => client.send({ type: "update", info }));
+        break;
+      case "updateApply":
+        this.applyUpdate(client);
         break;
       case "projectGet":
         if (!this.projects) break;
@@ -466,11 +483,48 @@ export class Agent {
     return null;
   }
 
+  /** Atualização em andamento: o agente vai parar, então nada novo começa. */
+  private refuseWhileUpdating(client: ClientConn): boolean {
+    if (!this.updater?.isApplying) return false;
+    client.send({ type: "error", message: "O LaserLink está se atualizando. Espere o agente voltar (alguns minutos)." });
+    return true;
+  }
+
+  private applyUpdate(client: ClientConn): void {
+    if (!this.updater) {
+      client.send({ type: "error", message: "A atualização pelo app não está ligada neste agente." });
+      return;
+    }
+    // com trabalho rodando ou pausado, parar o agente cancelaria o trabalho
+    if (this.job || this.grbl.isRunning) {
+      client.send({ type: "error", message: "Há um trabalho em andamento ou pausado. Termine ou pare o trabalho antes de atualizar." });
+      return;
+    }
+    const by = client.id;
+    this.broadcast({ type: "log", level: "info", text: "Conferindo a versão nova para atualizar…" });
+    void this.updater
+      .apply()
+      .then((info) => {
+        this.broadcast({ type: "update", info });
+        this.broadcast({
+          type: "log",
+          level: "warn",
+          text: `Atualizando o LaserLink para ${info.latest ?? "a versão nova"}. O agente vai parar e voltar sozinho em alguns minutos${info.slow ? " (esta versão instala pacotes novos: pode demorar mais)" : ""}.`,
+        });
+      })
+      .catch((err: Error) => {
+        const c = this.clients.get(by)?.conn ?? client;
+        c.send({ type: "error", message: err.message });
+        void this.updater?.check().then((info) => c.send({ type: "update", info }));
+      });
+  }
+
   private startJob(client: ClientConn, name: string, gcode: string): boolean {
     if (this.job || this.grbl.isRunning) {
       client.send({ type: "error", message: "Já existe um trabalho em andamento." });
       return false;
     }
+    if (this.refuseWhileUpdating(client)) return false;
     if (this.grbl.lastStatus?.state === "Alarm") {
       client.send({ type: "error", message: "A máquina está em alarme (depois de uma parada ou de um limite). Clique em Destravar ou Home na janela Máquina e envie de novo." });
       return false;

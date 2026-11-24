@@ -81,7 +81,7 @@ Write-Host "Criando o serviço $ServiceName ..." -ForegroundColor Cyan
 & $NssmExe set $ServiceName DisplayName "LaserLink (agente da laser)" | Out-Null
 & $NssmExe set $ServiceName Description "Controle remoto da laser GRBL. Faz o streaming do G-code pela USB." | Out-Null
 & $NssmExe set $ServiceName AppDirectory $Root | Out-Null
-& $NssmExe set $ServiceName AppEnvironmentExtra "LASERLINK_CONFIG=$Config" | Out-Null
+& $NssmExe set $ServiceName AppEnvironmentExtra "LASERLINK_CONFIG=$Config" "LASERLINK_SERVICE=1" | Out-Null
 & $NssmExe set $ServiceName Start SERVICE_AUTO_START | Out-Null
 & $NssmExe set $ServiceName AppStdout (Join-Path $LogDir "agente.log") | Out-Null
 & $NssmExe set $ServiceName AppStderr (Join-Path $LogDir "agente.log") | Out-Null

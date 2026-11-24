@@ -384,6 +384,16 @@
               <p id="last-result" class="muted" hidden></p>
               <label class="check"><input type="checkbox" id="sound-on" checked /> Tocar som quando um trabalho terminar</label>
             </section>
+            <section id="update-box">
+              <h2>Atualização do LaserLink</h2>
+              <p class="note">Versão instalada no PC da laser: <b id="up-current">—</b></p>
+              <div class="row">
+                <button id="up-check">Procurar atualização</button>
+                <button id="up-apply" class="primary" hidden>Atualizar agora</button>
+              </div>
+              <p id="up-status" class="note" aria-live="polite"></p>
+              <ul id="up-changes" class="up-changes" hidden></ul>
+            </section>
           </div>
 
           <div id="sp-queue" role="tabpanel" aria-labelledby="st-queue" hidden>
@@ -403,6 +413,7 @@
         <span id="sb-cursor">Cursor: —</span>
         <span>Máquina: <b id="state">—</b> · X <span id="x">0.000</span> Y <span id="y">0.000</span> <b id="sb-laser" class="sb-laser" hidden></b></span>
         <span class="muted">Ordem: imagem, detalhado, preenchido, linhas e cortes (furos antes do contorno).</span>
+        <button type="button" id="sb-update" class="sb-update" hidden title="Abrir a atualização na janela Máquina">Atualização disponível</button>
         <span class="version" id="sb-version" title="Versão desta interface (commit e data). Depois de atualizar, ela deve mudar."></span>
       </footer>
     </div>
