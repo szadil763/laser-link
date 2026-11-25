@@ -31,6 +31,11 @@ describe("generateGcode", () => {
     expect(r.maxS).toBe(850);
     expect(powerToS(33.3, machine)).toBe(333);
     expect(powerToS(150, machine)).toBe(1000);
+    // $31 > 0: o GRBL espalha o sinal entre $31 e $30, então 85 % fica em 85 % dessa faixa
+    expect(powerToS(85, { maxSpindle: 1000, minSpindle: 100 })).toBe(865);
+    expect(powerToS(100, { maxSpindle: 1000, minSpindle: 100 })).toBe(1000);
+    expect(powerToS(0, { maxSpindle: 1000, minSpindle: 100 })).toBe(0);
+    expect(powerToS(85, { maxSpindle: 255 })).toBe(217);
   });
 
   it("nenhum deslocamento G0 com o laser aceso (S0 antes de andar sem queimar)", () => {

@@ -4,6 +4,8 @@ A biblioteca de materiais fica no agente (`apps/agent/data/materials.json`) e va
 
 Na camada, ao escolher o material, aparecem os cuidados dele embaixo do seletor.
 
+**Potência em %:** 85% vira `S` = 85% do `$30` da máquina (com `$31` maior que 0, 85% da faixa entre `$31` e `$30`). O agente lê `$30` e `$31` direto do GRBL e zera os ajustes de potência e de avanço no início de cada trabalho. O corte usa potência dinâmica (`M4`): na velocidade da camada a potência é exatamente a pedida; ela só cai junto com a velocidade nas acelerações e nos cantos, para não queimar mais onde o cabeçote desacelera.
+
 Uma camada com material segue a biblioteca: ao salvar uma mudança em **Materiais**, as camadas abertas com esse material recebem os valores novos (o app avisa quais). O mesmo vale ao abrir um projeto `.laserlink` salvo antes do ajuste. Mudar velocidade, potência ou passes direto na camada solta o material dela (fica "sem material"), e aí ela não muda mais sozinha. Kerf e intervalo ajustados na camada são mantidos.
 
 Se um valor estiver fora dos limites (passes de 1 a 50, potência de 0 a 100%, kerf de 0 a 2 mm, intervalo de 0,02 a 2 mm), o **Salvar no agente** não fecha a janela e diz qual campo corrigir.

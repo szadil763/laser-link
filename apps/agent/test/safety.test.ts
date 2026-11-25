@@ -127,3 +127,63 @@ describe("modo laser do GRBL ($32)", () => {
     agent.shutdown();
   });
 });
+
+describe("escala de potência ($30 e $31 da máquina)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const start = async (fakeOptions: ConstructorParameters<typeof FakeGrbl>[0]) => {
+    const fake = new FakeGrbl({ msPerLine: 5, ...fakeOptions });
+    const grbl = new Grbl(fake, { statusPollMs: 100 });
+    const agent = new Agent({ config: testConfig({ maxSpindle: 1000, framePower: 10 }), grbl, portLabel: "simulador" });
+    // conectado desde antes: vê os avisos do primeiro $$
+    const early = new TestClient("cedo");
+    agent.connect(early);
+    await agent.start();
+    await vi.advanceTimersByTimeAsync(50);
+    const c = new TestClient("a");
+    agent.connect(c);
+    return { fake, grbl, agent, c, early };
+  };
+
+  it("usa o $30 da máquina como 100% e avisa uma vez quando o config é diferente", async () => {
+    const { grbl, agent, c, early } = await start({ maxSpindle: 255 });
+    expect(early.of("hello")[0]!.limits.maxSpindle).toBe(1000); // antes do $$: o do config
+    expect(early.of("machine").at(-1)?.limits.maxSpindle).toBe(255);
+    expect(c.of("hello")[0]!.limits).toMatchObject({ maxSpindle: 255, minSpindle: 0, framePower: 3 });
+    // S850 seria 85% para o config, mas na máquina passa do máximo: recusa em vez de queimar a 100%
+    agent.receive(c, { type: "job", name: "t.gcode", gcode: "G21 G90\nM4 S0\nG1 X10 Y0 F600 S850\nM5", confirmLaserOn: true });
+    expect(c.of("jobRejected").at(-1)?.problems[0]?.message).toMatch(/S255/);
+    expect(grbl.isRunning).toBe(false);
+    agent.receive(c, { type: "job", name: "t.gcode", gcode: "G21 G90\nM4 S0\nG1 X10 Y0 F600 S217\nM5", confirmLaserOn: true });
+    expect(grbl.isRunning).toBe(true);
+    agent.receive(c, { type: "stop" });
+    await vi.advanceTimersByTimeAsync(500);
+    // relê o $$ (nova conexão da serial): o aviso não se repete
+    grbl.readSettings();
+    await vi.advanceTimersByTimeAsync(50);
+    const other = new TestClient("b");
+    agent.connect(other);
+    expect(other.of("hello")[0]!.limits.maxSpindle).toBe(255);
+    expect(early.of("log").filter((m) => /\$30=255/.test(m.text))).toHaveLength(1);
+    agent.shutdown();
+  });
+
+  it("$31 > 0 vai para os limites, para a interface calcular o S na faixa certa", async () => {
+    const { c, agent } = await start({ minSpindle: 100 });
+    expect(c.of("hello")[0]!.limits).toMatchObject({ maxSpindle: 1000, minSpindle: 100 });
+    agent.shutdown();
+  });
+
+  it("trabalho começa com o ajuste de potência do GRBL de volta a 100%", async () => {
+    const { fake, grbl, agent, c } = await start({ spindleOverride: 60 });
+    await vi.advanceTimersByTimeAsync(250); // relatório com Ov:100,100,60
+    expect(grbl.lastStatus?.spindleOverride).toBe(60);
+    const rt = fake.realtime.length;
+    agent.receive(c, { type: "job", name: "t.gcode", gcode: sampleJob(10).join("\n"), confirmLaserOn: true });
+    expect(fake.realtime.slice(rt)).toEqual(expect.arrayContaining(["0x90", "0x99"]));
+    expect(fake.spindleOverride).toBe(100);
+    expect(c.of("log").some((m) => /ajuste de 60%/.test(m.text))).toBe(true);
+    agent.shutdown();
+  });
+});

@@ -17,6 +17,11 @@ export interface FakeGrblOptions {
   ignoreSpindleStop?: boolean;
   /** $32 (modo laser). Padrão: ligado. */
   laserMode?: boolean;
+  /** $30 e $31 respondidos no $$. Padrão: 1000 e 0. */
+  maxSpindle?: number;
+  minSpindle?: number;
+  /** Ajuste de potência em tempo real (Ov), em %. Padrão: 100. */
+  spindleOverride?: number;
 }
 
 const BANNER = "Grbl 1.1h ['$' for help]";
@@ -60,6 +65,10 @@ export class FakeGrbl extends EventEmitter<SerialLinkEvents> implements SerialLi
   private readonly ignoreSpindleStop: boolean;
   /** $32 do GRBL simulado. */
   laserMode: boolean;
+  private readonly maxSpindle: number;
+  private readonly minSpindle: number;
+  /** Ajuste de potência (terceiro número do Ov). 0x99 volta para 100. */
+  spindleOverride: number;
   private readonly respond: (line: string, index: number) => FakeResponse;
 
   constructor(options: FakeGrblOptions = {}) {
@@ -69,6 +78,9 @@ export class FakeGrbl extends EventEmitter<SerialLinkEvents> implements SerialLi
     this.failOpens = options.failOpens ?? 0;
     this.ignoreSpindleStop = options.ignoreSpindleStop ?? false;
     this.laserMode = options.laserMode ?? true;
+    this.maxSpindle = options.maxSpindle ?? 1000;
+    this.minSpindle = options.minSpindle ?? 0;
+    this.spindleOverride = options.spindleOverride ?? 100;
   }
 
   /** Laser aceso agora (considera o 0x9E em Hold). */
@@ -139,6 +151,13 @@ export class FakeGrbl extends EventEmitter<SerialLinkEvents> implements SerialLi
       case 0x18: // reset suave
         this.realtime.push("0x18");
         this.softReset();
+        return true;
+      case 0x90: // avanço em 100 %
+        this.realtime.push("0x90");
+        return true;
+      case 0x99: // potência em 100 %
+        this.realtime.push("0x99");
+        this.spindleOverride = 100;
         return true;
       case 0x9e: // parar spindle/laser (override), só em Hold
         this.realtime.push("0x9E");
@@ -220,7 +239,7 @@ export class FakeGrbl extends EventEmitter<SerialLinkEvents> implements SerialLi
   private apply(line: string): void {
     const upper = line.toUpperCase();
     if (upper === "$$") {
-      for (const l of ["$30=1000", "$31=0", `$32=${this.laserMode ? 1 : 0}`]) this.reply(l);
+      for (const l of [`$30=${this.maxSpindle}`, `$31=${this.minSpindle}`, `$32=${this.laserMode ? 1 : 0}`]) this.reply(l);
       return;
     }
     const setting = /^\$32=([01])$/.exec(upper);
@@ -290,7 +309,7 @@ export class FakeGrbl extends EventEmitter<SerialLinkEvents> implements SerialLi
     const lit = this.laserLit;
     const spindle = lit ? this.spindle : 0;
     // overrides e acessórios: "A:C" = laser aceso (M4); sem "A:" com "Ov:" = apagado
-    return `<${state}|MPos:${p.x.toFixed(3)},${p.y.toFixed(3)},${p.z.toFixed(3)}|FS:${this.feed},${spindle}|WCO:${w.x.toFixed(3)},${w.y.toFixed(3)},${w.z.toFixed(3)}|Ov:100,100,100${lit ? "|A:C" : ""}>`;
+    return `<${state}|MPos:${p.x.toFixed(3)},${p.y.toFixed(3)},${p.z.toFixed(3)}|FS:${this.feed},${spindle}|WCO:${w.x.toFixed(3)},${w.y.toFixed(3)},${w.z.toFixed(3)}|Ov:100,100,${this.spindleOverride}${lit ? "|A:C" : ""}>`;
   }
 
   private reply(line: string): void {

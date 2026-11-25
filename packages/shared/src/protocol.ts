@@ -185,7 +185,10 @@ export interface JobBounds {
 
 /** Limites configurados no agente (laserlink.config.json). */
 export interface AgentLimits {
+  /** S que vale 100 %: o $30 lido da máquina (ou o maxSpindle do config, se ainda não leu). */
   maxSpindle: number;
+  /** $31 da máquina (0 se não leu): o S de 1 % fica a partir daqui. */
+  minSpindle: number;
   workArea: { x: number; y: number };
   /** S usado em "Enquadrar com potência mínima". */
   framePower: number;
@@ -245,9 +248,19 @@ export type ServerMessage =
       /** Última atualização feita pelo app, se foi há pouco (para avisar quem conecta depois). */
       lastUpdate: UpdateResult | null;
     }
-  | { type: "status"; state: MachineState; mpos: Position; wpos?: Position; feed: number; spindle: number; laserOn?: boolean }
-  /** Configuração da máquina lida do GRBL ($$). */
-  | { type: "machine"; laserMode: boolean | null }
+  | {
+      type: "status";
+      state: MachineState;
+      mpos: Position;
+      wpos?: Position;
+      feed: number;
+      spindle: number;
+      laserOn?: boolean;
+      /** Ajuste de potência do GRBL em % (campo Ov). 100 = sem ajuste. */
+      spindleOverride?: number;
+    }
+  /** Configuração da máquina lida do GRBL ($$) e os limites que valem a partir dela. */
+  | { type: "machine"; laserMode: boolean | null; limits: AgentLimits }
   | { type: "log"; level: "info" | "warn" | "error"; text: string }
   | { type: "progress"; sent: number; total: number; running: boolean }
   | { type: "job"; job: JobInfo | null }
@@ -264,4 +277,4 @@ export type ServerMessage =
   | { type: "pong"; t: number }
   | { type: "error"; message: string };
 
-export const PROTOCOL_VERSION = "0.8.0";
+export const PROTOCOL_VERSION = "0.9.0";

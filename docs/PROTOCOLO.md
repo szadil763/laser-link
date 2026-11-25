@@ -1,7 +1,7 @@
 # Protocolo WebSocket
 
 Mensagens JSON. Tipos em `packages/shared/src/protocol.ts`; validação das mensagens do cliente em `packages/shared/src/validate.ts`.
-Versão atual: **0.8.0** (`PROTOCOL_VERSION`). O agente informa a versão no `hello`; a interface avisa se for diferente.
+Versão atual: **0.9.0** (`PROTOCOL_VERSION`). O agente informa a versão no `hello`; a interface avisa se for diferente.
 
 ## Endereço e autenticação
 
@@ -61,9 +61,9 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 
 | `type` | Campos |
 |---|---|
-| `hello` | `version`, `port`, `connected`, `job` (`JobInfo` ou `null`), `reconnectGraceSec`, `limits {maxSpindle, workArea {x,y}, framePower, frameFeed}`, `lastResult` (`JobResult` ou `null`), `laserMode` (`$32`: `true`, `false` ou `null` se desconhecido), `appVersion` (commit e data instalados, ou `"dev"`), `lastUpdate` (`{ok, message, version, at}` da última atualização pelo app, se foi nas últimas 2 h; senão `null`) |
-| `machine` | `laserMode`: enviado quando o agente lê (ou relê) o `$$` |
-| `status` | `state`, `mpos {x,y,z}`, `wpos {x,y,z}` (se o WCO já é conhecido), `feed`, `spindle`, `laserOn` (do campo `A:` do GRBL, quando vem) |
+| `hello` | `version`, `port`, `connected`, `job` (`JobInfo` ou `null`), `reconnectGraceSec`, `limits {maxSpindle, minSpindle, workArea {x,y}, framePower, frameFeed}` (`maxSpindle` e `minSpindle` são o `$30` e o `$31` lidos da máquina; antes do `$$`, o `maxSpindle` do config e 0), `lastResult` (`JobResult` ou `null`), `laserMode` (`$32`: `true`, `false` ou `null` se desconhecido), `appVersion` (commit e data instalados, ou `"dev"`), `lastUpdate` (`{ok, message, version, at}` da última atualização pelo app, se foi nas últimas 2 h; senão `null`) |
+| `machine` | `laserMode` e `limits` (com o `$30`/`$31` da máquina): enviado quando o agente lê (ou relê) o `$$`. A interface refaz o G-code com a escala nova |
+| `status` | `state`, `mpos {x,y,z}`, `wpos {x,y,z}` (se o WCO já é conhecido), `feed`, `spindle`, `laserOn` (do campo `A:` do GRBL, quando vem), `spindleOverride` (ajuste de potência do campo `Ov:`, em %) |
 | `log` | `level`, `text` |
 | `progress` | `sent`, `total`, `running` |
 | `job` | `job` (`JobInfo` ou `null`): enviado sempre que o trabalho muda de estado |
@@ -102,7 +102,7 @@ Cliente conecta em `ws://host:8787/?token=SEU_TOKEN`. Token inválido: conexão 
 
 Antes de aceitar um `job`, o agente confere o arquivo inteiro (`apps/agent/src/gcode-check.ts`):
 
-- **Potência:** qualquer `S` acima de `maxSpindle` recusa o trabalho.
+- **Potência:** qualquer `S` acima do `$30` da máquina (ou do `maxSpindle` do config, antes do `$$`) recusa o trabalho. Todo trabalho começa mandando `0x90` e `0x99` (ajustes de avanço e de potência de volta a 100%), para o % de cada camada ser o que chega ao laser.
 - **Área útil:** todo ponto percorrido (G0, G1 e os extremos de arcos G2/G3), em coordenadas de trabalho, precisa ficar entre `X0 Y0` e `X{workArea.x} Y{workArea.y}`. Movimentos relativos (G91) partem da posição atual do cabeçote; G20 é convertido para mm.
 - **Curso da máquina (opcional):** com `machineLimits` no config e o WCO já conhecido, cada ponto também é conferido em coordenadas de máquina.
 - **Recusados:** comandos `$`, G10, G28, G30, G53, G55–G59, G92, G93, G90.1, planos G18/G19 e palavras desconhecidas.

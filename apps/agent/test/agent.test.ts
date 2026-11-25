@@ -230,7 +230,7 @@ describe("Agent: limites", () => {
     const { agent } = await setup();
     const c = new TestClient("a");
     agent.connect(c);
-    expect(c.of("hello")[0]!.limits).toEqual({ maxSpindle: 1000, workArea: { x: 400, y: 300 }, framePower: 10, frameFeed: 3000 });
+    expect(c.of("hello")[0]!.limits).toEqual({ maxSpindle: 1000, minSpindle: 0, workArea: { x: 400, y: 300 }, framePower: 10, frameFeed: 3000 });
     agent.shutdown();
   });
 });

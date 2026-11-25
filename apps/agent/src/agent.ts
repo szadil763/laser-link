@@ -8,6 +8,7 @@ import {
   type JobInfo,
   type JobResult,
   type JobState,
+  type AgentLimits,
   type QueueItem,
   type ServerMessage,
 } from "@laserlink/shared";
@@ -127,8 +128,9 @@ export class Agent {
     grbl.on("log", (level, text) => this.broadcast({ type: "log", level, text }));
     grbl.on("progress", (p) => this.onProgress(p));
     grbl.on("jobEnd", (e) => this.onJobEnd(e));
-    grbl.on("settings", ({ laserMode }) => {
-      this.broadcast({ type: "machine", laserMode });
+    grbl.on("settings", ({ laserMode, maxSpindle, minSpindle }) => {
+      this.broadcast({ type: "machine", laserMode, limits: this.limits() });
+      this.warnPowerScale(maxSpindle, minSpindle);
       if (laserMode === false) {
         this.broadcast({ type: "log", level: "error", text: "Modo laser do GRBL desligado ($32=0): o laser pode ficar aceso nas pausas e nos deslocamentos. Trabalhos ficam bloqueados até ligar o modo laser." });
       }
@@ -176,12 +178,7 @@ export class Agent {
       connected: this.grbl.isOpen,
       job: this.jobInfoFor(client.id),
       reconnectGraceSec: this.config.reconnectGraceSec,
-      limits: {
-        maxSpindle: this.config.maxSpindle,
-        workArea: this.config.workArea,
-        framePower: this.config.framePower,
-        frameFeed: this.config.frameFeed,
-      },
+      limits: this.limits(),
       lastResult: this.lastResult,
       laserMode: this.grbl.laserMode,
       appVersion: this.updater?.current ?? "dev",
@@ -373,7 +370,7 @@ export class Agent {
         this.startJob(client, msg.name, msg.gcode);
         break;
       case "frame": {
-        const s = msg.laser === "min" ? this.config.framePower : 0;
+        const s = msg.laser === "min" ? this.framePower : 0;
         const label = msg.laser === "min" ? `Enquadrar (laser em S${s})` : "Enquadrar (laser desligado)";
         this.startJob(client, label, frameGcode(msg.bounds, { feed: this.config.frameFeed, s }));
         break;
@@ -469,7 +466,7 @@ export class Agent {
 
   /** Confere o G-code. Se houver problemas, avisa e devolve null. */
   private check(client: ClientConn, name: string, gcode: string): ReturnType<typeof checkGcode> | null {
-    const check = checkGcode(gcode, this.config, this.checkContext());
+    const check = checkGcode(gcode, { ...this.config, maxSpindle: this.maxSpindle }, this.checkContext());
     if (check.problems.length === 0) return check;
     client.send({ type: "jobRejected", name, problems: check.problems, bounds: check.bounds });
     this.jobLog?.write({
@@ -481,6 +478,52 @@ export class Agent {
     });
     this.broadcast({ type: "log", level: "warn", text: `Trabalho recusado: ${name} (${check.problems.length} problema(s)).` });
     return null;
+  }
+
+  /**
+   * S que vale 100 %: o $30 da própria máquina. O maxSpindle do config só vale até o $$ chegar
+   * (com valores diferentes, 85 % no app não seria 85 % no laser).
+   */
+  private get maxSpindle(): number {
+    return this.grbl.settings.maxSpindle ?? this.config.maxSpindle;
+  }
+
+  /** Enquadrar com potência mínima: o mesmo % do config, na escala da máquina. */
+  private get framePower(): number {
+    if (this.config.framePower <= 0) return 0;
+    return Math.max(1, Math.round((this.config.framePower / this.config.maxSpindle) * this.maxSpindle));
+  }
+
+  private limits(): AgentLimits {
+    return {
+      maxSpindle: this.maxSpindle,
+      minSpindle: Math.min(this.grbl.settings.minSpindle ?? 0, this.maxSpindle),
+      workArea: this.config.workArea,
+      framePower: this.framePower,
+      frameFeed: this.config.frameFeed,
+    };
+  }
+
+  /** Avisos de escala já dados (o $$ chega linha a linha e é relido a cada conexão da serial). */
+  private readonly powerWarned = new Set<string>();
+
+  /** Avisa uma vez quando a escala de potência da máquina não bate com o config. */
+  private warnPowerScale(max: number | null, min: number | null): void {
+    const lines: string[] = [];
+    if (max !== null && max !== this.config.maxSpindle) {
+      lines.push(
+        `A máquina usa $30=${max} (potência máxima) e o laserlink.config.json diz maxSpindle=${this.config.maxSpindle}. ` +
+          `O LaserLink passa a usar o da máquina: 100% = S${max}, 85% = S${Math.round(max * 0.85)}. Para tirar este aviso, coloque "maxSpindle": ${max} no config.`,
+      );
+    }
+    if (min !== null && min > 0) {
+      lines.push(`A máquina usa $31=${min} (potência mínima). O LaserLink calcula a potência entre S${min} e S${max ?? this.config.maxSpindle}, para o % de cada camada sair certo.`);
+    }
+    for (const text of lines) {
+      if (this.powerWarned.has(text)) continue;
+      this.powerWarned.add(text);
+      this.broadcast({ type: "log", level: "warn", text });
+    }
   }
 
   /** Atualização em andamento: o agente vai parar, então nada novo começa. */

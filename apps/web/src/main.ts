@@ -1,5 +1,5 @@
 import "./styles.css";
-import { PROTOCOL_VERSION, type JobInfo, type JobResult, type ProjectEntry, type QueueItem, type ServerMessage, type UpdateInfo, type UpdateResult } from "@laserlink/shared";
+import { PROTOCOL_VERSION, type AgentLimits, type JobInfo, type JobResult, type ProjectEntry, type QueueItem, type ServerMessage, type UpdateInfo, type UpdateResult } from "@laserlink/shared";
 import { chime } from "./chime.js";
 import { confirmDialog } from "./confirm-dialog.js";
 import { Connection, type LinkState } from "./connection.js";
@@ -448,10 +448,7 @@ function onMessage(msg: ServerMessage): void {
       if (msg.lastResult && msg.lastResult.outcome !== "completed") {
         log(`Último trabalho: ${msg.lastResult.name}, ${OUTCOME_LABELS[msg.lastResult.outcome]}. ${msg.lastResult.reason}`);
       }
-      $("limits").textContent =
-        `Limites do agente: área ${msg.limits.workArea.x} × ${msg.limits.workArea.y} mm a partir da origem, potência até S${msg.limits.maxSpindle}.`;
-      preview.setArea(msg.limits.workArea);
-      workspace.setLimits(msg.limits);
+      renderLimits(msg.limits);
       renderJob(msg.job);
       if (msg.job?.state === "connectionLost") log(`Atenção: "${msg.job.name}" está pausado por perda de conexão.`);
       if (onAgentVersion(msg.appVersion, msg.job !== null, msg.lastUpdate)) break;
@@ -526,6 +523,7 @@ function onMessage(msg: ServerMessage): void {
       break;
     case "machine":
       renderLaserMode(msg.laserMode);
+      renderLimits(msg.limits);
       break;
     case "projects":
       renderInbox(msg.items, msg.error);
@@ -905,3 +903,11 @@ $("sb-update").addEventListener("click", () => {
   showSide("st-machine");
   $("update-box").scrollIntoView({ block: "center" });
 });
+
+/** Limites do agente: a escala de potência vem do $30/$31 da máquina assim que o agente lê o $$. */
+function renderLimits(l: AgentLimits): void {
+  const scale = l.minSpindle > 0 ? `potência de S${l.minSpindle} (1%) a S${l.maxSpindle} (100%)` : `potência até S${l.maxSpindle} (100%)`;
+  $("limits").textContent = `Limites do agente: área ${l.workArea.x} × ${l.workArea.y} mm a partir da origem, ${scale}.`;
+  preview.setArea(l.workArea);
+  workspace.setLimits(l);
+}

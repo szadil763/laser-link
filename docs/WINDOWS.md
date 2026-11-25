@@ -64,7 +64,7 @@ Edite:
 | `serialPort` | a porta da laser, ex.: `COM3` (veja no Gerenciador de Dispositivos). Use `"sim"` para testar sem a laser. |
 | `baudRate` | quase sempre `115200` |
 | `token` | uma senha longa e aleatória (mínimo 16 caracteres). Gere com o comando abaixo. |
-| `maxSpindle` | o mesmo valor do `$30` do seu GRBL (veja com `$$`); normalmente `1000` |
+| `maxSpindle` | o mesmo valor do `$30` do seu GRBL (veja com `$$`); normalmente `1000`. Se for diferente, o agente usa o `$30` da máquina e avisa no Registro |
 | `workArea` | a área útil em mm, ex.: `{ "x": 400, "y": 400 }` |
 | `reconnectGraceSec` | segundos esperando reconexão antes de cancelar um trabalho pausado (padrão 60) |
 | `host` | deixe `0.0.0.0`, ou o IP do Tailscale deste PC (100.x.y.z) para aceitar conexões só pelo Tailscale |

@@ -73,7 +73,8 @@ describe("streaming com contagem de caracteres", () => {
     expect(ends).toHaveLength(1);
     expect(ends[0]!.outcome).toBe("aborted");
     expect(ends[0]!.reason).toContain("error:33 na linha 4");
-    expect(fake.realtime).toEqual(["0x18", "!", "0x18"]);
+    // 0x90/0x99: ajustes de avanço e potência em 100% no início do trabalho
+    expect(fake.realtime).toEqual(["0x18", "0x90", "0x99", "!", "0x18"]);
     expect(fake.lines.at(-1)).toBe("M5");
   });
 

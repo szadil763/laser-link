@@ -121,10 +121,15 @@ class Writer {
   }
 }
 
-/** S inteiro proporcional à potência em %. */
+/**
+ * S inteiro para a potência em %. O GRBL transforma S em sinal do laser em linha reta
+ * de $31 (mínimo) a $30 (máximo): por isso o S fica nessa faixa, e 0 % é laser apagado.
+ */
 export function powerToS(power: number, machine: MachineProfile): number {
   const p = Math.max(0, Math.min(100, power));
-  return Math.round((p / 100) * machine.maxSpindle);
+  if (p === 0) return 0;
+  const min = Math.max(0, Math.min(machine.minSpindle ?? 0, machine.maxSpindle));
+  return Math.round(min + (p / 100) * (machine.maxSpindle - min));
 }
 
 function describe(g: { name: string }, mode: string, s: OpSettings, extra = ""): string {

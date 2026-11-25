@@ -152,7 +152,7 @@ export class Workspace {
   /** Maior número de passes entre linhas e cortes (para o aviso de calor). */
   private maxPasses = 0;
   private lockRatio = true;
-  private limits: AgentLimits = { maxSpindle: 1000, workArea: { x: 400, y: 400 }, framePower: 10, frameFeed: 3000 };
+  private limits: AgentLimits = { maxSpindle: 1000, minSpindle: 0, workArea: { x: 400, y: 400 }, framePower: 10, frameFeed: 3000 };
   private haveLimits = false;
   private materials: Material[] = structuredClone(DEFAULT_MATERIALS);
   /** "Salvar no agente" foi clicado e a biblioteca nova ainda não voltou. */
@@ -1785,7 +1785,7 @@ export class Workspace {
     }
     this.generating = true;
     this.renderSummary();
-    const req: GenRequest = { kind: "gen", id, design, machine: { maxSpindle: this.limits.maxSpindle }, passOrder: this.passOrder };
+    const req: GenRequest = { kind: "gen", id, design, machine: { maxSpindle: this.limits.maxSpindle, minSpindle: this.limits.minSpindle }, passOrder: this.passOrder };
     this.genWorker.postMessage(req);
   }
 

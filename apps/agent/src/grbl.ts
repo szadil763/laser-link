@@ -13,6 +13,8 @@ const RT_HOLD = Buffer.from("!");
 const RT_RESUME = Buffer.from("~");
 const RT_RESET = Buffer.from([0x18]);
 const RT_SPINDLE_STOP = Buffer.from([0x9e]); // override: liga/desliga o laser, só vale em Hold
+/** Ajustes de avanço e de potência de volta a 100 % (o % pedido no trabalho é o que vale). */
+const RT_OVERRIDES_RESET = Buffer.from([0x90, 0x99]);
 
 /** Tempo para o GRBL confirmar a pausa (Hold) depois do "!". */
 export const HOLD_CONFIRM_MS = 3000;
@@ -31,6 +33,17 @@ export interface GrblStatus {
    * os overrides ("Ov:"); sem eles, fica indefinido.
    */
   laserOn?: boolean;
+  /** Ajuste de potência em tempo real (terceiro número do campo "Ov:"), em %. */
+  spindleOverride?: number;
+}
+
+/** Configurações do $$ que mexem na potência e na segurança. null = ainda não lido. */
+export interface GrblSettings {
+  laserMode: boolean | null;
+  /** $30: S que vale potência máxima. */
+  maxSpindle: number | null;
+  /** $31: S que vale potência mínima. */
+  minSpindle: number | null;
 }
 
 export interface JobEnd {
@@ -51,7 +64,7 @@ interface GrblEvents {
   jobEnd: [JobEnd];
   closed: [];
   /** Configurações lidas com $$ (só o que interessa ao agente). */
-  settings: [{ laserMode: boolean | null }];
+  settings: [GrblSettings];
 }
 
 /** Linha enviada ao GRBL e ainda sem resposta. */
@@ -104,6 +117,8 @@ export class Grbl extends EventEmitter<GrblEvents> {
   private safety: { stage: "waitHold" | "waitOff" | "confirmed"; timer?: NodeJS.Timeout } | null = null;
   /** $32 do GRBL (modo laser). null = ainda não lido ou o firmware não tem. */
   private laserModeSetting: boolean | null = null;
+  private maxSpindleSetting: number | null = null;
+  private minSpindleSetting: number | null = null;
 
   private wco: Position | null = null;
   private last: GrblStatus | null = null;
@@ -137,6 +152,10 @@ export class Grbl extends EventEmitter<GrblEvents> {
   }
 
   /** Modo laser do GRBL ($32). null = desconhecido. */
+  get settings(): GrblSettings {
+    return { laserMode: this.laserModeSetting, maxSpindle: this.maxSpindleSetting, minSpindle: this.minSpindleSetting };
+  }
+
   get laserMode(): boolean | null {
     return this.laserModeSetting;
   }
@@ -252,6 +271,10 @@ export class Grbl extends EventEmitter<GrblEvents> {
     this.total = lines.length;
     this.acked = 0;
     this.running = true;
+    // um ajuste de potência deixado por outro programa ou pelos botões da máquina mudaria o % do trabalho
+    const ov = this.last?.spindleOverride;
+    if (ov !== undefined && ov !== 100) this.emit("log", "warn", `A potência estava com ajuste de ${ov}% no GRBL: voltou para 100% (vale o % de cada camada).`);
+    this.writeRaw(RT_OVERRIDES_RESET);
     for (let i = 0; i < lines.length; i++) this.queue.push({ text: lines[i]!, jobLine: i + 1 });
     this.emitProgress();
     this.pump();
@@ -380,10 +403,13 @@ export class Grbl extends EventEmitter<GrblEvents> {
       this.markReady();
     } else if (/^\$\d+=/.test(line)) {
       // resposta do $$: guarda o que interessa e não enche o registro
-      const m = /^\$32=(\d+)/.exec(line);
+      const m = /^\$(30|31|32)=([\d.]+)/.exec(line);
       if (m) {
-        this.laserModeSetting = m[1] === "1";
-        this.emit("settings", { laserMode: this.laserModeSetting });
+        const v = Number(m[2]);
+        if (m[1] === "32") this.laserModeSetting = v === 1;
+        else if (m[1] === "30") this.maxSpindleSetting = Number.isFinite(v) && v > 0 ? v : null;
+        else this.minSpindleSetting = Number.isFinite(v) && v >= 0 ? v : null;
+        this.emit("settings", this.settings);
       }
     } else {
       this.emit("log", "info", line);
@@ -493,6 +519,8 @@ export function parseStatus(line: string, knownWco: Position | null = null): Par
   const acc = fields.get("A");
   if (acc !== undefined) status.laserOn = /[SC]/.test(acc);
   else if (fields.has("Ov")) status.laserOn = false;
+  const ov = fields.get("Ov")?.split(",").map(Number);
+  if (ov && ov.length >= 3 && Number.isFinite(ov[2])) status.spindleOverride = ov[2];
   if (wpos) status.wpos = wpos;
   if (wco) status.wco = wco;
   return status;

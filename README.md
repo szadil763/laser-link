@@ -71,7 +71,7 @@ No PC da laser, edite `laserlink.config.json`:
 | `host` | `0.0.0.0` | onde escutar; use o IP do Tailscale para restringir |
 | `token` | (16+ caracteres) | senha exigida no WebSocket |
 | `maxFeed` | `6000` | velocidade máxima do jog (mm/min) |
-| `maxSpindle` | `1000` | maior `S` aceito; use o valor do `$30` |
+| `maxSpindle` | `1000` | maior `S` aceito até o agente ler o `$30` da máquina; depois vale o `$30` (o agente avisa se for diferente) |
 | `workArea` | `{ "x": 400, "y": 400 }` | área útil em mm a partir da origem |
 | `machineLimits` | `{ "xMin": 0, "xMax": 400, "yMin": 0, "yMax": 400 }` | opcional: curso em coordenadas de máquina (com homing) |
 | `reconnectGraceSec` | `60` | espera por reconexão antes de cancelar um trabalho pausado |
