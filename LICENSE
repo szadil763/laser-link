@@ -1,21 +1,26 @@
-MIT License
+Sapienza LaserLink
+Copyright (c) 2026 Adilson. Todos os direitos reservados.
 
-Copyright (c) 2026 Adilson
+Este software, incluindo o código-fonte, a interface, a documentação e os
+arquivos que o acompanham, é propriedade de Adilson e está protegido pela
+Lei de Direito Autoral (Lei nº 9.610/1998) e pela Lei do Software
+(Lei nº 9.609/1998).
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Sem autorização prévia e por escrito do titular, é proibido:
+  - copiar, reproduzir ou distribuir o software, no todo ou em parte;
+  - modificar, adaptar, traduzir ou criar obras derivadas;
+  - vender, alugar, sublicenciar ou disponibilizar o software a terceiros;
+  - usar o software, ou partes dele, para fins comerciais.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+O uso só é permitido a quem recebeu uma licença do titular, nos termos
+dessa licença.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+O software é fornecido "no estado em que se encontra", sem garantias de
+qualquer tipo. O software controla equipamento a laser: o operador é
+responsável pela segurança da máquina, do ambiente e das pessoas, e deve
+seguir as instruções de segurança do fabricante e da documentação.
+
+Componentes de terceiros incluídos no software continuam sob as próprias
+licenças, listadas em LICENCAS-DE-TERCEIROS.md.
+
+Pedidos de licença: szadil763 no GitHub.

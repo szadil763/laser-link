@@ -1,0 +1,191 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Agent } from "../src/agent.js";
+import { Grbl, LASER_OFF_CONFIRM_MS } from "../src/grbl.js";
+import { FakeGrbl, type FakeGrblOptions } from "../src/sim/fake-grbl.js";
+import { TestClient, openGrbl, sampleJob, testConfig } from "./helpers.js";
+
+async function setup(options: FakeGrblOptions = {}) {
+  const { fake, grbl } = await openGrbl({ msPerLine: 20, ...options });
+  const agent = new Agent({ config: testConfig(), grbl, portLabel: "simulador" });
+  const owner = new TestClient("dono");
+  agent.connect(owner);
+  agent.receive(owner, { type: "job", name: "t.gcode", gcode: sampleJob(400).join("\n"), confirmLaserOn: true });
+  await vi.advanceTimersByTimeAsync(200);
+  return { fake, grbl, agent, owner };
+}
+
+const logs = (c: TestClient): string[] => c.of("log").map((m) => m.text);
+
+describe("pausa de segurança: laser apagado e conferido", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("perda de conexão: o GRBL confirma o laser apagado e o trabalho fica pausado (dá para retomar)", async () => {
+    const { fake, grbl, agent } = await setup();
+    const phone = new TestClient("celular");
+    agent.connect(phone);
+    expect(fake.laserLit).toBe(true);
+    const rt = fake.realtime.length;
+    agent.disconnect(agent["clients"].get("dono")!.conn);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(fake.state).toBe("Hold");
+    expect(fake.laserLit).toBe(false);
+    expect(grbl.isLaserOffConfirmed).toBe(true);
+    expect(logs(phone).some((t) => t.includes("conferido"))).toBe(true);
+    await vi.advanceTimersByTimeAsync(LASER_OFF_CONFIRM_MS + 500);
+    expect(fake.realtime.slice(rt)).not.toContain("0x18"); // sem reset: o trabalho continua guardado
+    expect(agent.jobInfo?.state).toBe("connectionLost");
+    agent.shutdown();
+  });
+
+  it("placa que ignora o 0x9E (laser continua aceso): cancela com reset em até 2 s", async () => {
+    const { fake, grbl, agent } = await setup({ ignoreSpindleStop: true });
+    const phone = new TestClient("celular");
+    agent.connect(phone);
+    const rt = fake.realtime.length;
+    agent.disconnect(agent["clients"].get("dono")!.conn);
+    await vi.advanceTimersByTimeAsync(400);
+    expect(fake.state).toBe("Hold");
+    expect(fake.laserLit).toBe(true); // a placa ignorou o pedido
+    await vi.advanceTimersByTimeAsync(LASER_OFF_CONFIRM_MS + 600);
+    expect(fake.realtime.slice(rt)).toContain("0x18");
+    expect(fake.laserLit).toBe(false);
+    expect(grbl.isRunning).toBe(false);
+    expect(agent.jobInfo).toBeNull();
+    expect(phone.of("jobEnded").at(-1)?.result.reason).toMatch(/Parada de segurança/);
+    agent.shutdown();
+  });
+
+  it("botão Pausar também apaga o laser; Retomar religa (com confirmação)", async () => {
+    const { fake, agent, owner } = await setup();
+    agent.receive(owner, { type: "hold" });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(fake.realtime).toContain("0x9E");
+    expect(fake.laserLit).toBe(false);
+    expect(agent.jobInfo?.state).toBe("paused");
+    agent.receive(owner, { type: "resume", confirmLaserOn: true });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(fake.state).toBe("Run");
+    expect(fake.laserLit).toBe(true);
+    agent.shutdown();
+  });
+});
+
+describe("agente parado não confunde com cliente sumido", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("relógio pula 10 s sem o agente rodar (PC ocupado/suspensão): lê os sinais antes de pausar", async () => {
+    const { agent, owner } = await setup();
+    const phone = new TestClient("celular");
+    agent.connect(phone);
+    // o agente "trava": o tempo passa sem nenhuma volta do ticker
+    vi.setSystemTime(Date.now() + 10_000);
+    await vi.advanceTimersByTimeAsync(500); // primeira volta depois da trava: só avisa
+    expect(agent.jobInfo?.state).toBe("running");
+    expect(phone.of("log").some((m) => m.text.includes("sem rodar"))).toBe(true);
+    // o ping do dono, que estava na fila, chega
+    agent.receive(owner, { type: "ping", t: 1 });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(agent.jobInfo?.state).toBe("running");
+    agent.shutdown();
+  });
+
+  it("dono realmente mudo: pausa e o motivo diz há quanto tempo", async () => {
+    const { agent } = await setup();
+    const phone = new TestClient("celular");
+    agent.connect(phone);
+    await vi.advanceTimersByTimeAsync(7000);
+    expect(agent.jobInfo?.state).toBe("connectionLost");
+    expect(phone.of("log").some((m) => /Sem sinal .* há \d/.test(m.text))).toBe(true);
+    agent.shutdown();
+  });
+});
+
+describe("modo laser do GRBL ($32)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("com $32=0, recusa trabalho e avisa; depois de ligar o modo laser, aceita", async () => {
+    const fake = new FakeGrbl({ msPerLine: 5, laserMode: false });
+    const grbl = new Grbl(fake, { statusPollMs: 100 });
+    const agent = new Agent({ config: testConfig(), grbl, portLabel: "simulador" });
+    await agent.start();
+    await vi.advanceTimersByTimeAsync(50);
+    const c = new TestClient("a");
+    agent.connect(c);
+    expect(c.of("hello")[0]!.laserMode).toBe(false);
+    agent.receive(c, { type: "job", name: "t.gcode", gcode: sampleJob(10).join("\n"), confirmLaserOn: true });
+    expect(c.of("error").at(-1)?.message).toMatch(/modo laser/);
+    expect(grbl.isRunning).toBe(false);
+    agent.receive(c, { type: "setLaserMode" });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(fake.laserMode).toBe(true);
+    expect(c.of("machine").at(-1)?.laserMode).toBe(true);
+    agent.receive(c, { type: "job", name: "t.gcode", gcode: sampleJob(10).join("\n"), confirmLaserOn: true });
+    expect(grbl.isRunning).toBe(true);
+    agent.shutdown();
+  });
+});
+
+describe("escala de potência ($30 e $31 da máquina)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const start = async (fakeOptions: ConstructorParameters<typeof FakeGrbl>[0]) => {
+    const fake = new FakeGrbl({ msPerLine: 5, ...fakeOptions });
+    const grbl = new Grbl(fake, { statusPollMs: 100 });
+    const agent = new Agent({ config: testConfig({ maxSpindle: 1000, framePower: 10 }), grbl, portLabel: "simulador" });
+    // conectado desde antes: vê os avisos do primeiro $$
+    const early = new TestClient("cedo");
+    agent.connect(early);
+    await agent.start();
+    await vi.advanceTimersByTimeAsync(50);
+    const c = new TestClient("a");
+    agent.connect(c);
+    return { fake, grbl, agent, c, early };
+  };
+
+  it("usa o $30 da máquina como 100% e avisa uma vez quando o config é diferente", async () => {
+    const { grbl, agent, c, early } = await start({ maxSpindle: 255 });
+    expect(early.of("hello")[0]!.limits.maxSpindle).toBe(1000); // antes do $$: o do config
+    expect(early.of("machine").at(-1)?.limits.maxSpindle).toBe(255);
+    expect(c.of("hello")[0]!.limits).toMatchObject({ maxSpindle: 255, minSpindle: 0, framePower: 3 });
+    // S850 seria 85% para o config, mas na máquina passa do máximo: recusa em vez de queimar a 100%
+    agent.receive(c, { type: "job", name: "t.gcode", gcode: "G21 G90\nM4 S0\nG1 X10 Y0 F600 S850\nM5", confirmLaserOn: true });
+    expect(c.of("jobRejected").at(-1)?.problems[0]?.message).toMatch(/S255/);
+    expect(grbl.isRunning).toBe(false);
+    agent.receive(c, { type: "job", name: "t.gcode", gcode: "G21 G90\nM4 S0\nG1 X10 Y0 F600 S217\nM5", confirmLaserOn: true });
+    expect(grbl.isRunning).toBe(true);
+    agent.receive(c, { type: "stop" });
+    await vi.advanceTimersByTimeAsync(500);
+    // relê o $$ (nova conexão da serial): o aviso não se repete
+    grbl.readSettings();
+    await vi.advanceTimersByTimeAsync(50);
+    const other = new TestClient("b");
+    agent.connect(other);
+    expect(other.of("hello")[0]!.limits.maxSpindle).toBe(255);
+    expect(early.of("log").filter((m) => /\$30=255/.test(m.text))).toHaveLength(1);
+    // quem conecta depois também vê o aviso
+    expect(other.of("log").some((m) => /\$30=255/.test(m.text))).toBe(true);
+    agent.shutdown();
+  });
+
+  it("$31 > 0 vai para os limites, para a interface calcular o S na faixa certa", async () => {
+    const { c, agent } = await start({ minSpindle: 100 });
+    expect(c.of("hello")[0]!.limits).toMatchObject({ maxSpindle: 1000, minSpindle: 100 });
+    agent.shutdown();
+  });
+
+  it("trabalho começa com o ajuste de potência do GRBL de volta a 100%", async () => {
+    const { fake, grbl, agent, c } = await start({ spindleOverride: 60 });
+    await vi.advanceTimersByTimeAsync(250); // relatório com Ov:100,100,60
+    expect(grbl.lastStatus?.spindleOverride).toBe(60);
+    const rt = fake.realtime.length;
+    agent.receive(c, { type: "job", name: "t.gcode", gcode: sampleJob(10).join("\n"), confirmLaserOn: true });
+    expect(fake.realtime.slice(rt)).toEqual(expect.arrayContaining(["0x90", "0x99"]));
+    expect(fake.spindleOverride).toBe(100);
+    expect(c.of("log").some((m) => /ajuste de 60%/.test(m.text))).toBe(true);
+    agent.shutdown();
+  });
+});
