@@ -860,8 +860,10 @@ function renderUpdate(info: UpdateInfo): void {
       return li;
     }),
   );
+  if (info.state === "applying") startUpdateClock();
+  else stopUpdateClock();
   if (info.state === "current") status.textContent = "Você já está na versão mais nova.";
-  else if (info.state === "applying") status.textContent = "Atualizando… O agente para e volta sozinho em alguns minutos. A página recarrega quando ele voltar.";
+  else if (info.state === "applying") status.textContent = updatingText();
   else if (info.state === "error") status.textContent = info.reason ?? "Não deu para conferir agora.";
   else {
     const parts = [`Versão nova: ${info.latest ?? "?"}. O que mudou:`];
@@ -876,6 +878,28 @@ function renderUpdate(info: UpdateInfo): void {
     sb.textContent = "Atualização disponível";
     sb.hidden = false;
   } else if (sb.textContent === "Atualização disponível") sb.hidden = true;
+}
+
+// tempo desde o pedido: no PC da laser a compilação pode levar vários minutos
+let updateStarted = 0;
+let updateClock: number | undefined;
+
+function updatingText(): string {
+  const s = Math.round((Date.now() - updateStarted) / 1000);
+  const t = s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s`;
+  const slow = s > 10 * 60 ? " Está demorando mais que o normal: se passar de 15 minutos, use o Atualizar LaserLink no PC da laser." : "";
+  return `Atualizando há ${t}. O agente fica parado enquanto o PC da laser instala e compila (num PC antigo, uns 5 a 10 minutos). A página recarrega sozinha quando ele voltar.${slow}`;
+}
+
+function startUpdateClock(): void {
+  if (updateClock !== undefined) return;
+  updateStarted = Date.now();
+  updateClock = window.setInterval(() => ($("up-status").textContent = updatingText()), 1000);
+}
+
+function stopUpdateClock(): void {
+  if (updateClock !== undefined) window.clearInterval(updateClock);
+  updateClock = undefined;
 }
 
 $("up-check").addEventListener("click", () => {

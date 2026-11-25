@@ -226,6 +226,7 @@ export class Agent {
   shutdown(): void {
     this.stopped = true;
     clearInterval(this.ticker);
+    this.updater?.dispose();
     if (this.progressTimer) clearTimeout(this.progressTimer);
     if (this.serialTimer) clearTimeout(this.serialTimer);
     this.serialTimer = null;
@@ -546,7 +547,11 @@ export class Agent {
     const by = client.id;
     this.broadcast({ type: "log", level: "info", text: "Conferindo a versão nova para atualizar…" });
     void this.updater
-      .apply()
+      .apply((message) => {
+        this.broadcast({ type: "log", level: "error", text: message });
+        this.broadcast({ type: "error", message });
+        void this.updater?.check(true).then((info) => this.broadcast({ type: "update", info }));
+      })
       .then((info) => {
         this.broadcast({ type: "update", info });
         this.broadcast({

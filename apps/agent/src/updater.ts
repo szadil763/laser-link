@@ -36,6 +36,13 @@ export const runCommand: CommandRunner = (file, args) =>
 export const UPDATE_REF = "refs/laserlink/atualizacao";
 export const TASK_NAME = "LaserLink Atualizar";
 const CACHE_MS = 10 * 60 * 1000;
+/**
+ * O script para o serviço nos primeiros segundos. Se o agente continua rodando depois disto,
+ * a tarefa não começou (ou travou): o agente desiste e volta a aceitar trabalhos.
+ */
+export const START_TIMEOUT_MS = 3 * 60 * 1000;
+/** "Last Result" do Agendador quando a tarefa ainda está rodando (0x41301). */
+const TASK_RUNNING = "267009";
 /** Resultado de atualização mais velho que isto não é mais mostrado a quem conecta. */
 const RESULT_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 const VERSION_FORMAT = ["--format=%h · %cd", "--date=format:%d/%m %H:%M"];
@@ -62,6 +69,7 @@ export class Updater {
   private cached: { at: number; info: UpdateInfo } | null = null;
   private busy: Promise<UpdateInfo> | null = null;
   private applying = false;
+  private watchdog: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly config: UpdaterConfig,
@@ -162,7 +170,7 @@ export class Updater {
    * Confere de novo e dispara a atualização numa tarefa agendada (fora do serviço).
    * Quem chama garante que não há trabalho em andamento.
    */
-  async apply(): Promise<UpdateInfo> {
+  async apply(onStalled?: (message: string) => void): Promise<UpdateInfo> {
     if (this.applying) throw new Error("A atualização já está em andamento.");
     const info = await this.check(true);
     if (info.state === "current") throw new Error("O LaserLink já está na versão mais nova.");
@@ -179,7 +187,40 @@ export class Updater {
       throw new Error(`Não consegui iniciar a atualização: ${(err as Error).message.split("\n")[0]}`);
     }
     this.cached = null;
+    this.watchdog = setTimeout(() => {
+      this.watchdog = null;
+      void this.stalled().then((message) => onStalled?.(message));
+    }, START_TIMEOUT_MS);
+    this.watchdog.unref?.();
     return { ...info, state: "applying", canApply: false };
+  }
+
+  /** O agente continua de pé muito depois de pedir a atualização: encerra a tarefa e destrava. */
+  private async stalled(): Promise<string> {
+    let detail = "";
+    try {
+      const csv = (await this.run("schtasks.exe", ["/Query", "/TN", TASK_NAME, "/FO", "CSV", "/V", "/NH"])).trim().split(/\r?\n/)[0] ?? "";
+      // colunas fixas (os nomes mudam com o idioma do Windows): 3 = estado, 5 = última execução, 6 = último resultado
+      const f = csv.replace(/^"|"$/g, "").split('","');
+      if (f[6] === TASK_RUNNING) {
+        // rodando sem ter parado o agente: encerra antes de destravar, para ela não parar o agente no meio de um trabalho
+        await this.run("schtasks.exe", ["/End", "/TN", TASK_NAME]).catch(() => "");
+      }
+      detail = ` Tarefa do Windows: ${f[3] ?? "?"}, última execução ${f[5] ?? "?"}, resultado ${f[6] ?? "?"}.`;
+    } catch (err) {
+      detail = ` Não achei a tarefa do Windows (${(err as Error).message.split("\n")[0]}).`;
+    }
+    this.applying = false;
+    return (
+      `A atualização não começou: depois de ${START_TIMEOUT_MS / 60000} minutos o agente continua na versão ${this.current}.${detail} ` +
+      "O agente voltou a aceitar trabalhos. Use o Atualizar LaserLink no PC da laser e mande o arquivo apps\\agent\\logs\\atualizacao.log, se existir."
+    );
+  }
+
+  /** Para o relógio da atualização (agente encerrando). */
+  dispose(): void {
+    if (this.watchdog) clearTimeout(this.watchdog);
+    this.watchdog = null;
   }
 
   /** Resultado da última atualização pelo app, se foi há pouco. */

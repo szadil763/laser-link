@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Agent } from "../src/agent.js";
-import { TASK_NAME, Updater, type UpdaterEnv } from "../src/updater.js";
+import { START_TIMEOUT_MS, TASK_NAME, Updater, type UpdaterEnv } from "../src/updater.js";
 import { TestClient, openGrbl, sampleJob, testConfig } from "./helpers.js";
 
 const git = (cwd: string, ...args: string[]): string =>
@@ -41,7 +41,7 @@ beforeEach(() => {
 
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-const updater = (host: UpdaterEnv = WINDOWS, run = vi.fn(async () => "")) =>
+const updater = (host: UpdaterEnv = WINDOWS, run: (file: string, args: string[]) => Promise<string> = vi.fn(async () => "")) =>
   new Updater({ repoDir: laser, remote: "origin", dataDir: join(laser, "dados") }, undefined, run, host);
 
 describe("Updater", () => {
@@ -169,5 +169,28 @@ describe("Agent e atualização", () => {
     agent.receive(c, { type: "updateApply" });
     expect(c.of("error").at(-1)?.message).toBe("Mensagem inválida.");
     agent.shutdown();
+  });
+});
+
+describe("Updater: a tarefa não começou", () => {
+  it("depois do prazo, encerra a tarefa se estiver rodando, destrava e explica", async () => {
+    publish("leia-me.txt", "v2\n", "Algo novo");
+    const run = vi.fn(async (_file: string, args: string[]) =>
+      args[0] === "/Query" ? '"PC-LASER","\\LaserLink Atualizar","N/A","Em execução","Interativo/Plano de fundo","25/11/2026 10:00:00","267009"\r\n' : "",
+    );
+    const u = updater(WINDOWS, run);
+    const stalled = vi.fn();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      await u.apply(stalled);
+      expect(u.isApplying).toBe(true);
+      await vi.advanceTimersByTimeAsync(START_TIMEOUT_MS + 10);
+    } finally {
+      vi.useRealTimers();
+    }
+    await expect.poll(() => stalled.mock.calls.length).toBe(1);
+    expect(u.isApplying).toBe(false);
+    expect(run.mock.calls.map((c) => c[1][0])).toEqual(["/Create", "/Run", "/Query", "/End"]);
+    expect(stalled.mock.calls[0]![0]).toMatch(/não começou.*Em execução.*267009/);
   });
 });
