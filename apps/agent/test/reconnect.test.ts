@@ -51,7 +51,8 @@ describe("reconexão", () => {
     expect(grbl.isRunning).toBe(false);
     agent.receive(c, { type: "ping", t: 2 });
     await vi.advanceTimersByTimeAsync(500);
-    expect(fake.lines.length).toBe(linesBefore); // nada do trabalho foi reenviado
+    // nada do trabalho foi reenviado (só a leitura das configurações, $$)
+    expect(fake.lines.slice(linesBefore).filter((l) => l !== "$$")).toEqual([]);
     agent.shutdown();
   });
 

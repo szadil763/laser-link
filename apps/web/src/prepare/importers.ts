@@ -1,4 +1,4 @@
-import { boundsOf, type Point } from "@laserlink/gcode";
+import { boundsOf, parseDxf, type Point } from "@laserlink/gcode";
 import type { Material } from "@laserlink/shared";
 import { makeLayer, makeShape, rebuildImage, type ImageItem, type Layer } from "./model.js";
 
@@ -26,6 +26,21 @@ function lengthToMm(v: string | null): number | null {
 export interface SvgImport {
   layers: Layer[];
   count: number;
+  /** Material pedido pelo arquivo (data-laserlink-material), quando existe no agente. */
+  materialName?: string;
+  /** O arquivo pediu um material que não está cadastrado: usou o primeiro da lista. */
+  materialMissing?: string;
+}
+
+function norm(t: string): string {
+  return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+}
+
+/** Acha o material pelo nome, sem diferenciar maiúsculas nem acentos. */
+export function findMaterial(materials: readonly Material[], name: string | null): Material | undefined {
+  if (!name || !name.trim()) return undefined;
+  const alvo = norm(name);
+  return materials.find((m) => norm(m.name) === alvo);
 }
 
 /**
@@ -58,7 +73,10 @@ export function importSvg(text: string, materials: readonly Material[]): SvgImpo
     for (const el of host.querySelectorAll<SVGGeometryElement>("path,line,polyline,polygon,rect,circle,ellipse")) {
       const cs = getComputedStyle(el);
       if (cs.display === "none") continue;
-      const color = cs.stroke && cs.stroke !== "none" ? cs.stroke : cs.fill && cs.fill !== "none" ? cs.fill : "rgb(0, 0, 0)";
+      const stroked = !!cs.stroke && cs.stroke !== "none";
+      const color = stroked ? cs.stroke : cs.fill && cs.fill !== "none" ? cs.fill : "rgb(0, 0, 0)";
+      // só preenchimento, sem contorno: a intenção é gravar a área (preenchido)
+      const key = stroked || !(cs.fill && cs.fill !== "none") ? color : `${color}|fill`;
       let total = 0;
       try {
         total = el.getTotalLength();
@@ -80,9 +98,9 @@ export function importSvg(text: string, materials: readonly Material[]): SvgImpo
       if (points.length < 2) continue;
       const tag = el.tagName.toLowerCase();
       const closed = ["rect", "circle", "ellipse", "polygon"].includes(tag) || (tag === "path" && /z\s*$/i.test(el.getAttribute("d") ?? ""));
-      const list = groups.get(color) ?? [];
+      const list = groups.get(key) ?? [];
       list.push({ points, closed, name: el.id || tag });
-      groups.set(color, list);
+      groups.set(key, list);
       count++;
     }
   } finally {
@@ -92,17 +110,61 @@ export function importSvg(text: string, materials: readonly Material[]): SvgImpo
   const b = boundsOf([...groups.values()].flat().flatMap((s) => s.points))!;
   const layers: Layer[] = [];
   let n = 0;
-  const mdf = materials[0];
-  for (const [color, shapes] of groups) {
+  // data-laserlink-material="borracha carimbo": o arquivo escolhe o material (velocidade, potência, passes) pelo nome
+  const pedido = svg.getAttribute("data-laserlink-material");
+  const achado = findMaterial(materials, pedido);
+  const mdf = achado ?? materials[0];
+  // data-laserlink="mesa": o SVG é a mesa inteira (0,0 no canto de baixo à esquerda) e as posições valem como estão
+  const onBed = svg.getAttribute("data-laserlink") === "mesa";
+  const bedH = hmm ?? (hasVb ? vb[3]! * sy : b.maxY);
+  for (const [key, shapes] of groups) {
+    const [color, kind] = key.split("|") as [string, string | undefined];
     const red = /^rgb\((2\d\d), (\d{1,2}), (\d{1,2})\)$/.test(color);
-    const layer = makeLayer(NAMED[color] ?? `Cor ${++n}`, color, red ? "cut" : "line", mdf);
+    const mode = kind === "fill" ? "fill" : red ? "cut" : "line";
+    const base = NAMED[color] ?? `Cor ${++n}`;
+    const layer = makeLayer(kind === "fill" ? `${base} (preenchido)` : base, color, mode, mdf);
     shapes.forEach((sh, k) => {
-      const pts = sh.points.map(([x, y]) => [x - b.minX + 20, b.maxY - y + 20] as Point); // SVG tem Y para baixo
+      // SVG tem Y para baixo
+      const pts = sh.points.map(([x, y]) => (onBed ? [x, bedH - y] : [x - b.minX + 20, b.maxY - y + 20]) as Point);
       layer.shapes.push(makeShape(pts, `${sh.name} ${k + 1}`, sh.closed));
     });
     layers.push(layer);
   }
-  return { layers, count };
+  return { layers, count, ...(achado ? { materialName: achado.name } : {}), ...(pedido?.trim() && !achado ? { materialMissing: pedido.trim() } : {}) };
+}
+
+/** Cores ACI mais comuns do DXF. */
+const ACI: Record<number, [string, string]> = {
+  1: ["#ff5c5c", "Vermelho"],
+  2: ["#e0c34d", "Amarelo"],
+  3: ["#45c46a", "Verde"],
+  4: ["#3fc6d1", "Ciano"],
+  5: ["#4da3ff", "Azul"],
+  6: ["#d36be0", "Magenta"],
+  7: ["#c7cbd1", "Branco/preto"],
+};
+
+/**
+ * Lê um DXF (pacote gcode, sem navegador): uma camada do LaserLink por camada do DXF.
+ * Vermelho (cor 1) vira Cortar; as outras, Gravar linha. Posiciona a 20 mm da origem.
+ */
+export function importDxf(text: string, materials: readonly Material[]): SvgImport & { skipped: number } {
+  const r = parseDxf(text);
+  const b = boundsOf(r.layers.flatMap((l) => l.paths.flatMap((p) => p.points)))!;
+  const mdf = materials[0];
+  let count = 0;
+  const layers = r.layers.map((dl) => {
+    const [color, colorName] = ACI[dl.color] ?? ["#c7cbd1", `Cor ${dl.color}`];
+    const layer = makeLayer(dl.name === "0" ? colorName : dl.name, color, dl.color === 1 ? "cut" : "line", mdf);
+    dl.paths.forEach((p, k) => {
+      const pts = p.points.map(([x, y]) => [x - b.minX + 20, y - b.minY + 20] as Point);
+      layer.shapes.push(makeShape(pts, `${layer.name} ${k + 1}`, p.closed));
+      count++;
+    });
+    return layer;
+  });
+  const skipped = Object.values(r.skipped).reduce((a, n) => a + n, 0);
+  return { layers, count, skipped };
 }
 
 /** Abre PNG/JPG e cria a imagem com 60 mm de largura a 20 mm da origem. */

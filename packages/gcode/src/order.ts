@@ -12,6 +12,11 @@ export interface OrderOptions {
  * o início é girado para o vértice mais próximo.
  */
 export function orderPaths(paths: readonly Path[], start: Point, options: OrderOptions = {}): Path[] {
+  return orderPathIndices(paths, start, options).map(({ closed, points }) => ({ closed, points }));
+}
+
+/** Como `orderPaths`, mas diz de qual caminho de entrada (índice) veio cada um. */
+export function orderPathIndices(paths: readonly Path[], start: Point, options: OrderOptions = {}): Array<Path & { index: number }> {
   const n = paths.length;
   const boxes = paths.map((p) => boundsOf(p.points));
   // blockers[i] = quantos caminhos ainda não feitos estão dentro de i
@@ -37,7 +42,7 @@ export function orderPaths(paths: readonly Path[], start: Point, options: OrderO
   }
 
   const done = new Array<boolean>(n).fill(false);
-  const out: Path[] = [];
+  const out: Array<Path & { index: number }> = [];
   let pos = start;
   for (let k = 0; k < n; k++) {
     let best = -1;
@@ -74,7 +79,7 @@ export function orderPaths(paths: readonly Path[], start: Point, options: OrderO
     let pts: Point[];
     if (src.closed) pts = rotateRing(src.points, bestRot);
     else pts = bestRev ? src.points.slice().reverse() : src.points.slice();
-    out.push({ closed: src.closed, points: pts });
+    out.push({ closed: src.closed, points: pts, index: best });
     pos = pts[pts.length - 1]!;
   }
   return out;

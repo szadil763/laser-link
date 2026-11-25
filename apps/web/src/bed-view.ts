@@ -1,4 +1,5 @@
 import type { Point } from "@laserlink/gcode";
+import { bedColors } from "./theme.js";
 
 export interface Area {
   x: number;
@@ -8,12 +9,22 @@ export interface Area {
 export interface BedInteractions {
   /** Toque/clique sem arrastar, em pixels do canvas. */
   onTap?(px: Point, ev: PointerEvent): void;
-  /** Começo de arraste: devolva true para arrastar um objeto em vez da vista. */
-  onDragStart?(px: Point): boolean;
+  /**
+   * Começo de arraste: true = arrastar um objeto; "marquee" = desenhar uma caixa
+   * de seleção; false = mover a vista.
+   */
+  onDragStart?(px: Point, ev: PointerEvent): boolean | "marquee";
+  /** Caixa de seleção sendo desenhada (pixels do canvas); `b` null = cancelada. */
+  onMarquee?(a: Point, b: Point | null, ev?: PointerEvent): void;
+  /** Caixa de seleção solta. */
+  onMarqueeEnd?(a: Point, b: Point, ev: PointerEvent): void;
   /** Arraste de objeto, deslocamento em mm desde o último evento. */
   onDragMove?(dxMm: number, dyMm: number): void;
   onDragEnd?(): void;
-  onDoubleClick?(): void;
+  /** Dois cliques, em pixels do canvas. */
+  onDoubleClick?(px: Point): void;
+  /** Mouse sobre a mesa (sem botão apertado), em mm; null quando sai. */
+  onHover?(mm: Point | null): void;
 }
 
 /**
@@ -32,7 +43,7 @@ export class BedView {
   fitS = 1;
   private zoomed = false;
   private readonly pointers = new Map<number, Point>();
-  private drag: { p: Point; moved: boolean; object: boolean } | null = null;
+  private drag: { p: Point; start: Point; moved: boolean; object: boolean; marquee: boolean } | null = null;
   private pinch: { d: number; mid: Point } | null = null;
 
   constructor(
@@ -45,6 +56,7 @@ export class BedView {
     if (!ctx) throw new Error("Canvas 2D indisponível neste navegador.");
     this.ctx = ctx;
     new ResizeObserver(() => this.resize()).observe(canvas);
+    window.addEventListener("bedtheme", () => this.redraw());
     this.attach();
   }
 
@@ -131,10 +143,11 @@ export class BedView {
   drawBed(): void {
     const { ctx, canvas: c, area } = this;
     const d = this.dpr;
+    const col = bedColors();
     ctx.clearRect(0, 0, c.width, c.height);
-    ctx.fillStyle = "#101216";
+    ctx.fillStyle = col.outside;
     ctx.fillRect(0, 0, c.width, c.height);
-    ctx.fillStyle = "#14171c";
+    ctx.fillStyle = col.bed;
     ctx.fillRect(this.X(0), this.Y(area.y), area.x * this.s, area.y * this.s);
     const [vx0, vy0] = this.toMm(0, c.height);
     const [vx1, vy1] = this.toMm(c.width, 0);
@@ -148,24 +161,24 @@ export class BedView {
     ctx.lineWidth = 1;
     if (gx1 > gx0 && gy1 > gy0) {
       for (let x = Math.ceil(gx0 / minor) * minor; x <= gx1 + 1e-9; x += minor) {
-        ctx.strokeStyle = isMajor(x) ? "#2c323a" : "#1f2329";
+        ctx.strokeStyle = isMajor(x) ? col.gridMajor : col.gridMinor;
         ctx.beginPath();
         ctx.moveTo(this.X(x), this.Y(gy0));
         ctx.lineTo(this.X(x), this.Y(gy1));
         ctx.stroke();
       }
       for (let y = Math.ceil(gy0 / minor) * minor; y <= gy1 + 1e-9; y += minor) {
-        ctx.strokeStyle = isMajor(y) ? "#2c323a" : "#1f2329";
+        ctx.strokeStyle = isMajor(y) ? col.gridMajor : col.gridMinor;
         ctx.beginPath();
         ctx.moveTo(this.X(gx0), this.Y(y));
         ctx.lineTo(this.X(gx1), this.Y(y));
         ctx.stroke();
       }
     }
-    ctx.strokeStyle = "#3c4043";
+    ctx.strokeStyle = col.border;
     ctx.strokeRect(this.X(0), this.Y(area.y), area.x * this.s, area.y * this.s);
     const lab = [1, 2, 5, 10, 25, 50, 100].find((st) => st * this.s >= 46 * d) ?? 100;
-    ctx.fillStyle = "#9aa0a6";
+    ctx.fillStyle = col.label;
     ctx.font = `${11 * d}px ui-monospace, monospace`;
     const ly = Math.min(c.height - 5 * d, this.Y(0) + 14 * d);
     const lx = Math.max(30 * d, this.X(0) - 4 * d);
@@ -226,14 +239,17 @@ export class BedView {
       const p = this.local(e);
       this.pointers.set(e.pointerId, p);
       if (this.pointers.size === 1) {
-        this.drag = { p, moved: false, object: this.interactions.onDragStart?.(p) ?? false };
+        const how = this.interactions.onDragStart?.(p, e) ?? false;
+        this.drag = { p, start: p, moved: false, object: how === true, marquee: how === "marquee" };
       } else if (this.pointers.size === 2) {
         const [a, b] = [...this.pointers.values()] as [Point, Point];
         this.pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] };
+        if (this.drag?.marquee) this.interactions.onMarquee?.(this.drag.start, null);
         this.drag = null;
       }
     });
     c.addEventListener("pointermove", (e) => {
+      if (e.pointerType === "mouse") this.interactions.onHover?.(this.toMm(...this.local(e)));
       if (!this.pointers.has(e.pointerId)) return;
       const p = this.local(e);
       this.pointers.set(e.pointerId, p);
@@ -254,6 +270,10 @@ export class BedView {
       if (!drag.moved && Math.hypot(dx, dy) < 5 * this.dpr) return;
       drag.moved = true;
       drag.p = p;
+      if (drag.marquee) {
+        this.interactions.onMarquee?.(drag.start, p, e);
+        return;
+      }
       if (drag.object) {
         this.interactions.onDragMove?.(dx / this.s, -dy / this.s);
         return;
@@ -276,9 +296,12 @@ export class BedView {
       }
       if (tap) this.interactions.onTap?.(this.local(e), e);
       if (drag?.moved && drag.object) this.interactions.onDragEnd?.();
+      if (drag?.marquee && drag.moved && e.type === "pointerup") this.interactions.onMarqueeEnd?.(drag.start, this.local(e), e);
+      else if (drag?.marquee) this.interactions.onMarquee?.(drag.start, null);
     };
+    c.addEventListener("pointerleave", () => this.interactions.onHover?.(null));
     c.addEventListener("pointerup", end);
     c.addEventListener("pointercancel", end);
-    c.addEventListener("dblclick", () => this.interactions.onDoubleClick?.());
+    c.addEventListener("dblclick", (e) => this.interactions.onDoubleClick?.(this.local(e)));
   }
 }

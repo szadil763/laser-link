@@ -66,9 +66,11 @@ describe("biblioteca de materiais", () => {
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-  it("começa com MDF 3 mm e 6 mm de exemplo", () => {
+  it("começa com os materiais de exemplo (MDF primeiro)", () => {
     const store = new MaterialStore(dir);
-    expect(store.all.map((m) => m.name)).toEqual(["MDF 3 mm", "MDF 6 mm"]);
+    expect(store.all.map((m) => m.name).slice(0, 2)).toEqual(["MDF 3 mm", "MDF 6 mm"]);
+    expect(store.all.map((m) => m.id)).toEqual(DEFAULT_MATERIALS.map((m) => m.id));
+    expect(store.all.map((m) => m.name)).toEqual(expect.arrayContaining(["EVA 2 mm", "Papel lamicote (cartão metalizado)", "Acrílico preto 3 mm"]));
     expect(existsSync(store.file)).toBe(false); // só grava quando a pessoa salva
     expect(parseClientMessage({ type: "materialsSave", materials: DEFAULT_MATERIALS })).not.toBeNull();
   });
@@ -82,12 +84,12 @@ describe("biblioteca de materiais", () => {
     const b = new TestClient("b");
     agent.connect(a);
     agent.connect(b);
-    expect(a.of("materials")[0]!.materials).toHaveLength(2);
+    expect(a.of("materials")[0]!.materials).toHaveLength(DEFAULT_MATERIALS.length);
     const acrilico = { id: "acr-3", name: "Acrílico 3 mm", thickness: 3, presets: [{ mode: "cut", speed: 200, power: 100, passes: 3 }] };
     agent.receive(a, { type: "materialsSave", materials: [...DEFAULT_MATERIALS, acrilico] });
     expect(b.of("materials").at(-1)!.materials.map((m) => m.name)).toContain("Acrílico 3 mm");
-    expect(JSON.parse(readFileSync(store.file, "utf8"))).toHaveLength(3);
-    expect(new MaterialStore(dir).all).toHaveLength(3);
+    expect(JSON.parse(readFileSync(store.file, "utf8"))).toHaveLength(DEFAULT_MATERIALS.length + 1);
+    expect(new MaterialStore(dir).all).toHaveLength(DEFAULT_MATERIALS.length + 1);
     agent.shutdown();
     vi.useRealTimers();
   });
@@ -104,6 +106,22 @@ describe("biblioteca de materiais", () => {
 
   it("arquivo corrompido não derruba o agente", () => {
     writeFileSync(join(dir, "materials.json"), "{ quebrado");
-    expect(new MaterialStore(dir).all.map((m) => m.id)).toEqual(["mdf-3", "mdf-6"]);
+    expect(new MaterialStore(dir).all.map((m) => m.id)).toEqual(DEFAULT_MATERIALS.map((m) => m.id));
+  });
+
+  it("biblioteca salva numa versão antiga: ganha os exemplos novos sem perder as edições", () => {
+    // o que a pessoa tinha: MDF 3 editado, MDF 6 apagado e um material dela
+    const mdf3 = { ...structuredClone(DEFAULT_MATERIALS[0]!), name: "MDF 3 mm da loja X" };
+    const meu = { id: "meu", name: "Meu material", thickness: 1, presets: [{ mode: "line", speed: 1000, power: 10, passes: 1 }] };
+    writeFileSync(join(dir, "materials.json"), JSON.stringify([mdf3, meu]));
+    const ids = new MaterialStore(dir).all.map((m) => m.id);
+    expect(ids.slice(0, 2)).toEqual(["mdf-3", "meu"]);
+    expect(ids).not.toContain("mdf-6");
+    expect(ids).toContain("eva-2");
+    expect(new MaterialStore(dir).all[0]!.name).toBe("MDF 3 mm da loja X");
+    // apagar um exemplo novo: ele não volta
+    const store = new MaterialStore(dir);
+    store.save(store.all.filter((m) => m.id !== "eva-2"));
+    expect(new MaterialStore(dir).all.map((m) => m.id)).not.toContain("eva-2");
   });
 });

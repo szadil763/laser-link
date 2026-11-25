@@ -54,3 +54,51 @@ export function compensateKerf(paths: readonly Path[], kerf: number): Path[] {
   });
   return out;
 }
+
+function clipperOuters(paths: ClipperLib.IntPoint[][]): ClipperLib.IntPoint[][] {
+  // na saída do Clipper os contornos externos têm orientação positiva e os furos, negativa
+  return paths.filter((p) => p.length >= 3 && ClipperLib.Clipper.Orientation(p));
+}
+
+/**
+ * Une caminhos fechados que se sobrepõem (regra não-zero, a das fontes):
+ * letras cursivas que se encostam viram um contorno só e os miolos continuam furos.
+ * Caminhos abertos são ignorados.
+ */
+export function unionPaths(paths: readonly Path[]): Path[] {
+  const c = new ClipperLib.Clipper();
+  let any = false;
+  for (const p of paths) {
+    if (!p.closed || p.points.length < 3) continue;
+    c.AddPath(toClipper(p.points), ClipperLib.PolyType.ptSubject, true);
+    any = true;
+  }
+  if (!any) return [];
+  const sol: ClipperLib.IntPoint[][] = [];
+  c.Execute(ClipperLib.ClipType.ctUnion, sol, ClipperLib.PolyFillType.pftNonZero, ClipperLib.PolyFillType.pftNonZero);
+  return sol.filter((p) => p.length >= 3).map(fromClipper);
+}
+
+/**
+ * Contorno cheio em volta dos caminhos (a "base" de letras de painel): sem furos,
+ * crescido `grow` mm. Com `bridge` > 0, partes a menos de 2·bridge uma da outra
+ * viram uma peça só (fecha os espaços entre as letras de uma palavra).
+ */
+export function solidOutline(paths: readonly Path[], grow: number, bridge = 0): Path[] {
+  const united = new ClipperLib.Clipper();
+  for (const p of paths) if (p.closed && p.points.length >= 3) united.AddPath(toClipper(p.points), ClipperLib.PolyType.ptSubject, true);
+  let cur: ClipperLib.IntPoint[][] = [];
+  united.Execute(ClipperLib.ClipType.ctUnion, cur, ClipperLib.PolyFillType.pftNonZero, ClipperLib.PolyFillType.pftNonZero);
+  cur = clipperOuters(cur);
+  const offset = (input: ClipperLib.IntPoint[][], delta: number): ClipperLib.IntPoint[][] => {
+    if (delta === 0) return input;
+    const co = new ClipperLib.ClipperOffset(2, 0.01 * SCALE);
+    co.AddPaths(input, ClipperLib.JoinType.jtRound, ClipperLib.EndType.etClosedPolygon);
+    const out: ClipperLib.IntPoint[][] = [];
+    co.Execute(out, delta * SCALE);
+    return clipperOuters(out);
+  };
+  cur = offset(cur, Math.max(0, bridge) + Math.max(0, grow));
+  if (bridge > 0) cur = offset(cur, -bridge);
+  return cur.map(fromClipper);
+}

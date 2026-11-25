@@ -4,6 +4,19 @@ export type Point = readonly [number, number];
 export interface Path {
   points: Point[];
   closed: boolean;
+  /** Letras de um texto editável: todas as letras do mesmo texto têm o mesmo `id`. */
+  text?: TextTag;
+}
+
+/** O que foi escrito, para a interface poder editar o texto depois. */
+export interface TextTag {
+  id: string;
+  value: string;
+  /** Altura das maiúsculas, mm. */
+  height: number;
+  align: "left" | "center" | "right";
+  /** Fonte (id da interface); sem valor = traço único. */
+  font?: string;
 }
 
 /**
@@ -55,6 +68,11 @@ export interface RasterGroup {
 export interface MachineProfile {
   /** Valor de S que corresponde a 100 % (igual ao $30 do GRBL). */
   maxSpindle: number;
+  /**
+   * $31 do GRBL (padrão 0). Com $31 > 0, o GRBL distribui a potência entre $31 e $30:
+   * o S é calculado nessa faixa para que 85 % saia como 85 % do sinal do laser.
+   */
+  minSpindle?: number;
 }
 
 export interface JobDesign {

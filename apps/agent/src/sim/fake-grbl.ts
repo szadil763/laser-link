@@ -13,6 +13,15 @@ export interface FakeGrblOptions {
   respond?: (line: string, index: number) => FakeResponse;
   /** Se a primeira abertura deve falhar (para testar a reconexão). */
   failOpens?: number;
+  /** Imita placa que ignora o 0x9E (o laser continua aceso em Hold). */
+  ignoreSpindleStop?: boolean;
+  /** $32 (modo laser). Padrão: ligado. */
+  laserMode?: boolean;
+  /** $30 e $31 respondidos no $$. Padrão: 1000 e 0. */
+  maxSpindle?: number;
+  minSpindle?: number;
+  /** Ajuste de potência em tempo real (Ov), em %. Padrão: 100. */
+  spindleOverride?: number;
 }
 
 const BANNER = "Grbl 1.1h ['$' for help]";
@@ -53,6 +62,13 @@ export class FakeGrbl extends EventEmitter<SerialLinkEvents> implements SerialLi
   overflowed = false;
 
   private readonly msPerLine: number;
+  private readonly ignoreSpindleStop: boolean;
+  /** $32 do GRBL simulado. */
+  laserMode: boolean;
+  private readonly maxSpindle: number;
+  private readonly minSpindle: number;
+  /** Ajuste de potência (terceiro número do Ov). 0x99 volta para 100. */
+  spindleOverride: number;
   private readonly respond: (line: string, index: number) => FakeResponse;
 
   constructor(options: FakeGrblOptions = {}) {
@@ -60,6 +76,16 @@ export class FakeGrbl extends EventEmitter<SerialLinkEvents> implements SerialLi
     this.msPerLine = options.msPerLine ?? 0;
     this.respond = options.respond ?? (() => "ok");
     this.failOpens = options.failOpens ?? 0;
+    this.ignoreSpindleStop = options.ignoreSpindleStop ?? false;
+    this.laserMode = options.laserMode ?? true;
+    this.maxSpindle = options.maxSpindle ?? 1000;
+    this.minSpindle = options.minSpindle ?? 0;
+    this.spindleOverride = options.spindleOverride ?? 100;
+  }
+
+  /** Laser aceso agora (considera o 0x9E em Hold). */
+  get laserLit(): boolean {
+    return this.spindle > 0 && !(this.state === "Hold" && this.spindleStopped);
   }
 
   get isOpen(): boolean {
@@ -126,9 +152,16 @@ export class FakeGrbl extends EventEmitter<SerialLinkEvents> implements SerialLi
         this.realtime.push("0x18");
         this.softReset();
         return true;
+      case 0x90: // avanço em 100 %
+        this.realtime.push("0x90");
+        return true;
+      case 0x99: // potência em 100 %
+        this.realtime.push("0x99");
+        this.spindleOverride = 100;
+        return true;
       case 0x9e: // parar spindle/laser (override), só em Hold
         this.realtime.push("0x9E");
-        if (this.state === "Hold") this.spindleStopped = !this.spindleStopped;
+        if (this.state === "Hold" && !this.ignoreSpindleStop) this.spindleStopped = !this.spindleStopped;
         return true;
       default:
         return byte >= 0x80; // outros overrides: aceitos e ignorados
@@ -205,6 +238,15 @@ export class FakeGrbl extends EventEmitter<SerialLinkEvents> implements SerialLi
   /** Atualiza a posição e o laser simulados (subconjunto suficiente do G-code). */
   private apply(line: string): void {
     const upper = line.toUpperCase();
+    if (upper === "$$") {
+      for (const l of [`$30=${this.maxSpindle}`, `$31=${this.minSpindle}`, `$32=${this.laserMode ? 1 : 0}`]) this.reply(l);
+      return;
+    }
+    const setting = /^\$32=([01])$/.exec(upper);
+    if (setting) {
+      this.laserMode = setting[1] === "1";
+      return;
+    }
     if (upper === "$X") {
       if (this.state === "Alarm") this.state = "Idle";
       return;
@@ -264,8 +306,10 @@ export class FakeGrbl extends EventEmitter<SerialLinkEvents> implements SerialLi
     const state = this.state === "Hold" ? "Hold:0" : this.state;
     const p = this.mpos;
     const w = this.wco;
-    const spindle = this.state === "Hold" && this.spindleStopped ? 0 : this.spindle;
-    return `<${state}|MPos:${p.x.toFixed(3)},${p.y.toFixed(3)},${p.z.toFixed(3)}|FS:${this.feed},${spindle}|WCO:${w.x.toFixed(3)},${w.y.toFixed(3)},${w.z.toFixed(3)}>`;
+    const lit = this.laserLit;
+    const spindle = lit ? this.spindle : 0;
+    // overrides e acessórios: "A:C" = laser aceso (M4); sem "A:" com "Ov:" = apagado
+    return `<${state}|MPos:${p.x.toFixed(3)},${p.y.toFixed(3)},${p.z.toFixed(3)}|FS:${this.feed},${spindle}|WCO:${w.x.toFixed(3)},${w.y.toFixed(3)},${w.z.toFixed(3)}|Ov:100,100,${this.spindleOverride}${lit ? "|A:C" : ""}>`;
   }
 
   private reply(line: string): void {
