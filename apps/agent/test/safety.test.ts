@@ -166,6 +166,8 @@ describe("escala de potência ($30 e $31 da máquina)", () => {
     agent.connect(other);
     expect(other.of("hello")[0]!.limits.maxSpindle).toBe(255);
     expect(early.of("log").filter((m) => /\$30=255/.test(m.text))).toHaveLength(1);
+    // quem conecta depois também vê o aviso
+    expect(other.of("log").some((m) => /\$30=255/.test(m.text))).toBe(true);
     agent.shutdown();
   });
 

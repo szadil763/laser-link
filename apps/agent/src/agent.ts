@@ -187,6 +187,8 @@ export class Agent {
     const last = this.grbl.lastStatus;
     if (last) client.send({ type: "status", ...last });
     if (this.materials) client.send({ type: "materials", materials: this.materials.all });
+    // avisos da escala de potência saem uma vez só: quem conecta depois também precisa ver
+    for (const text of this.powerWarned) client.send({ type: "log", level: "warn", text });
     client.send({ type: "queue", items: this.queueItems() });
   }
 

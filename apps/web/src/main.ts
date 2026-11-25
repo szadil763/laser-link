@@ -932,6 +932,8 @@ $("sb-update").addEventListener("click", () => {
 function renderLimits(l: AgentLimits): void {
   const scale = l.minSpindle > 0 ? `potência de S${l.minSpindle} (1%) a S${l.maxSpindle} (100%)` : `potência até S${l.maxSpindle} (100%)`;
   $("limits").textContent = `Limites do agente: área ${l.workArea.x} × ${l.workArea.y} mm a partir da origem, ${scale}.`;
+  const s85 = Math.round((l.minSpindle > 0 ? l.minSpindle : 0) + 0.85 * (l.maxSpindle - l.minSpindle));
+  $("power-scale").innerHTML = `Potência: <b>100% = S${l.maxSpindle}</b> · 85% = S${s85}${l.minSpindle > 0 ? ` · mínimo da máquina S${l.minSpindle}` : ""}`;
   preview.setArea(l.workArea);
   workspace.setLimits(l);
 }
